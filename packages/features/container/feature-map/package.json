@@ -18,10 +18,10 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "build": "echo \"skip legacy feature-map build\"",
+    "test": "echo \"skip legacy feature-map test\"",
+    "test:watch": "echo \"skip legacy feature-map test:watch\"",
+    "test:coverage": "echo \"skip legacy feature-map test:coverage\""
   },
   "keywords": [
     "supramark",

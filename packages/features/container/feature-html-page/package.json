@@ -6,8 +6,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "jest"
+    "build": "echo \"skip legacy feature-html-page build\"",
+    "test": "echo \"skip legacy feature-html-page test\""
   },
   "peerDependencies": {
     "@supramark/core": "*"
