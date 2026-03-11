@@ -39,7 +39,12 @@
  * @license Apache-2.0
  */
 
-import type { SupramarkNode, SupramarkDiagramConfig } from './ast';
+import type {
+  SupramarkNode,
+  SupramarkDiagramConfig,
+  SupramarkDiagramEngineId,
+} from './ast';
+import { warnIfUnknownDiagramEngine } from './ast';
 import type MarkdownIt from 'markdown-it';
 import type Token from 'markdown-it/lib/token.mjs';
 
@@ -1621,6 +1626,119 @@ export function getEnabledFeatures(
 export function isFeatureEnabled(config: SupramarkConfig, featureId: string): boolean {
   const featureConfig = config.features?.find(f => f.id === featureId);
   return featureConfig?.enabled ?? false;
+}
+
+export type DiagramFeatureFamilyId =
+  | 'mermaid'
+  | 'plantuml'
+  | 'vega-family'
+  | 'echarts'
+  | 'graphviz-family';
+
+const DIAGRAM_FEATURE_IDS_BY_FAMILY: Record<DiagramFeatureFamilyId, readonly string[]> = {
+  mermaid: ['@supramark/feature-mermaid'],
+  plantuml: ['@supramark/feature-diagram-plantuml'],
+  'vega-family': ['@supramark/feature-diagram-vega-lite'],
+  echarts: ['@supramark/feature-diagram-echarts'],
+  'graphviz-family': ['@supramark/feature-diagram-dot'],
+};
+
+/**
+ * 将 diagram engine 归类到当前支持的 feature family。
+ *
+ * 当前约定：
+ * - mermaid
+ * - plantuml
+ * - vega-family（vega / vega-lite / chart / chartjs）
+ * - echarts
+ * - graphviz-family（dot / graphviz）
+ */
+export function getDiagramFeatureFamily(
+  engine: SupramarkDiagramEngineId | string
+): DiagramFeatureFamilyId | null {
+  const normalized = String(engine).toLowerCase();
+
+  if (normalized === 'mermaid') {
+    return 'mermaid';
+  }
+
+  if (normalized === 'plantuml') {
+    return 'plantuml';
+  }
+
+  if (
+    normalized === 'vega' ||
+    normalized === 'vega-lite' ||
+    normalized === 'chart' ||
+    normalized === 'chartjs'
+  ) {
+    return 'vega-family';
+  }
+
+  if (normalized === 'echarts') {
+    return 'echarts';
+  }
+
+  if (normalized === 'dot' || normalized === 'graphviz') {
+    return 'graphviz-family';
+  }
+
+  return null;
+}
+
+/**
+ * 将 diagram engine 映射到对应的 feature id 列表。
+ */
+export function getDiagramFeatureIdsForEngine(
+  engine: SupramarkDiagramEngineId | string
+): string[] {
+  const family = getDiagramFeatureFamily(engine);
+  if (!family) {
+    return [];
+  }
+
+  return [...DIAGRAM_FEATURE_IDS_BY_FAMILY[family]];
+}
+
+/**
+ * 判断一组 Feature ID 是否被启用。
+ *
+ * 约定：
+ * - 未提供 config 或 config.features 为空 → 视为全部启用；
+ * - 如果 config 中根本没有提到这些 ID → 视为使用默认行为（启用）；
+ * - 一旦显式配置了其中任意一个 ID，则以配置为准，只要有一个 enabled:true 就认为启用。
+ */
+export function isFeatureGroupEnabled(
+  config: SupramarkConfig | undefined,
+  ids: readonly string[]
+): boolean {
+  if (!config || !config.features || config.features.length === 0) {
+    return true;
+  }
+
+  const hasAny = ids.some(id => config.features!.some(f => f.id === id));
+  if (!hasAny) {
+    return true;
+  }
+
+  return ids.some(id => isFeatureEnabled(config, id));
+}
+
+/**
+ * 根据配置判断某个 diagram engine 是否被启用。
+ */
+export function isDiagramFeatureEnabled(
+  config: SupramarkConfig | undefined,
+  engine: SupramarkDiagramEngineId | string,
+  context?: string
+): boolean {
+  const ids = getDiagramFeatureIdsForEngine(engine);
+  if (!ids.length) {
+    warnIfUnknownDiagramEngine(engine, context);
+    return true;
+  }
+
+  return isFeatureGroupEnabled(config, ids);
 }
 
 /**

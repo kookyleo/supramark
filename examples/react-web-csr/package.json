@@ -19,6 +19,7 @@
     "@supramark/feature-diagram-echarts": "workspace:*",
     "@supramark/feature-diagram-plantuml": "workspace:*",
     "@supramark/feature-diagram-vega-lite": "workspace:*",
+    "@supramark/feature-mermaid": "workspace:*",
     "@supramark/feature-emoji": "workspace:*",
     "@supramark/feature-footnote": "workspace:*",
     "@supramark/feature-gfm": "workspace:*",

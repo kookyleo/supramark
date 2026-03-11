@@ -31,7 +31,7 @@ import type {
 import {
   parseMarkdown,
   isFeatureEnabled,
-  warnIfUnknownDiagramEngine,
+  isDiagramFeatureEnabled,
   getFeatureOptionsAs,
   SUPRAMARK_ADMONITION_KINDS,
 } from '@supramark/core';
@@ -318,7 +318,9 @@ function renderNode(
     }
     case 'diagram': {
       const diagram = node as SupramarkDiagramNode;
-      warnIfUnknownDiagramEngine(diagram.engine, 'web:diagram-render');
+      if (!isDiagramFeatureEnabled(config, diagram.engine, 'web:diagram-feature')) {
+        return renderDisabledDiagram(diagram, key, classNames);
+      }
       // Web 端 diagram 渲染由脚本（@supramark/web-diagram）在浏览器中负责。
       // 这里只渲染占位符，实际渲染由 buildDiagramSupportScripts 提供的客户端脚本完成。
       return (
@@ -657,6 +659,19 @@ function renderInlineNode(
     default:
       return null;
   }
+}
+
+function renderDisabledDiagram(
+  diagram: SupramarkDiagramNode,
+  key: number,
+  classNames: SupramarkClassNames
+): React.ReactNode {
+  const header = `[diagram engine="${diagram.engine}" 已被禁用]\n\n`;
+  return (
+    <pre key={key} className={classNames.codeBlock}>
+      <code className={classNames.code}>{header + diagram.code}</code>
+    </pre>
+  );
 }
 
 /**

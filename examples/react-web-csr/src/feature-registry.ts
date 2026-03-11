@@ -21,6 +21,8 @@ import { diagramPlantUmlFeature } from '@supramark/feature-diagram-plantuml';
 import { diagramPlantUmlExamples } from '@supramark/feature-diagram-plantuml';
 import { diagramVegaLiteFeature } from '@supramark/feature-diagram-vega-lite';
 import { diagramVegaLiteExamples } from '@supramark/feature-diagram-vega-lite';
+import { mermaidFeature } from '@supramark/feature-mermaid';
+import { mermaidExamples } from '@supramark/feature-mermaid';
 import { emojiFeature } from '@supramark/feature-emoji';
 import { emojiExamples } from '@supramark/feature-emoji';
 import { footnoteFeature } from '@supramark/feature-footnote';
@@ -66,6 +68,7 @@ export const featureRegistry: FeatureEntry[] = [
   { shortName: shortName(diagramEchartsFeature.metadata.id), displayName: diagramEchartsFeature.metadata.name, version: diagramEchartsFeature.metadata.version, examples: diagramEchartsExamples },
   { shortName: shortName(diagramPlantUmlFeature.metadata.id), displayName: diagramPlantUmlFeature.metadata.name, version: diagramPlantUmlFeature.metadata.version, examples: diagramPlantUmlExamples },
   { shortName: shortName(diagramVegaLiteFeature.metadata.id), displayName: diagramVegaLiteFeature.metadata.name, version: diagramVegaLiteFeature.metadata.version, examples: diagramVegaLiteExamples },
+  { shortName: shortName(mermaidFeature.metadata.id), displayName: mermaidFeature.metadata.name, version: mermaidFeature.metadata.version, examples: mermaidExamples },
   { shortName: shortName(emojiFeature.metadata.id), displayName: emojiFeature.metadata.name, version: emojiFeature.metadata.version, examples: emojiExamples },
   { shortName: shortName(footnoteFeature.metadata.id), displayName: footnoteFeature.metadata.name, version: footnoteFeature.metadata.version, examples: footnoteExamples },
   { shortName: shortName(gfmFeature.metadata.id), displayName: gfmFeature.metadata.name, version: gfmFeature.metadata.version, examples: gfmExamples },

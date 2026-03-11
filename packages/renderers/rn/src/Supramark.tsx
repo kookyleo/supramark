@@ -32,7 +32,7 @@ import type {
 import {
   parseMarkdown,
   isFeatureEnabled,
-  warnIfUnknownDiagramEngine,
+  isDiagramFeatureEnabled,
   getFeatureOptionsAs,
   SUPRAMARK_ADMONITION_KINDS,
 } from '@supramark/core';
@@ -266,7 +266,7 @@ function renderNode(
     case 'diagram': {
       const diagram = node as SupramarkDiagramNode;
       // 如果配置中显式禁用了对应图表 Feature，则降级为代码块渲染
-      if (!isDiagramFeatureEnabled(config, diagram.engine)) {
+      if (!isDiagramFeatureEnabled(config, diagram.engine, 'rn:diagram-feature')) {
         return renderDisabledDiagram(diagram, key, styles);
       }
       return <DiagramNode key={key} node={diagram} diagramConfig={config?.diagram} />;
@@ -608,48 +608,6 @@ function headingStyle(
     default:
       return styles.h4;
   }
-}
-
-/**
- * 根据配置判断某个 diagram engine 是否被启用。
- *
- * 设计约定：
- * - 如果未提供 config，或 config.features 为空，则视为所有内置图表功能启用；
- * - 仅当 config 中**显式包含**相关 Feature 且 enabled 为 false 时，才视为禁用；
- * - 这样既兼容「自动生成的完整配置」，也兼容「只配置少数 Feature」的场景。
- */
-function isDiagramFeatureEnabled(config: SupramarkConfig | undefined, engine: string): boolean {
-  const ids = getFeatureIdsForEngine(engine);
-  if (!ids.length) {
-    // 当前 engine 尚未与具体 Feature 绑定，默认启用，但给出一次性告警
-    warnIfUnknownDiagramEngine(engine as any, 'rn:diagram-feature');
-    return true;
-  }
-  return isFeatureGroupEnabled(config, ids);
-}
-
-/**
- * 将 diagram.engine 映射到对应的 Feature ID。
- *
- * 后续如果增加独立的 Mermaid / PlantUML Feature，只需在此补充映射即可。
- */
-function getFeatureIdsForEngine(engine: string): string[] {
-  const normalized = engine.toLowerCase();
-
-  if (
-    normalized === 'vega' ||
-    normalized === 'vega-lite' ||
-    normalized === 'chart' ||
-    normalized === 'chartjs'
-  ) {
-    return ['@supramark/feature-diagram-vega-lite'];
-  }
-
-  if (normalized === 'echarts') {
-    return ['@supramark/feature-diagram-echarts'];
-  }
-
-  return [];
 }
 
 /**
