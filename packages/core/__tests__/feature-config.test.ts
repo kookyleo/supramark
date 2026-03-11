@@ -7,7 +7,11 @@ import {
   createConfigFromRegistry,
   getEnabledFeatureIds,
   getEnabledFeatures,
+  getDiagramFeatureFamily,
+  getDiagramFeatureIdsForEngine,
   isFeatureEnabled,
+  isDiagramFeatureEnabled,
+  isFeatureGroupEnabled,
   getFeatureOptions,
   type SupramarkConfig,
   type SupramarkNode,
@@ -197,11 +201,67 @@ describe('Feature 配置系统', () => {
     });
   });
 
+  describe('diagram family helpers', () => {
+    it('应该将内置 diagram engine 映射到约定的 family', () => {
+      expect(getDiagramFeatureFamily('mermaid')).toBe('mermaid');
+      expect(getDiagramFeatureFamily('plantuml')).toBe('plantuml');
+      expect(getDiagramFeatureFamily('vega')).toBe('vega-family');
+      expect(getDiagramFeatureFamily('vega-lite')).toBe('vega-family');
+      expect(getDiagramFeatureFamily('chart')).toBe('vega-family');
+      expect(getDiagramFeatureFamily('chartjs')).toBe('vega-family');
+      expect(getDiagramFeatureFamily('echarts')).toBe('echarts');
+      expect(getDiagramFeatureFamily('dot')).toBe('graphviz-family');
+      expect(getDiagramFeatureFamily('graphviz')).toBe('graphviz-family');
+      expect(getDiagramFeatureFamily('custom-engine')).toBeNull();
+    });
+
+    it('应该返回对应 family 的 feature ids', () => {
+      expect(getDiagramFeatureIdsForEngine('mermaid')).toEqual(['@supramark/feature-mermaid']);
+      expect(getDiagramFeatureIdsForEngine('plantuml')).toEqual([
+        '@supramark/feature-diagram-plantuml',
+      ]);
+      expect(getDiagramFeatureIdsForEngine('chart')).toEqual([
+        '@supramark/feature-diagram-vega-lite',
+      ]);
+      expect(getDiagramFeatureIdsForEngine('graphviz')).toEqual([
+        '@supramark/feature-diagram-dot',
+      ]);
+      expect(getDiagramFeatureIdsForEngine('unknown')).toEqual([]);
+    });
+
+    it('应该在 feature group 未出现在配置中时默认启用', () => {
+      const config: SupramarkConfig = {
+        features: [{ id: '@supramark/feature-math', enabled: true }],
+      };
+
+      expect(isFeatureGroupEnabled(config, ['@supramark/feature-mermaid'])).toBe(true);
+      expect(isDiagramFeatureEnabled(config, 'mermaid')).toBe(true);
+    });
+
+    it('应该在 feature group 被显式禁用时返回 false', () => {
+      const config: SupramarkConfig = {
+        features: [{ id: '@supramark/feature-mermaid', enabled: false }],
+      };
+
+      expect(isFeatureGroupEnabled(config, ['@supramark/feature-mermaid'])).toBe(false);
+      expect(isDiagramFeatureEnabled(config, 'mermaid')).toBe(false);
+    });
+
+    it('应该让 graphviz family 共享同一开关', () => {
+      const config: SupramarkConfig = {
+        features: [{ id: '@supramark/feature-diagram-dot', enabled: false }],
+      };
+
+      expect(isDiagramFeatureEnabled(config, 'dot')).toBe(false);
+      expect(isDiagramFeatureEnabled(config, 'graphviz')).toBe(false);
+    });
+  });
+
   describe('集成测试', () => {
     it('应该支持完整的配置流程', () => {
       // 1. 注册 Features
       FeatureRegistry.register({
-        ...createTestFeature('@supramark/feature-mermaid', 'diagram'),
+        ...createTestFeature('@test/feature-mermaid', 'diagram'),
         syntax: {
           ast: {
             type: 'diagram',
@@ -212,7 +272,7 @@ describe('Feature 配置系统', () => {
       });
 
       FeatureRegistry.register({
-        ...createTestFeature('@supramark/feature-vega-lite', 'diagram'),
+        ...createTestFeature('@test/feature-vega-lite', 'diagram'),
         syntax: {
           ast: {
             type: 'diagram',
@@ -229,9 +289,9 @@ describe('Feature 配置系统', () => {
       // 3. 用户自定义配置
       const userConfig: SupramarkConfig = {
         features: [
-          { id: '@supramark/feature-mermaid', enabled: true },
+          { id: '@test/feature-mermaid', enabled: true },
           {
-            id: '@supramark/feature-vega-lite',
+            id: '@test/feature-vega-lite',
             enabled: true,
             options: { theme: 'dark' },
           },
@@ -239,18 +299,18 @@ describe('Feature 配置系统', () => {
       };
 
       // 4. 查询启用状态
-      expect(isFeatureEnabled(userConfig, '@supramark/feature-mermaid')).toBe(true);
-      expect(isFeatureEnabled(userConfig, '@supramark/feature-vega-lite')).toBe(true);
+      expect(isFeatureEnabled(userConfig, '@test/feature-mermaid')).toBe(true);
+      expect(isFeatureEnabled(userConfig, '@test/feature-vega-lite')).toBe(true);
 
       // 5. 获取配置选项
-      const vegaOptions = getFeatureOptions(userConfig, '@supramark/feature-vega-lite');
+      const vegaOptions = getFeatureOptions(userConfig, '@test/feature-vega-lite');
       expect(vegaOptions).toEqual({ theme: 'dark' });
 
       // 6. 获取启用的 Features
       const enabledFeatures = getEnabledFeatures(userConfig);
       expect(enabledFeatures).toHaveLength(2);
-      expect(enabledFeatures[0].metadata.id).toBe('@supramark/feature-mermaid');
-      expect(enabledFeatures[1].metadata.id).toBe('@supramark/feature-vega-lite');
+      expect(enabledFeatures[0].metadata.id).toBe('@test/feature-mermaid');
+      expect(enabledFeatures[1].metadata.id).toBe('@test/feature-vega-lite');
     });
   });
 });
