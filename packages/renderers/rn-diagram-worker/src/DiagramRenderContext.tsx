@@ -3,7 +3,7 @@ import type { SupramarkDiagramConfig } from '@supramark/core';
 import { createDiagramEngine, type DiagramRenderService } from '@supramark/diagram-engine';
 import { DiagramWebViewBridge } from './DiagramWebViewBridge';
 import type { DiagramWebViewBridgeHandle } from './DiagramWebViewBridge';
-import { createEChartsBridge } from './bridges';
+import { createDotBridge, createEChartsBridge, createVegaBridge, createVegaLiteBridge } from './bridges';
 import type { BridgeEngine } from './bridges';
 
 interface DiagramRenderProviderProps {
@@ -48,11 +48,16 @@ export const DiagramRenderProvider: React.FC<DiagramRenderProviderProps> = ({
   }, [timeout, cacheOptions, diagramConfig]);
 
   const bridgeEngines = useMemo<readonly BridgeEngine[]>(() => {
+    const dotCdn = (diagramConfig?.engines?.dot as any)?.cdnUrl as string | undefined;
     const echartsCdn = (diagramConfig?.engines?.echarts as any)?.cdnUrl as string | undefined;
-    // 目前只有 echarts 走 WebView bridge；vega/vega-lite 仍走 diagram-engine（远端 Kroki）。
-    // 后续需要时在此数组追加 createVegaBridge() 等即可启用。
+    const vegaCdn = (diagramConfig?.engines?.vega as any)?.cdnUrl as string | undefined;
+    const vegaLiteCdn = (diagramConfig?.engines?.['vega-lite'] as any)?.cdnUrl as string | undefined;
+
     return [
+      createDotBridge(dotCdn),
       createEChartsBridge(echartsCdn),
+      createVegaBridge(vegaCdn),
+      createVegaLiteBridge(vegaLiteCdn, vegaCdn),
     ];
   }, [diagramConfig]);
 

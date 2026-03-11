@@ -77,7 +77,7 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
     };
 
     const attemptRender = () => {
-      const engine = node.engine.toLowerCase();
+      const engine = normalizeBridgeEngineName(node.engine);
       const bridge = webViewBridgeRef.current;
 
       if (bridge && bridge.engines.includes(engine)) {
@@ -92,6 +92,11 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
           .catch(() => {
             if (cancelled) return;
             renderedViaBridge = false;
+            if (isBridgeOnlyEngine(engine)) {
+              setError(`${engine} WebView render failed`);
+              setLoading(false);
+              return;
+            }
             attemptViaEngine();
           });
         return;
@@ -191,6 +196,18 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
     </View>
   );
 };
+
+function normalizeBridgeEngineName(engine: string): string {
+  const normalized = engine.toLowerCase();
+  if (normalized === 'graphviz') {
+    return 'dot';
+  }
+  return normalized;
+}
+
+function isBridgeOnlyEngine(engine: string): boolean {
+  return engine === 'vega' || engine === 'vega-lite';
+}
 
 /**
  * 根据全局 diagramConfig 和节点自身的 meta 构造渲染选项。
