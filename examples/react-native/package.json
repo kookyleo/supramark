@@ -19,6 +19,8 @@
     "@supramark/feature-diagram-echarts": "workspace:*",
     "@supramark/feature-diagram-vega-lite": "workspace:*",
     "@supramark/feature-gfm": "workspace:*",
+    "@supramark/feature-html-page": "workspace:*",
+    "@supramark/feature-map": "workspace:*",
     "@supramark/rn": "workspace:*",
     "@supramark/rn-diagram-worker": "workspace:*",
     "expo": "~54",
