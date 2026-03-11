@@ -4,6 +4,8 @@ export type DiagramEngine =
   | 'math'
   | 'vega'
   | 'vega-lite'
+  | 'chart'
+  | 'chartjs'
   | 'echarts'
   | string;
 

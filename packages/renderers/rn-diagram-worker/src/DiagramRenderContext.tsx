@@ -547,7 +547,12 @@ const WORKER_HTML = `
               return;
             }
 
-            if (req.engine === 'vega' || req.engine === 'vega-lite') {
+            if (
+              req.engine === 'vega' ||
+              req.engine === 'vega-lite' ||
+              req.engine === 'chart' ||
+              req.engine === 'chartjs'
+            ) {
               renderVegaLite(req);
               return;
             }

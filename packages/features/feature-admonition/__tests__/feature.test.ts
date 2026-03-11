@@ -1,33 +1,28 @@
-import { admonitionFeature } from '../src/feature';
+import { admonitionFeature, ADMONITION_CONTAINER_NAMES } from '../src/feature';
 import { validateContainerFeature } from '@supramark/core';
 
 describe('Admonition Feature', () => {
-  describe('Definition', () => {
-    it('should have valid metadata', () => {
+  describe('ContainerFeature shape', () => {
+    it('should have valid container feature definition', () => {
       const result = validateContainerFeature(admonitionFeature);
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
 
     it('should have correct id', () => {
-      expect(admonitionFeature.id).toMatch(/^@[\w-]+\/feature-[\w-]+$/);
+      expect(admonitionFeature.id).toBe('@supramark/feature-admonition');
     });
 
     it('should have semantic version', () => {
       expect(admonitionFeature.version).toMatch(/^\d+\.\d+\.\d+$/);
     });
 
-    it('should define supported container names', () => {
-      expect(admonitionFeature.containerNames).toEqual(
-        expect.arrayContaining(['note', 'tip', 'info', 'warning', 'danger']),
-      );
+    it('should expose all admonition container names', () => {
+      expect(admonitionFeature.containerNames).toEqual([...ADMONITION_CONTAINER_NAMES]);
     });
 
-    it('should expose parser registration', () => {
+    it('should provide parser registration and renderer exports', () => {
       expect(typeof admonitionFeature.registerParser).toBe('function');
-    });
-
-    it('should expose renderer export names', () => {
       expect(admonitionFeature.webRendererExport).toBe('renderAdmonitionContainerWeb');
       expect(admonitionFeature.rnRendererExport).toBe('renderAdmonitionContainerRN');
     });
