@@ -161,6 +161,8 @@ describe('DiagramEngine', () => {
       expect(result.format).toBe('svg');
       expect(result.payload).toContain('<svg');
       expect(result.payload).toContain('</svg>');
+      expect(result.payload).not.toContain('<style');
+      expect(result.payload).not.toContain('var(--');
     });
 
     it('renders a more complex flowchart', async () => {
@@ -180,6 +182,22 @@ describe('DiagramEngine', () => {
       });
       expect(result.success).toBe(false);
       expect(result.format).toBe('error');
+    });
+
+    it('respects theme options without cache collisions', async () => {
+      const light = await engine.render({
+        engine: 'mermaid',
+        code: 'graph TD\n  A --> B',
+        options: { bg: '#ffffff', fg: '#111111' },
+      });
+      const dark = await engine.render({
+        engine: 'mermaid',
+        code: 'graph TD\n  A --> B',
+        options: { bg: '#111111', fg: '#ffffff' },
+      });
+      expect(light.success).toBe(true);
+      expect(dark.success).toBe(true);
+      expect(light.payload).not.toBe(dark.payload);
     });
   });
 

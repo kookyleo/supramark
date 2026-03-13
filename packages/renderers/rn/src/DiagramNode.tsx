@@ -3,7 +3,7 @@ import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-nat
 import { SvgXml } from 'react-native-svg';
 import type { SupramarkDiagramNode, SupramarkDiagramConfig } from '@supramark/core';
 import type { DiagramRenderResult } from '@supramark/diagram-engine';
-import { useDiagramRender, useDiagramWebViewBridge } from '@supramark/rn-diagram-worker';
+import { useDiagramRender } from './DiagramRenderContext';
 import { normalizeSvg, normalizeSvgLight } from './svgUtils';
 
 export interface DiagramNodeProps {
@@ -20,16 +20,12 @@ export interface DiagramNodeProps {
 
 export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig }) => {
   const diagramRender = useDiagramRender();
-  const webViewBridgeRef = useDiagramWebViewBridge();
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [retryCount, setRetryCount] = useState<number>(0);
-  const maxRetries = 2;
 
   useEffect(() => {
     let cancelled = false;
-    let renderedViaBridge = false;
     setLoading(true);
     setError(null);
     setSvg(null);
@@ -41,13 +37,6 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
         const errorMsg = result.error
           ? `${result.error.message}: ${result.error.details || result.payload}`
           : result.payload || '未知错误';
-
-        if (result.error?.code === 'timeout' && retryCount < maxRetries) {
-          setRetryCount(retryCount + 1);
-          setTimeout(attemptRender, 1000);
-          return;
-        }
-
         setError(errorMsg);
         setLoading(false);
         return;
@@ -56,12 +45,8 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
       if (result.format === 'svg') {
         let normalized;
         try {
-          // WebView bridge 产出的 SVG 已内联 CSS、结构干净，用轻量清理；
-          // SSR / 远端产出（如 mermaid）可能含 <style> 块，用完整清理。
-          const useLightNormalize = renderedViaBridge;
-          normalized = useLightNormalize
-            ? normalizeSvgLight(result.payload)
-            : normalizeSvg(result.payload);
+          const useLightNormalize = !result.payload.includes('<style');
+          normalized = useLightNormalize ? normalizeSvgLight(result.payload) : normalizeSvg(result.payload);
         } catch (err) {
           setError(`SVG 处理错误: ${err}`);
           setLoading(false);
@@ -76,52 +61,19 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
       }
     };
 
-    const attemptRender = () => {
-      const engine = normalizeBridgeEngineName(node.engine);
-      const bridge = webViewBridgeRef.current;
-
-      if (bridge && bridge.engines.includes(engine)) {
-        renderedViaBridge = true;
-        bridge
-          .render({
-            engine,
-            code: node.code,
-            options: node.meta as Record<string, unknown> | undefined,
-          })
-          .then(handleResult)
-          .catch(() => {
-            if (cancelled) return;
-            renderedViaBridge = false;
-            if (isBridgeOnlyEngine(engine)) {
-              setError(`${engine} WebView render failed`);
-              setLoading(false);
-              return;
-            }
-            attemptViaEngine();
-          });
-        return;
-      }
-
-      attemptViaEngine();
-    };
-
-    const attemptViaEngine = () => {
-      const options = buildRenderOptions(node.engine, node.meta, diagramConfig);
-      diagramRender.render({ engine: node.engine, code: node.code, options })
-        .then(handleResult)
-        .catch(err => {
-          if (cancelled) return;
-          setError(String(err));
-          setLoading(false);
-        });
-    };
-
-    attemptRender();
+    const options = buildRenderOptions(node.engine, node.meta, diagramConfig);
+    diagramRender.render({ engine: node.engine, code: node.code, options })
+      .then(handleResult)
+      .catch(err => {
+        if (cancelled) return;
+        setError(String(err));
+        setLoading(false);
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [node.engine, node.code, node.meta, diagramConfig, diagramRender, webViewBridgeRef, retryCount]);
+  }, [node.engine, node.code, node.meta, diagramConfig, diagramRender]);
 
   if (loading && !svg && !error) {
     return (
@@ -135,7 +87,7 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
   if (error) {
     return (
       <View style={styles.placeholder}>
-        <Text style={styles.errorText}>图表渲染错误？：{error}</Text>
+        <Text style={styles.errorText}>图表渲染错误：{error}</Text>
       </View>
     );
   }
@@ -196,18 +148,6 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
     </View>
   );
 };
-
-function normalizeBridgeEngineName(engine: string): string {
-  const normalized = engine.toLowerCase();
-  if (normalized === 'graphviz') {
-    return 'dot';
-  }
-  return normalized;
-}
-
-function isBridgeOnlyEngine(engine: string): boolean {
-  return engine === 'vega' || engine === 'vega-lite' || engine === 'mermaid';
-}
 
 /**
  * 根据全局 diagramConfig 和节点自身的 meta 构造渲染选项。

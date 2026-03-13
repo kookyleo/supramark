@@ -13,7 +13,7 @@ import { diagramPlantUmlExamples } from './examples.js';
  *
  * - 复用通用 `diagram` AST 节点；
  * - 只关心 engine 为 'plantuml' 的 diagram；
- * - 解析与渲染逻辑由现有 pipeline（parseMarkdown + web-diagram + rn-diagram-worker）负责。
+ * - 解析与渲染逻辑由现有 pipeline（parseMarkdown + web-diagram + diagram-engine）负责。
  *
  * @example
  * ```markdown
@@ -86,9 +86,8 @@ export const diagramPlantUmlFeature: SupramarkFeature<SupramarkDiagramNode> = {
     rn: {
       platform: 'rn',
       infrastructure: {
-        needsWorker: true,
+        needsWorker: false,
         needsCache: true,
-        workerType: 'webview',
       },
     },
     web: {

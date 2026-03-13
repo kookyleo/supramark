@@ -25,7 +25,21 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   // Metro 不支持 package.json 的 exports 条件导出,需要手动指定 RN 入口
   if (moduleName === '@supramark/core') {
     return {
-      filePath: path.resolve(workspaceRoot, 'packages/core/dist/index.rn.js'),
+      filePath: path.resolve(workspaceRoot, 'packages/core/src/index.rn.ts'),
+      type: 'sourceFile',
+    };
+  }
+
+  if (moduleName === '@supramark/rn') {
+    return {
+      filePath: path.resolve(workspaceRoot, 'packages/renderers/rn/src/index.ts'),
+      type: 'sourceFile',
+    };
+  }
+
+  if (moduleName === '@supramark/diagram-engine') {
+    return {
+      filePath: path.resolve(workspaceRoot, 'packages/renderers/diagram-engine/src/index.ts'),
       type: 'sourceFile',
     };
   }

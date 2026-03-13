@@ -13,7 +13,7 @@ import { diagramEchartsExamples } from './examples.js';
  *
  * - 复用现有的 `diagram` AST 节点；
  * - 只关心 engine 为 'echarts' 的 diagram；
- * - 解析与渲染逻辑暂由现有 pipeline（parseMarkdown + web-diagram + rn-diagram-worker）负责。
+ * - 解析与渲染逻辑由现有 pipeline（parseMarkdown + web-diagram + diagram-engine）负责。
  *
  * @example
  * ```markdown
@@ -83,19 +83,13 @@ export const diagramEchartsFeature: SupramarkFeature<SupramarkDiagramNode> = {
     rn: {
       platform: 'rn',
       infrastructure: {
-        needsWorker: true,
+        needsWorker: false,
         needsCache: true,
-        workerType: 'webview',
       },
       dependencies: [
         {
           name: 'react-native-svg',
           version: '^13.0.0',
-          type: 'npm',
-        },
-        {
-          name: 'react-native-webview',
-          version: '>=11.0.0',
           type: 'npm',
         },
       ],
@@ -251,7 +245,7 @@ export const diagramEchartsFeature: SupramarkFeature<SupramarkDiagramNode> = {
       {
         question: 'RN 端如何渲染 ECharts？',
         answer:
-          '通过 @supramark/rn-diagram-worker 中的 EChartsWebViewBridge 组件，在隐藏的 WebView 中加载 ECharts 库并渲染为 SVG，再通过消息协议回传给 RN 端用 react-native-svg 呈现。此方案同时兼容 JSC (iOS) 和 Hermes (Android) 运行时。',
+          '通过 diagram-engine 在本地运行时将 ECharts option 渲染为 SVG，再由 RN 端使用 react-native-svg 呈现。',
       },
     ],
   },

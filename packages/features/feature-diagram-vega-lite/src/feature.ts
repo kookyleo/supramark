@@ -13,7 +13,7 @@ import { diagramVegaLiteExamples } from './examples.js';
  *
  * - 复用现有的 `diagram` AST 节点；
  * - 只关心 engine 为 'vega-lite' / 'vega' / 'chart' / 'chartjs' 的子集；
- * - 解析与渲染逻辑暂由现有 pipeline（parseMarkdown + web-diagram + rn-diagram-worker）负责；
+ * - 解析与渲染逻辑由现有 pipeline（parseMarkdown + web-diagram + diagram-engine）负责；
  * - Feature 主要用于：描述约束、生成文档、做能力发现。
  *
  * @example
@@ -92,9 +92,8 @@ export const diagramVegaLiteFeature: SupramarkFeature<SupramarkDiagramNode> = {
     rn: {
       platform: 'rn',
       infrastructure: {
-        needsWorker: true,
+        needsWorker: false,
         needsCache: true,
-        workerType: 'webview',
       },
       dependencies: [
         {
@@ -210,7 +209,7 @@ export const diagramVegaLiteFeature: SupramarkFeature<SupramarkDiagramNode> = {
 
 - 语法：使用 \`\\\`\\\`vega-lite\`、\`\\\`\\\`vega\`、\`\\\`\\\`chart\` 或 \`\\\`\\\`chartjs\` 围栏代码块；
 - AST：解析为 \`diagram\` 节点，engine 字段为对应引擎名，code 为 JSON spec；
-- 渲染：通过统一图表子系统（RN 端 headless WebView，Web 端 @supramark/web-diagram）生成 SVG。
+- 渲染：通过统一图表子系统（RN 端本地 \`diagram-engine\`，Web 端 \`@supramark/web-diagram\`）生成 SVG。
     `.trim(),
 
     api: {
@@ -268,7 +267,7 @@ export const diagramVegaLiteFeature: SupramarkFeature<SupramarkDiagramNode> = {
       {
         question: 'Vega-Lite 图表何时会被实际渲染为 SVG？',
         answer:
-          '在 RN 端由 @supramark/rn-diagram-worker 的 headless WebView 渲染，在 Web 端由 @supramark/web-diagram 注入的脚本完成。',
+          '在 RN 端由 diagram-engine 本地渲染，在 Web 端由 @supramark/web-diagram 注入的脚本完成。',
       },
     ],
   },

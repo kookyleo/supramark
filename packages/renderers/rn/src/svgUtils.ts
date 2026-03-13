@@ -22,7 +22,7 @@ export function normalizeSvgLight(xml: string): string {
     .replace(/<desc[\s\S]*?<\/desc>/gi, '')
     .replace(/<metadata[\s\S]*?<\/metadata>/gi, '');
 
-  // Remove <style> blocks (already inlined by WebView bridge)
+  // Remove <style> blocks after engine-level style inlining / normalization.
   normalized = normalized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
 
   // Collapse whitespace-only text nodes between tags (safe)

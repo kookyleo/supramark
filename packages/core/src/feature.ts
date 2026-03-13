@@ -599,8 +599,8 @@ export interface ValidationWarning {
  * - 实际的渲染逻辑仍在各平台包中实现（@supramark/rn、@supramark/web）
  *
  * **对于复杂功能（如图表）**：
- * - 可以通过 `infrastructure` 字段声明需要 WebView、Worker、客户端脚本等
- * - 实际的 Worker/Script 实现仍在各平台包中
+ * - 可以通过 `infrastructure` 字段声明需要缓存、客户端脚本等运行时能力
+ * - 具体实现仍在各平台包中
  *
  * @example
  * // 简化的渲染器定义（仅声明平台支持和依赖）

@@ -634,7 +634,7 @@ export const vegaLiteFeature: SupramarkFeature<DiagramNode> = {
   renderers: {
     rn: {
       infrastructure: {
-        needsWorker: true,
+        needsWorker: false,
         needsCache: true,
       },
     },
@@ -669,10 +669,10 @@ export function App() {
 
 ### 3. 实现渲染逻辑
 
-在 `diagram-worker` 中添加 Vega-Lite 渲染支持：
+在 `diagram-engine` 中添加 Vega-Lite 渲染支持：
 
 ```typescript
-// packages/rn-diagram-worker/src/engines/vega-lite.ts
+// packages/renderers/diagram-engine/src/engines/vega-lite.ts
 export async function renderVegaLite(spec: string): Promise<string> {
   // 使用 Vega-Lite 库渲染
   const view = new vega.View(vega.parse(vegaLite.compile(JSON.parse(spec)).spec));

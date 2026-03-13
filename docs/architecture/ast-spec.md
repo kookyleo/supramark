@@ -585,7 +585,7 @@ graph TD
 
 **渲染策略：**
 
-- **RN**：通过 `@supramark/rn-diagram-worker` 的 headless WebView 渲染为 SVG
+- **RN**：通过本地 `@supramark/diagram-engine` 渲染为 SVG
 - **Web**：通过浏览器端脚本（Mermaid.js 等）渲染为 SVG/Canvas
 
 ---

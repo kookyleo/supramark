@@ -31,7 +31,7 @@ export class DiagramEngine implements DiagramRenderService {
     const { engine, code, options } = params;
     const startTime = Date.now();
     const id = `de_${Date.now()}_${this.requestId++}`;
-    const cacheKey = createCacheKey(engine, simpleHash(code));
+    const cacheKey = createCacheKey(engine, simpleHash(code), simpleHash(stableSerialize(options ?? {})));
 
     // Check cache
     if (this.cacheEnabled) {
@@ -113,7 +113,7 @@ export class DiagramEngine implements DiagramRenderService {
     switch (normalizedEngine) {
       case 'mermaid': {
         const { renderMermaid } = await import('./engines/mermaid.js');
-        return { payload: await renderMermaid(code), format: 'svg' };
+        return { payload: await renderMermaid(code, options), format: 'svg' };
       }
       case 'dot': {
         const { renderDot } = await import('./engines/dot.js');
@@ -157,4 +157,18 @@ export class DiagramEngine implements DiagramRenderService {
       totalSize: stats.totalSize,
     };
   }
+}
+
+function stableSerialize(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(',')}]`;
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entryValue]) => `${key}:${stableSerialize(entryValue)}`);
+    return `{${entries.join(',')}}`;
+  }
+  return String(value);
 }

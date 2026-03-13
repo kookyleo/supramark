@@ -46,7 +46,7 @@ interface SupramarkMathBlockNode {
 
 ## 平台支持
 
-- [x] React Native（通过 `@supramark/rn` + headless WebView + MathJax/KaTeX 渲染为 SVG）
+- [x] React Native（通过 `@supramark/rn` + 本地 MathJax 渲染为 SVG）
 - [x] Web (React)（通过 `@supramark/web` + KaTeX / MathJax 渲染）
 - [ ] CLI (终端)
 

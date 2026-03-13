@@ -248,7 +248,7 @@ export interface SupramarkCodeNode extends SupramarkBaseNode {
  * 块级数学公式节点（对应 $$...$$）
  *
  * 语义上接近 mdast 的 "math" 节点，但这里只保留原始 TeX 文本，
- * 实际渲染由上层（KaTeX / headless WebView 等）负责。
+ * 实际渲染由上层（KaTeX / diagram-engine 等）负责。
  */
 export interface SupramarkMathBlockNode extends SupramarkBaseNode {
   type: 'math_block';

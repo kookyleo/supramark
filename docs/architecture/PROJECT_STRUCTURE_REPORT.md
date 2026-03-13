@@ -20,12 +20,7 @@
 #### `packages/renderers/rn`
 
 - 功能：React Native 渲染层，把 supramark AST 映射成 RN 组件并内置 Markdown / Math / Diagram 等渲染。
-- 依赖：直接依赖 `@supramark/core`，对 `@supramark/rn-diagram-worker` 与 `react-native-svg` 定义可选 peer 依赖。
-
-#### `packages/renderers/rn-diagram-worker`
-
-- 功能：封装隐藏 WebView 的后台图表渲染服务，面向 Mermaid / PlantUML / Vega 等引擎输出 SVG/PNG。
-- 依赖：声明 `react-native-webview`、`react`/`react-native` 的 peer 依赖，供渲染层按需接入。
+- 依赖：直接依赖 `@supramark/core`、`@supramark/diagram-engine` 与 `react-native-svg`。
 
 #### `packages/renderers/web`
 

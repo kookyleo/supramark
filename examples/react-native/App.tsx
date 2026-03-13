@@ -8,8 +8,7 @@ import {
   View,
   Alert,
 } from 'react-native';
-import { Supramark } from '@supramark/rn';
-// import { DiagramRenderProvider } from '@supramark/rn-diagram-worker'; // 临时注释掉以避免LRUCache问题
+import { DiagramRenderProvider, Supramark } from '@supramark/rn';
 import type { SupramarkConfig } from '@supramark/core';
 import { createCoreMarkdownFeatureConfig } from '@supramark/feature-core-markdown';
 import { createGfmFeatureConfig } from '@supramark/feature-gfm';
@@ -32,9 +31,7 @@ console.error = (...args) => {
   originalError(...args);
 };
 
-// 统一的 Supramark 配置示例：
-// - 与 React Web 示例共享思路；
-// - diagram 配置通过 DiagramRenderProvider + Supramark 同时生效。
+// 统一的 Supramark 配置示例，与 React Web 示例共享思路。
 const BASE_CONFIG: SupramarkConfig = {
   // 配置示例：只启用部分扩展，并通过 options 控制行为
   features: [
@@ -189,10 +186,9 @@ function InnerApp() {
 
 export default function App() {
   return (
-    // 临时注释掉DiagramRenderProvider以避免LRUCache兼容性问题
-    // <DiagramRenderProvider diagramConfig={BASE_CONFIG.diagram}>
-    <InnerApp />
-    // </DiagramRenderProvider>
+    <DiagramRenderProvider diagramConfig={BASE_CONFIG.diagram}>
+      <InnerApp />
+    </DiagramRenderProvider>
   );
 }
 

@@ -10,7 +10,7 @@
 - 代码块（多行代码展示）；
 - 数学公式（Math / LaTeX）；
 - 脚注、定义列表、Admonition、Emoji 等；
-- 图表示例：使用 ` ```mermaid` / ` ```plantuml` / ` ```vega-lite` / ` ```echarts` 等代码块生成 `diagram` 节点，在 RN 中通过 headless WebView 渲染为 SVG 并展示。
+- 图表示例：使用 ` ```mermaid` / ` ```plantuml` / ` ```vega-lite` / ` ```echarts` 等代码块生成 `diagram` 节点，在 RN 中通过本地图表引擎渲染为 SVG 并展示。
 
 选择左侧的某一项，可以在右侧看到：
 

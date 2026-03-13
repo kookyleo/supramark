@@ -2,6 +2,21 @@
 
 ## 最新增量
 
+- RN Mermaid 渲染方案已切换为纯本地实现：
+  - 不再依赖 headless WebView；
+  - 不再依赖远端图表服务；
+  - React Native 侧直接在本地调用 `beautiful-mermaid` 生成 SVG。
+- RN Mermaid SVG 兼容层已补充：
+  - 去掉 `<style>` 与 CSS 变量依赖；
+  - 将 `var(--...)` 和派生主题色转换为静态属性；
+  - 输出可直接交给 `react-native-svg` 渲染的静态 SVG。
+- RN diagram 渲染入口已改为本地 engine 直连：
+  - `@supramark/rn` 内部直接使用 `@supramark/diagram-engine`；
+  - Mermaid / DOT / Vega / ECharts / PlantUML 均不再经过 WebView bridge。
+- 宿主如果之前做过 Hermes/WebView 兼容 shim：
+  - 需要移除对 `beautiful-mermaid` 的禁用 shim；
+  - 需要移除旧的 WebView/bridge 接线，否则仍会命中旧逻辑。
+
 - RN LaTeX / Math 渲染方案已切换为本地 MathJax：
   - `math_block` 与 `math_inline` 均不再通过 headless WebView 渲染；
   - 不再依赖远端数学公式服务；
@@ -14,11 +29,11 @@
   - 继续沿用现有 KaTeX / Web 渲染路径；
   - 本次调整仅影响 React Native 数学公式渲染链路。
 
-- RN diagram worker 已注册的浏览器型引擎统一优先走 headless WebView。
-- Vega / Vega-Lite 已接入 headless WebView，本地在 WebView 内完成编译与 SVG 渲染，不再走 Kroki 远端服务。
-- DOT / Graphviz 已接入 headless WebView，本地通过 Viz.js 生成 SVG，不再走 Kroki 远端服务。
-- RN Math 已切为本地 headless WebView 渲染：`math_block` 通过 MathJax 3 生成 SVG，`math_inline` 通过 MathJax 3 生成 SVG 后在 WebView 内转 PNG；Web 端继续保持 KaTeX 不变。
-- RN headless WebView bridge 已增加统一内存缓存，覆盖 Math / DOT / Mermaid / Vega / ECharts 等浏览器型渲染结果。
+- RN 图表渲染现已统一收口到本地 engine：
+  - Vega / Vega-Lite 在本地完成编译与 SVG 渲染；
+  - DOT / Graphviz 在本地通过 Viz.js 生成 SVG；
+  - ECharts 在本地完成 SSR SVG 输出；
+  - PlantUML 继续通过远端服务拉取 SVG，但不再依赖 RN 侧 WebView。
 
 ---
 

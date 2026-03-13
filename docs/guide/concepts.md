@@ -188,7 +188,7 @@ Web 和 RN 使用相同的 API：
 某些功能依赖浏览器环境（如图表渲染）：
 
 - **Web**: 直接使用 Mermaid、Vega 等库
-- **RN**: 使用 Headless WebView Worker 后台渲染
+- **RN**: 使用本地 `diagram-engine` 生成 SVG，再交给 `react-native-svg`
 
 ## 扩展性
 

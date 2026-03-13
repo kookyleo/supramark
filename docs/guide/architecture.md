@@ -234,66 +234,25 @@ function DiagramRenderer({ code }: { code: string }) {
 **RN 端**：
 
 ```typescript
-// 使用 Headless WebView Worker
-import { useDiagramRender } from '@supramark/rn-diagram-worker'
+import { DiagramRenderProvider } from '@supramark/rn'
 
-function DiagramRenderer({ code }: { code: string }) {
-  const { svg } = useDiagramRender({ engine: 'mermaid', code })
-  return <SvgImage source={{ uri: svg }} />
+function App() {
+  return (
+    <DiagramRenderProvider>
+      <Supramark markdown={'```mermaid\\ngraph TD\\nA-->B\\n```'} />
+    </DiagramRenderProvider>
+  )
 }
 ```
 
-## Headless WebView Worker
-
-### 架构
-
-```
-┌────────────────────────────────┐
-│      RN Main Thread            │
-│  ┌──────────────────────────┐  │
-│  │  <Supramark>             │  │
-│  │    ├─ Paragraph          │  │
-│  │    ├─ Math ─────────┐    │  │
-│  │    └─ Diagram ───┐   │    │  │
-│  └──────────────────│───│────┘  │
-│                     │   │        │
-│                     ↓   ↓        │
-│  ┌─────────────────────────────┐│
-│  │ DiagramRenderProvider       ││
-│  │   render({ engine, code })  ││
-│  └─────────────────────────────┘│
-│                ↓                 │
-│        postMessage()             │
-└────────────────│─────────────────┘
-                 │
-                 ↓
-┌────────────────────────────────┐
-│   Headless WebView Worker      │
-│  ┌──────────────────────────┐  │
-│  │  Rendering Engines       │  │
-│  │  ├─ Mermaid.js           │  │
-│  │  ├─ Vega.js              │  │
-│  │  ├─ PlantUML             │  │
-│  │  └─ KaTeX/MathJax        │  │
-│  └──────────────────────────┘  │
-│                ↓                │
-│        Generate SVG/PNG         │
-│                ↓                │
-│        postMessage(result)      │
-└─────────────────────────────────┘
-```
+## RN 本地图表渲染
 
 ### 工作流程
 
 1. RN 组件请求渲染图表
-2. DiagramRenderProvider 发送消息到 WebView
-3. WebView 内的 JS 引擎渲染图表
-4. 返回 SVG/PNG 数据
-5. RN 组件展示结果
-
-优点：
-
-- 单个 WebView 服务所有图表
+2. `DiagramRenderProvider` 调用本地 `diagram-engine`
+3. 图表引擎在当前运行时生成 SVG
+4. `DiagramNode` 使用 `react-native-svg` 展示结果
 - 后台渲染，不阻塞 UI
 - 支持所有浏览器图表库
 

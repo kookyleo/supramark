@@ -59,7 +59,7 @@ PORT=8080 npm run start
 
 ## 与 React Native 示例的关系
 
-- `examples/react-native`：使用 `@supramark/rn` + `@supramark/rn-diagram-worker` 在 React Native 中渲染 Markdown 和图表；
+- `examples/react-native`：使用 `@supramark/rn` 在 React Native 中渲染 Markdown 和图表；
 - `examples/react-web`：使用 `@supramark/web` 在浏览器环境中渲染 Markdown 和图表：
   - 两者共享 supramark AST 与插件体系；
-  - 图表渲染细节分别由 RN 的 headless WebView 与 Web 端 Mermaid 脚本封装，对业务代码透明。
+  - 图表渲染细节分别由 RN 的本地图表引擎与 Web 端 Mermaid 脚本封装，对业务代码透明。
