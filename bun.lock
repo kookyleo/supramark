@@ -31,14 +31,12 @@
         "@supramark/feature-diagram-vega-lite": "workspace:*",
         "@supramark/feature-gfm": "workspace:*",
         "@supramark/rn": "workspace:*",
-        "@supramark/rn-diagram-worker": "workspace:*",
         "expo": "~54",
         "expo-status-bar": "~1.12.1",
         "react": "18.2.0",
         "react-native": "0.81.5",
         "react-native-maps": "1.14.0",
         "react-native-svg": "15.2.0",
-        "react-native-webview": "13.8.6",
       },
       "devDependencies": {
         "@react-native-community/cli": "^20.0.2",
@@ -301,43 +299,21 @@
       "version": "0.1.0",
       "dependencies": {
         "@supramark/core": "workspace:*",
+        "@supramark/diagram-engine": "workspace:*",
         "mathjax-full": "^3.2.2",
       },
       "devDependencies": {
         "typescript": "^5.5.0",
       },
       "peerDependencies": {
-        "@supramark/rn-diagram-worker": "0.1.0",
         "react": ">=18.0.0",
         "react-native": ">=0.72.0",
         "react-native-svg": ">=13.0.0",
       },
       "optionalPeers": [
-        "@supramark/rn-diagram-worker",
         "react",
         "react-native",
         "react-native-svg",
-      ],
-    },
-    "packages/renderers/rn-diagram-worker": {
-      "name": "@supramark/rn-diagram-worker",
-      "version": "0.3.0",
-      "dependencies": {
-        "@supramark/core": "workspace:*",
-        "@supramark/diagram-engine": "workspace:*",
-      },
-      "devDependencies": {
-        "typescript": "^5.5.0",
-      },
-      "peerDependencies": {
-        "react": ">=18.0.0",
-        "react-native": ">=0.72.0",
-        "react-native-webview": ">=11.0.0",
-      },
-      "optionalPeers": [
-        "react",
-        "react-native",
-        "react-native-webview",
       ],
     },
     "packages/renderers/web": {
@@ -967,8 +943,6 @@
     "@supramark/feature-weather": ["@supramark/feature-weather@workspace:packages/features/feature-weather"],
 
     "@supramark/rn": ["@supramark/rn@workspace:packages/renderers/rn"],
-
-    "@supramark/rn-diagram-worker": ["@supramark/rn-diagram-worker@workspace:packages/renderers/rn-diagram-worker"],
 
     "@supramark/web": ["@supramark/web@workspace:packages/renderers/web"],
 

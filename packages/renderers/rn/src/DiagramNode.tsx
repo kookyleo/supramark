@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  LayoutChangeEvent,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import type { SupramarkDiagramNode, SupramarkDiagramConfig } from '@supramark/core';
 import type { DiagramRenderResult } from '@supramark/diagram-engine';
@@ -23,6 +29,14 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+
+  const handleLayout = (event: LayoutChangeEvent) => {
+    // 中文注释：图表宽度必须跟随父容器，而不是直接按屏宽渲染，
+    // 否则放进聊天气泡等窄容器时会右偏、溢出或触发重复布局。
+    const nextWidth = Math.max(0, Math.floor(event.nativeEvent.layout.width));
+    setContainerWidth(prev => (prev === nextWidth ? prev : nextWidth));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -77,7 +91,7 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
 
   if (loading && !svg && !error) {
     return (
-      <View style={styles.placeholder}>
+      <View style={styles.placeholder} onLayout={handleLayout}>
         <ActivityIndicator size="small" />
         <Text style={styles.placeholderText}>正在渲染图表（{node.engine}）...</Text>
       </View>
@@ -86,68 +100,74 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
 
   if (error) {
     return (
-      <View style={styles.placeholder}>
+      <View style={styles.placeholder} onLayout={handleLayout}>
         <Text style={styles.errorText}>图表渲染错误：{error}</Text>
       </View>
     );
   }
 
   if (svg) {
-    const { width: screenWidth } = Dimensions.get('window');
-    const containerWidth = screenWidth - 32; // account for typical padding
-
-    // Try viewBox first, then fall back to width/height attributes
-    const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
-    const widthAttrMatch = svg.match(/<svg[^>]*\bwidth="([^"]+)"/);
-    const heightAttrMatch = svg.match(/<svg[^>]*\bheight="([^"]+)"/);
-
-    let svgWidth = 0;
-    let svgHeight = 0;
-
-    if (viewBoxMatch) {
-      const parts = viewBoxMatch[1].split(/[\s,]+/);
-      if (parts.length === 4) {
-        svgWidth = parseFloat(parts[2]);
-        svgHeight = parseFloat(parts[3]);
-      }
-    }
-
-    // Fall back to explicit width/height attributes
-    if (svgWidth <= 0 && widthAttrMatch) svgWidth = parseFloat(widthAttrMatch[1]);
-    if (svgHeight <= 0 && heightAttrMatch) svgHeight = parseFloat(heightAttrMatch[1]);
+    const containerSize = getSvgSize(svg);
+    // 中文注释：首次 layout 前给出保守宽度，避免 0 宽导致的空白；
+    // 一旦量到父容器宽度，就立即切换为真实宽度。
+    const effectiveWidth = containerWidth > 0 ? containerWidth : 320;
 
     let height = 300;
-    if (svgWidth > 0 && svgHeight > 0) {
-      height = (svgHeight / svgWidth) * containerWidth;
+    if (containerSize && containerSize.width > 0 && containerSize.height > 0) {
+      height = (containerSize.height / containerSize.width) * effectiveWidth;
       height = Math.min(height, 500);
     }
 
     // Ensure SVG has viewBox and no fixed dimensions for proper scaling
     let scalableSvg = svg;
-    if (!viewBoxMatch && svgWidth > 0 && svgHeight > 0) {
+    if (!/viewBox="[^"]+"/.test(scalableSvg) && containerSize) {
       scalableSvg = scalableSvg.replace(
         /<svg([^>]*)>/,
-        `<svg$1 viewBox="0 0 ${svgWidth} ${svgHeight}">`
+        `<svg$1 viewBox="0 0 ${containerSize.width} ${containerSize.height}">`
       );
     }
-    // Remove fixed width/height from SVG root so SvgXml controls sizing
+    // 中文注释：去掉根节点固定宽高，让 SvgXml 用父容器尺寸控制最终显示大小。
     scalableSvg = scalableSvg
       .replace(/(<svg[^>]*)\bwidth="[^"]*"/, '$1')
       .replace(/(<svg[^>]*)\bheight="[^"]*"/, '$1');
 
     return (
-      <View style={[styles.diagram, { width: containerWidth, height }]}>
-        <SvgXml xml={scalableSvg} width={containerWidth} height={height} />
+      <View style={[styles.diagram, { height }]} onLayout={handleLayout}>
+        <SvgXml xml={scalableSvg} width={effectiveWidth} height={height} />
       </View>
     );
   }
 
   return (
-    <View style={styles.placeholder}>
+    <View style={styles.placeholder} onLayout={handleLayout}>
       <Text style={styles.placeholderText}>[diagram: {node.engine}]</Text>
     </View>
   );
 };
+
+function getSvgSize(svg: string): { width: number; height: number } | null {
+  const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
+  if (viewBoxMatch) {
+    const parts = viewBoxMatch[1].split(/[\s,]+/);
+    if (parts.length === 4) {
+      const width = parseFloat(parts[2]);
+      const height = parseFloat(parts[3]);
+      if (width > 0 && height > 0) {
+        return { width, height };
+      }
+    }
+  }
+
+  const widthAttrMatch = svg.match(/<svg[^>]*\bwidth="([^"]+)"/);
+  const heightAttrMatch = svg.match(/<svg[^>]*\bheight="([^"]+)"/);
+  const width = widthAttrMatch ? parseFloat(widthAttrMatch[1]) : 0;
+  const height = heightAttrMatch ? parseFloat(heightAttrMatch[1]) : 0;
+  if (width > 0 && height > 0) {
+    return { width, height };
+  }
+
+  return null;
+}
 
 /**
  * 根据全局 diagramConfig 和节点自身的 meta 构造渲染选项。
@@ -188,9 +208,13 @@ function buildRenderOptions(
 
 const styles = StyleSheet.create({
   diagram: {
+    width: '100%',
+    minWidth: 0,
     marginBottom: 8,
   },
   placeholder: {
+    width: '100%',
+    minWidth: 0,
     padding: 8,
     borderRadius: 4,
     borderWidth: 1,

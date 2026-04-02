@@ -56,7 +56,7 @@ export async function renderECharts(
 
   try {
     chart.setOption(option);
-    const svg: string = chart.renderToSVGString();
+    const svg: string = chart.renderToSVGString().replace(/pointer-events="visible"/g, '');
     return svg;
   } finally {
     chart.dispose();
