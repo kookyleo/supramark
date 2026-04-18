@@ -19,7 +19,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json --emitDeclarationOnly",
-    "test": "jest"
+    "test": "bun test"
   },
   "peerDependencies": {
     "@supramark/core": "*"

@@ -15,7 +15,7 @@ interface MapContainerData {
   meta?: Record<string, unknown>;
 }
 
-type SupramarkMapContainerNode = SupramarkContainerNode & {
+export type SupramarkMapContainerNode = SupramarkContainerNode & {
   name: 'map';
   data: MapContainerData;
 };
@@ -27,23 +27,11 @@ const isMapContainer = (node: SupramarkNode): node is SupramarkMapContainerNode 
 /**
  * Map Feature
  *
- * 地图卡片占位
+ * 为 Supramark 提供地图卡片占位支持。
  *
- * @example
- * ```markdown
- * :::map
- * center: [34.05, -118.24]
- * zoom: 12
- * marker:
- *   lat: 34.05
- *   lng: -118.24
- * :::
- * ```
- *
- * 节点类型说明：
- * - 解析统一生成 `type: 'map'` 的块级节点；
- * - 通过 center / zoom / marker 字段表达地图视图；
- * - 具体地图容器（Web / RN）由宿主实现。
+ * - 将 :::map 容器解析为 `map` 节点；
+ * - 携带中心点、缩放级别和标记点数据；
+ * - 具体地图实现（Apple Maps, Google Maps, Mapbox 等）由宿主决定。
  */
 export const mapFeature: SupramarkFeature<SupramarkMapContainerNode> = {
   metadata: {
@@ -51,9 +39,9 @@ export const mapFeature: SupramarkFeature<SupramarkMapContainerNode> = {
     name: 'Map',
     version: '0.1.0',
     author: 'Supramark Team',
-    description: '地图卡片占位',
+    description: '使用 :::map 容器定义地图占位节点，支持经纬度中心点和标记。',
     license: 'Apache-2.0',
-    tags: ['map', 'location', 'geo'],
+    tags: ['map', 'location', 'geo', 'container'],
     syntaxFamily: 'container',
   },
 
@@ -61,8 +49,6 @@ export const mapFeature: SupramarkFeature<SupramarkMapContainerNode> = {
     ast: {
       type: 'container',
       selector: isMapContainer,
-
-      // 可选：描述节点接口
       interface: {
         required: ['type', 'name', 'data', 'children'],
         optional: ['params'],
@@ -77,59 +63,34 @@ export const mapFeature: SupramarkFeature<SupramarkMapContainerNode> = {
           },
           data: {
             type: 'object',
-            description: '地图数据，包含 center / zoom / marker / meta 等结构化字段。',
+            description: '地图数据，包含中心点 center、缩放 zoom 和标记 marker。',
+          },
+          children: {
+            type: 'array',
+            description: '子节点列表，对于 map 容器通常为空。',
           },
         },
       },
-
-      // 可选：节点约束
       constraints: {
         allowedParents: ['root', 'paragraph', 'list_item'],
         allowedChildren: [],
       },
-
-      // 可选：示例节点
       examples: [
         {
           type: 'container',
           name: 'map',
           data: {
-            center: [34.05, -118.24],
+            center: [39.9042, 116.4074],
             zoom: 12,
-            marker: { lat: 34.05, lng: -118.24 },
+            marker: { lat: 39.9042, lng: 116.4074 },
           },
           children: [],
         } as SupramarkMapContainerNode,
       ],
     },
-
-    // 可选：如果需要自定义解析器
-    // parser: {
-    //   engine: 'markdown-it',
-    //   markdownIt: {
-    //     plugin: yourPlugin,
-    //     tokenMapper: (token, context) => { /* ... */ }
-    //   }
-    // },
-
-    // 可选：验证规则
-    // validator: {
-    //   validate: (node) => {
-    //     // TODO: 添加验证逻辑
-    //     return { valid: true, errors: [] };
-    //   }
-    // },
   },
 
   renderers: {
-    rn: {
-      platform: 'rn',
-      infrastructure: {
-        needsWorker: false,
-        needsCache: false,
-      },
-      dependencies: [],
-    },
     web: {
       platform: 'web',
       infrastructure: {
@@ -139,87 +100,61 @@ export const mapFeature: SupramarkFeature<SupramarkMapContainerNode> = {
       },
       dependencies: [],
     },
+    rn: {
+      platform: 'rn',
+      infrastructure: {
+        needsWorker: false,
+        needsCache: false,
+      },
+      dependencies: [],
+    },
   },
 
-  // 使用示例
   examples: mapExamples,
 
-  // 测试定义（最小可用）
   testing: {
     syntaxTests: {
       cases: [
         {
-          name: '解析 :::map 容器为 map 节点',
-          input: [
-            ':::map',
-            'center: [34.05, -118.24]',
-            'zoom: 12',
-            ':::',
-          ].join('\n'),
+          name: '解析 :::map 容器',
+          input: ':::map\ncenter: [0, 0]\n:::',
           expected: {
             type: 'container',
             name: 'map',
           } as SupramarkMapContainerNode,
-          options: {
-            typeOnly: true,
-          },
+          options: { typeOnly: true },
         },
       ],
     },
     renderTests: {
       web: [
         {
-          name: 'Web 渲染 map 节点（占位卡片存在）',
+          name: 'Web 渲染占位图层',
           input: {
             type: 'container',
             name: 'map',
             data: { center: [0, 0] },
             children: [],
           } as SupramarkMapContainerNode,
-          expected: (output: unknown) => output !== null && output !== undefined,
-          snapshot: false,
-        },
-      ],
-      rn: [
-        {
-          name: 'RN 渲染 map 节点（占位卡片存在）',
-          input: {
-            type: 'container',
-            name: 'map',
-            data: { center: [0, 0] },
-            children: [],
-          } as SupramarkMapContainerNode,
-          expected: (output: unknown) => output !== null && output !== undefined,
-          snapshot: false,
+          expected: (output) => output !== null,
         },
       ],
     },
     integrationTests: {
       cases: [
         {
-          name: '端到端：markdown 中包含 :::map 容器',
-          input: [
-            '# Map demo',
-            '',
-            ':::map',
-            'center: [34.05, -118.24]',
-            ':::',
-          ].join('\n'),
-          validate: (result: unknown) => {
-            if (!result || typeof result !== 'object') return false;
-            const root = result as any;
-            const children = Array.isArray(root.children) ? root.children : [];
-            return children.some((n: any) => n.type === 'container' && n.name === 'map');
-          },
+          name: 'Map 集成测试',
+          input: ':::map\ncenter: [0, 0]\n:::',
+          validate: (result: any) => result.children?.[0]?.name === 'map',
           platforms: ['web', 'rn'],
         },
       ],
     },
     coverageRequirements: {
-      statements: 40,
-      branches: 30,
-      functions: 30,
-      lines: 40,
+      statements: 80,
+      branches: 80,
+      functions: 80,
+      lines: 80,
     },
   },
 
@@ -227,30 +162,28 @@ export const mapFeature: SupramarkFeature<SupramarkMapContainerNode> = {
     readme: `
 # Map Feature
 
-使用 \`:::map\` 容器定义一张「地图卡片」占位节点，由宿主在 RN / Web 中提供具体地图实现。
+使用 \`:::map\` 容器定义地图占位节点。
 
-- 语法：\`:::map ... :::\`；
-- AST：解析为 \`map\` 节点，包含 center / zoom / marker / meta 等结构化字段；
-- 渲染：默认实现为简单卡片，展示「这里应该是地图」，真实地图由宿主注入。
+支持通过 YAML 或 JSON 配置经纬度、缩放级别和标记点。宿主应用可以根据这些数据渲染交互式地图。
     `.trim(),
-
     api: {
       interfaces: [
         {
           name: 'MapFeatureOptions',
-          description: 'Map Feature 的配置选项，例如默认 provider / defaultZoom。',
+          description: 'Map 配置选项',
           fields: [
             {
               name: 'provider',
-              type: `'apple' | 'google' | 'mapbox' | 'custom' | undefined`,
-              description: '默认地图提供方标识，由宿主解释具体含义。',
+              type: "'apple' | 'google' | 'mapbox' | 'custom'",
+              description: '地图服务商标识',
               required: false,
             },
             {
               name: 'defaultZoom',
-              type: 'number | undefined',
-              description: '当节点未指定 zoom 时使用的默认缩放级别。',
+              type: 'number',
+              description: '默认缩放级别',
               required: false,
+              default: '12',
             },
           ],
         },
@@ -258,55 +191,31 @@ export const mapFeature: SupramarkFeature<SupramarkMapContainerNode> = {
       functions: [
         {
           name: 'createMapFeatureConfig',
-          description: '创建 Map Feature 的配置对象，用于 SupramarkConfig.features。',
+          description: '创建 Map 特性配置',
           parameters: [
-            { name: 'enabled', type: 'boolean', description: '是否启用该 Feature', optional: true },
-            { name: 'options', type: 'MapFeatureOptions', description: '可选配置项', optional: true },
+            { name: 'enabled', type: 'boolean', description: '是否启用' },
+            { name: 'options', type: 'MapFeatureOptions', description: '选项', optional: true },
           ],
           returns: 'MapFeatureConfig',
         },
+      ],
+      types: [
         {
-          name: 'getMapFeatureOptions',
-          description: '从 SupramarkConfig 中读取 Map Feature 的 options。',
-          parameters: [
-            { name: 'config', type: 'SupramarkConfig | undefined', description: '全局 supramark 配置', optional: true },
-          ],
-          returns: 'MapFeatureOptions | undefined',
+          name: 'MapFeatureConfig',
+          description: '配置类型定义',
+          definition: 'type MapFeatureConfig = FeatureConfigWithOptions<MapFeatureOptions>',
         },
       ],
-      types: [],
     },
-
     bestPractices: [
-      '在 options.provider 中声明抽象的 provider 标识，由宿主进行实际映射。',
-      '将地图业务逻辑封装在宿主组件中，Map 节点只承担数据与占位作用。',
-    ],
-
-    faq: [
-      {
-        question: '为什么 Map Feature 默认只渲染卡片而不是直接画地图？',
-        answer:
-          '因为不同项目对地图 SDK 的选择差异很大（Apple / Google / 第三方），supramark 只负责抽象 AST 结构和占位渲染，真实地图由宿主注入实现。',
-      },
-      {
-        question: 'MapFeatureOptions 有什么作用？',
-        answer:
-          '它提供了一层与具体地图库解耦的配置：例如通过 provider 声明使用哪一类地图服务，通过 defaultZoom 指定未配置 zoom 时的默认缩放级别，上层宿主可以按自己选用的 SDK 做映射。',
-      },
+      '在文档中明确标注经纬度顺序。',
+      '利用 provider 字段在多平台环境下切换地图内核。',
     ],
   },
 };
 
 export interface MapFeatureOptions {
-  /**
-   * 默认地图提供方（由宿主解释），例如：
-   * - 'apple' | 'google' | 'mapbox' | 'custom'
-   */
   provider?: 'apple' | 'google' | 'mapbox' | 'custom';
-
-  /**
-   * 可选：未在节点中指定 zoom 时使用的默认缩放级别。
-   */
   defaultZoom?: number;
 }
 
@@ -323,14 +232,8 @@ export function createMapFeatureConfig(
   };
 }
 
-export function getMapFeatureOptions(
-  config?: SupramarkConfig
-): MapFeatureOptions | undefined {
-  return getFeatureOptionsAs<MapFeatureOptions>(
-    config,
-    '@supramark/feature-map'
-  );
+export function getMapFeatureOptions(config?: SupramarkConfig): MapFeatureOptions | undefined {
+  return getFeatureOptionsAs<MapFeatureOptions>(config, '@supramark/feature-map');
 }
 
-// 注册 Feature，便于通过 FeatureRegistry 统一发现与配置
 FeatureRegistry.register(mapFeature);

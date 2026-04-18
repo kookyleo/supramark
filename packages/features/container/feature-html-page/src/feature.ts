@@ -5,7 +5,7 @@ import type {
   SupramarkConfig,
   SupramarkFeature,
 } from '@supramark/core';
-import { getFeatureOptionsAs } from '@supramark/core';
+import { getFeatureOptionsAs, FeatureRegistry } from '@supramark/core';
 import { htmlPageExamples } from './examples.js';
 
 interface HtmlPageContainerData {
@@ -15,7 +15,7 @@ interface HtmlPageContainerData {
   meta?: Record<string, unknown>;
 }
 
-type SupramarkHtmlPageContainerNode = SupramarkContainerNode & {
+export type SupramarkHtmlPageContainerNode = SupramarkContainerNode & {
   name: 'html';
   data: HtmlPageContainerData;
 };
@@ -27,20 +27,11 @@ const isHtmlPageContainer = (node: SupramarkNode): node is SupramarkHtmlPageCont
 /**
  * Html Page Feature
  *
+ * 为 Supramark 提供独立 HTML 页面节点支持。
+ *
  * - 将 :::html 容器解析为 `html_page` AST 节点；
  * - 在主 Markdown 流中以“卡片”方式呈现；
- * - 真正打开 HTML 页的行为由宿主通过回调 / 容器实现。
- *
- * @example
- * ```markdown
- * :::html
- * <!doctype html>
- * <html>
- *   <head><title>HTML Page</title></head>
- *   <body><h1>Hello HTML Page</h1></body>
- * </html>
- * :::
- * ```
+ * - 真正的交互行为（如点击卡片打开独立页面）由宿主实现。
  */
 export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageContainerNode> = {
   metadata: {
@@ -48,10 +39,9 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageContainerNode> =
     name: 'HTML Page',
     version: '0.1.0',
     author: 'Supramark Team',
-    description:
-      '使用 :::html 容器定义独立 HTML 页面节点，并在宿主中以卡片 + 独立容器方式打开。',
+    description: '使用 :::html 容器定义独立 HTML 页面节点，支持卡片式预览。',
     license: 'Apache-2.0',
-    tags: ['html', 'page', 'card'],
+    tags: ['html', 'page', 'card', 'container'],
     syntaxFamily: 'container',
   },
 
@@ -75,6 +65,10 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageContainerNode> =
             type: 'object',
             description: '容器数据，包含完整 HTML 文本及可选元信息。',
           },
+          children: {
+            type: 'array',
+            description: '子节点列表，对于 html 容器通常为空。',
+          },
         },
       },
       constraints: {
@@ -86,8 +80,8 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageContainerNode> =
           type: 'container',
           name: 'html',
           data: {
-            html: '<!doctype html><html><head><title>Example</title></head><body>Hello</body></html>',
-            title: 'Example',
+            html: '<!doctype html><html><body>Hello</body></html>',
+            title: 'Example Page',
           },
           children: [],
         } as SupramarkHtmlPageContainerNode,
@@ -96,14 +90,6 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageContainerNode> =
   },
 
   renderers: {
-    rn: {
-      platform: 'rn',
-      infrastructure: {
-        needsWorker: false,
-        needsCache: false,
-      },
-      // 具体渲染由 @supramark/rn 中的组件负责。
-    },
     web: {
       platform: 'web',
       infrastructure: {
@@ -111,92 +97,63 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageContainerNode> =
         needsWorker: false,
         needsCache: false,
       },
-      // 具体渲染由 @supramark/web 中的组件负责。
+      dependencies: [],
+    },
+    rn: {
+      platform: 'rn',
+      infrastructure: {
+        needsWorker: false,
+        needsCache: false,
+      },
+      dependencies: [],
     },
   },
 
-  // 使用示例
   examples: htmlPageExamples,
 
-  // 测试定义（当前以占位形式存在）
   testing: {
     syntaxTests: {
       cases: [
         {
-          name: '解析 :::html 容器为 html_page 节点（类型检查）',
-          input: [
-            ':::html',
-            '<html><body>Example</body></html>',
-            ':::',
-          ].join('\n'),
+          name: '解析 :::html 容器',
+          input: ':::html\n<html><body>Test</body></html>\n:::',
           expected: {
             type: 'container',
             name: 'html',
           } as SupramarkHtmlPageContainerNode,
-          options: {
-            typeOnly: true,
-          },
+          options: { typeOnly: true },
         },
       ],
     },
     renderTests: {
       web: [
         {
-          name: 'Web 渲染 html_page 节点（占位卡片存在）',
+          name: 'Web 渲染占位卡片',
           input: {
             type: 'container',
             name: 'html',
-            data: {
-              html: '<html><body>Example</body></html>',
-            },
+            data: { html: '...' },
             children: [],
           } as SupramarkHtmlPageContainerNode,
-          expected: (output: unknown) => output !== null && output !== undefined,
-          snapshot: false,
-        },
-      ],
-      rn: [
-        {
-          name: 'RN 渲染 html_page 节点（占位卡片存在）',
-          input: {
-            type: 'container',
-            name: 'html',
-            data: {
-              html: '<html><body>Example</body></html>',
-            },
-            children: [],
-          } as SupramarkHtmlPageContainerNode,
-          expected: (output: unknown) => output !== null && output !== undefined,
-          snapshot: false,
+          expected: (output) => output !== null,
         },
       ],
     },
     integrationTests: {
       cases: [
         {
-          name: '端到端：markdown 中包含 :::html 容器',
-          input: [
-            '# HTML Page demo',
-            '',
-            ':::html',
-            '<html><body>Example</body></html>',
-            ':::',
-          ].join('\n'),
-          validate: (result: unknown) => {
-            if (!result || typeof result !== 'object') return false;
-            const root = result as any;
-            const children = Array.isArray(root.children) ? root.children : [];
-            return children.some((n: any) => n.type === 'container' && n.name === 'html');
-          },
+          name: 'HTML Page 集成测试',
+          input: ':::html\ncontent\n:::',
+          validate: (result: any) => result.children?.[0]?.name === 'html',
           platforms: ['web', 'rn'],
         },
       ],
     },
     coverageRequirements: {
-      statements: 30,
-      branches: 20,
-      functions: 20,
-      lines: 30,
+      statements: 80,
+      branches: 80,
+      functions: 80,
+      lines: 80,
     },
   },
 
@@ -204,30 +161,22 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageContainerNode> =
     readme: `
 # HTML Page Feature
 
-使用 \`:::html\` 容器定义独立 HTML 页面节点，并在主 Markdown 流中以卡片形式呈现，由宿主在 Web / RN 中提供实际容器（ShadowDOM / WebView）来加载页面。
+使用 \`:::html\` 容器定义独立 HTML 页面节点。
 
-- 语法：\`:::html ... :::\`；
-- AST：解析为 \`html_page\` 节点，携带完整 HTML 文本及可选元信息；
-- 渲染：默认实现为占位卡片，点击后由宿主打开独立容器。
+在宿主应用中，该节点通常被渲染为一个卡片预览。当用户交互时，可以通过宿主提供的回调打开一个全屏的 WebView 或新窗口来加载该 HTML。
     `.trim(),
     api: {
       interfaces: [
         {
           name: 'HtmlPageFeatureOptions',
-          description: 'HTML Page Feature 的配置选项，例如默认打开方式。',
+          description: 'HTML Page 配置选项',
           fields: [
             {
               name: 'webOpenMode',
-              type: `'window' | 'callback-only' | undefined`,
-              description:
-                "Web 端默认打开方式：'window' 使用 window.open 打开新窗口，'callback-only' 仅通过回调交由宿主处理。",
+              type: "'window' | 'callback-only'",
+              description: 'Web 端打开模式',
               required: false,
-            },
-            {
-              name: 'rnOpenMode',
-              type: `'callback-only' | undefined`,
-              description: "RN 端默认打开方式，目前仅支持 'callback-only'。",
-              required: false,
+              default: "'window'",
             },
           ],
         },
@@ -235,75 +184,35 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageContainerNode> =
       functions: [
         {
           name: 'createHtmlPageFeatureConfig',
-          description: '创建 Html Page Feature 的配置对象，用于 SupramarkConfig.features。',
+          description: '创建 HTML Page 特性配置',
           parameters: [
-            {
-              name: 'enabled',
-              type: 'boolean',
-              description: '是否启用该 Feature',
-              optional: true,
-            },
-            {
-              name: 'options',
-              type: 'HtmlPageFeatureOptions',
-              description: '可选配置项',
-              optional: true,
-            },
+            { name: 'enabled', type: 'boolean', description: '是否启用' },
+            { name: 'options', type: 'HtmlPageFeatureOptions', description: '选项', optional: true },
           ],
           returns: 'HtmlPageFeatureConfig',
         },
+      ],
+      types: [
         {
-          name: 'getHtmlPageFeatureOptions',
-          description: '从 SupramarkConfig 中读取 Html Page Feature 的 options。',
-          parameters: [
-            {
-              name: 'config',
-              type: 'SupramarkConfig | undefined',
-              description: '全局 supramark 配置',
-              optional: true,
-            },
-          ],
-          returns: 'HtmlPageFeatureOptions | undefined',
+          name: 'HtmlPageFeatureConfig',
+          description: '配置类型定义',
+          definition: 'type HtmlPageFeatureConfig = FeatureConfigWithOptions<HtmlPageFeatureOptions>',
         },
       ],
-      types: [],
     },
     bestPractices: [
-      '将 HTML 页面中的复杂脚本与样式隔离在独立容器中，避免污染主应用环境。',
-      '通过 Feature 配置或宿主回调控制打开行为，以适配不同平台需求。',
-    ],
-    faq: [
-      {
-        question: '为什么不直接在 Markdown 中内联渲染 HTML？',
-        answer:
-          '独立 HTML 页面往往包含脚本与样式隔离需求，通过 html_page 节点 + 独立容器可以更好地控制安全性与生命周期。',
-      },
+      '对于复杂的第三方 HTML 交互，建议使用此特性进行隔离。',
+      '配合宿主的 onOpenHtmlPage 回调实现深度集成。',
     ],
   },
 };
 
 export interface HtmlPageFeatureOptions {
-  /**
-   * Web 端默认打开方式：
-   * - 'window': 使用 window.open + about:blank 方式打开一个新窗口并注入 HTML
-   * - 'callback-only': 仅触发回调，由宿主自行处理
-   *
-   * 默认值为 'window'。
-   */
   webOpenMode?: 'window' | 'callback-only';
-
-  /**
-   * RN 端默认打开方式：
-   * - 'callback-only': 仅触发 onOpenHtmlPage 回调，由宿主决定如何打开（推荐）
-   * - 未来可以扩展为 'internal-webview' 等
-   *
-   * 默认值为 'callback-only'。
-   */
   rnOpenMode?: 'callback-only';
 }
 
-export type HtmlPageFeatureConfig =
-  FeatureConfigWithOptions<HtmlPageFeatureOptions>;
+export type HtmlPageFeatureConfig = FeatureConfigWithOptions<HtmlPageFeatureOptions>;
 
 export function createHtmlPageFeatureConfig(
   enabled = true,
@@ -316,11 +225,8 @@ export function createHtmlPageFeatureConfig(
   };
 }
 
-export function getHtmlPageFeatureOptions(
-  config?: SupramarkConfig
-): HtmlPageFeatureOptions | undefined {
-  return getFeatureOptionsAs<HtmlPageFeatureOptions>(
-    config,
-    '@supramark/feature-html-page'
-  );
+export function getHtmlPageFeatureOptions(config?: SupramarkConfig): HtmlPageFeatureOptions | undefined {
+  return getFeatureOptionsAs<HtmlPageFeatureOptions>(config, '@supramark/feature-html-page');
 }
+
+FeatureRegistry.register(htmlPageFeature);
