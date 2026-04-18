@@ -38,6 +38,7 @@ import {
 } from '@supramark/core';
 import { DiagramNode } from './DiagramNode';
 import { MathBlock } from './MathBlock';
+import { MathInline } from './MathInline';
 import {
   type SupramarkStyles,
   defaultStyles,
@@ -530,11 +531,15 @@ function renderInlineNode(
     }
     case 'math_inline': {
       const mathNode = node as SupramarkMathInlineNode;
-      // 行内公式先简单用 inlineCode 样式渲染，后续可接入 KaTeX
+      if (!isFeatureGroupEnabled(config, ['@supramark/feature-math'])) {
+        return mathNode.value;
+      }
       return (
-        <Text key={key} style={styles.inlineCode}>
-          {mathNode.value}
-        </Text>
+        <MathInline
+          key={key}
+          value={mathNode.value}
+          textStyle={styles.paragraph}
+        />
       );
     }
     case 'link': {

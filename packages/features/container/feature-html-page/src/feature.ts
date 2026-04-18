@@ -1,5 +1,5 @@
 import type {
-  SupramarkHtmlPageNode,
+  SupramarkContainerNode,
   SupramarkNode,
   FeatureConfigWithOptions,
   SupramarkConfig,
@@ -7,6 +7,22 @@ import type {
 } from '@supramark/core';
 import { getFeatureOptionsAs } from '@supramark/core';
 import { htmlPageExamples } from './examples.js';
+
+interface HtmlPageContainerData {
+  html: string;
+  title?: string;
+  url?: string;
+  meta?: Record<string, unknown>;
+}
+
+type SupramarkHtmlPageContainerNode = SupramarkContainerNode & {
+  name: 'html';
+  data: HtmlPageContainerData;
+};
+
+const isHtmlPageContainer = (node: SupramarkNode): node is SupramarkHtmlPageContainerNode => {
+  return node.type === 'container' && (node as SupramarkContainerNode).name === 'html';
+};
 
 /**
  * Html Page Feature
@@ -26,7 +42,7 @@ import { htmlPageExamples } from './examples.js';
  * :::
  * ```
  */
-export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageNode> = {
+export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageContainerNode> = {
   metadata: {
     id: '@supramark/feature-html-page',
     name: 'HTML Page',
@@ -41,33 +57,23 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageNode> = {
 
   syntax: {
     ast: {
-      type: 'html_page',
-      selector: (node: SupramarkNode) => node.type === 'html_page',
+      type: 'container',
+      selector: isHtmlPageContainer,
       interface: {
-        required: ['type', 'html'],
-        optional: ['title', 'url', 'meta'],
+        required: ['type', 'name', 'data', 'children'],
+        optional: ['params'],
         fields: {
           type: {
             type: 'string',
-            description: '节点类型，固定为 "html_page"。',
+            description: '节点类型，固定为 "container"。',
           },
-          html: {
+          name: {
             type: 'string',
-            description: '独立 HTML 页面内容，可以是完整文档或片段。',
+            description: '容器名称，固定为 "html"。',
           },
-          title: {
-            type: 'string',
-            description:
-              '可选标题。优先从配置 / 元信息中获得，其次可以由宿主从 HTML 的 <title> 中提取。',
-          },
-          url: {
-            type: 'string',
-            description:
-              '可选：当 HTML 页有外部访问地址时的 URL，宿主可以用来决定打开行为（如 window.open 或 WebView 加载）。',
-          },
-          meta: {
+          data: {
             type: 'object',
-            description: '附加元信息，例如作者自定义的 data-* 字段。',
+            description: '容器数据，包含完整 HTML 文本及可选元信息。',
           },
         },
       },
@@ -77,10 +83,14 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageNode> = {
       },
       examples: [
         {
-          type: 'html_page',
-          html: '<!doctype html><html><head><title>Example</title></head><body>Hello</body></html>',
-          title: 'Example',
-        } as SupramarkHtmlPageNode,
+          type: 'container',
+          name: 'html',
+          data: {
+            html: '<!doctype html><html><head><title>Example</title></head><body>Hello</body></html>',
+            title: 'Example',
+          },
+          children: [],
+        } as SupramarkHtmlPageContainerNode,
       ],
     },
   },
@@ -120,8 +130,9 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageNode> = {
             ':::',
           ].join('\n'),
           expected: {
-            type: 'html_page',
-          } as SupramarkHtmlPageNode,
+            type: 'container',
+            name: 'html',
+          } as SupramarkHtmlPageContainerNode,
           options: {
             typeOnly: true,
           },
@@ -133,9 +144,13 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageNode> = {
         {
           name: 'Web 渲染 html_page 节点（占位卡片存在）',
           input: {
-            type: 'html_page',
-            html: '<html><body>Example</body></html>',
-          } as SupramarkHtmlPageNode,
+            type: 'container',
+            name: 'html',
+            data: {
+              html: '<html><body>Example</body></html>',
+            },
+            children: [],
+          } as SupramarkHtmlPageContainerNode,
           expected: (output: unknown) => output !== null && output !== undefined,
           snapshot: false,
         },
@@ -144,9 +159,13 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageNode> = {
         {
           name: 'RN 渲染 html_page 节点（占位卡片存在）',
           input: {
-            type: 'html_page',
-            html: '<html><body>Example</body></html>',
-          } as SupramarkHtmlPageNode,
+            type: 'container',
+            name: 'html',
+            data: {
+              html: '<html><body>Example</body></html>',
+            },
+            children: [],
+          } as SupramarkHtmlPageContainerNode,
           expected: (output: unknown) => output !== null && output !== undefined,
           snapshot: false,
         },
@@ -167,7 +186,7 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageNode> = {
             if (!result || typeof result !== 'object') return false;
             const root = result as any;
             const children = Array.isArray(root.children) ? root.children : [];
-            return children.some((n: any) => n.type === 'html_page');
+            return children.some((n: any) => n.type === 'container' && n.name === 'html');
           },
           platforms: ['web', 'rn'],
         },

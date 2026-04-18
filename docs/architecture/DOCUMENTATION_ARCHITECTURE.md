@@ -179,7 +179,6 @@ npm run docs:preview
 
 ### 部署选项
 
-- **GitHub Pages**：推荐用于开源项目
 - **Netlify / Vercel**：支持持续部署
 - **自托管**：任何静态文件服务器
 

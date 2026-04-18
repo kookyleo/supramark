@@ -37,6 +37,8 @@
 // React 组件
 export { Supramark } from './Supramark.js';
 export type { SupramarkWebProps } from './Supramark.js';
+export { DiagramEngineProvider } from './DiagramEngineProvider.js';
+export type { DiagramEngineProviderProps } from './DiagramEngineProvider.js';
 
 // ClassName 系统
 export type { SupramarkClassNames } from './classNames.js';

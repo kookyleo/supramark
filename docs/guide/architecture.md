@@ -29,6 +29,13 @@ Supramark 采用分层架构，从底层到上层分为：
 └─────────────────────────────────────┘
 ```
 
+## Diagram Engine 目标
+
+图表链路正在从“平台各自渲染”收敛到“统一 engine 产出 SVG，再由各平台消费”。
+
+- 架构目标文档见 [../architecture/DIAGRAM_ENGINE_TARGET.md](../architecture/DIAGRAM_ENGINE_TARGET.md)
+- 当前文档中关于 `Headless WebView Worker`、浏览器端脚本渲染的内容，应视为过渡态说明，不是最终目标架构
+
 ## 核心层（@supramark/core）
 
 ### 职责

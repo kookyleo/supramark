@@ -787,6 +787,10 @@ export const DiagramRenderProvider: React.FC<DiagramRenderProviderProps> = ({
   );
 };
 
+export function useOptionalDiagramRender(): DiagramRenderService | null {
+  return useContext(DiagramRenderContext);
+}
+
 export function useDiagramRender(): DiagramRenderService {
   const ctx = useContext(DiagramRenderContext);
   if (!ctx) {

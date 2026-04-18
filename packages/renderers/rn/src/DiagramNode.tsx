@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import type { SupramarkDiagramNode, SupramarkDiagramConfig } from '@supramark/core';
-import { useDiagramRender } from '@supramark/rn-diagram-worker';
-import { normalizeSvg } from './svgUtils';
+import {
+  type DiagramRenderResult as LocalDiagramRenderResult,
+} from '@supramark/diagram-engine';
+import { createReactNativeDiagramEngine } from '@supramark/diagram-engine/rn';
+import type { DiagramRenderResult as WorkerDiagramRenderResult } from '@supramark/rn-diagram-worker';
+import { useOptionalDiagramRender } from '@supramark/rn-diagram-worker';
+import { normalizeSvg, normalizeSvgLight } from './svgUtils';
 
 export interface DiagramNodeProps {
   node: SupramarkDiagramNode;
@@ -17,8 +22,12 @@ export interface DiagramNodeProps {
   diagramConfig?: SupramarkDiagramConfig;
 }
 
+type DiagramRenderResult = LocalDiagramRenderResult | WorkerDiagramRenderResult;
+
+const defaultDiagramEngine = createReactNativeDiagramEngine();
+
 export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig }) => {
-  const { render } = useDiagramRender();
+  const diagramRender = useOptionalDiagramRender();
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -33,7 +42,31 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
 
     const attemptRender = () => {
       const options = buildRenderOptions(node.engine, node.meta, diagramConfig);
-      render({ engine: node.engine, code: node.code, options })
+      const normalizedEngine = String(node.engine || '').toLowerCase();
+      const useLocalEngine =
+        normalizedEngine === 'mermaid' ||
+        normalizedEngine === 'dot' ||
+        normalizedEngine === 'graphviz';
+
+      const renderPromise: Promise<DiagramRenderResult> =
+        useLocalEngine
+          ? defaultDiagramEngine.render({ engine: normalizedEngine, code: node.code, options })
+          : diagramRender
+            ? diagramRender.render({ engine: node.engine, code: node.code, options })
+            : Promise.resolve({
+                id: `missing_provider_${Date.now()}`,
+                engine: node.engine,
+                success: false,
+                format: 'error',
+                payload: 'DiagramRenderProvider is required for non-mermaid diagram engines.',
+                error: {
+                  code: 'render_error',
+                  message: `${node.engine} rendering requires DiagramRenderProvider`,
+                  details: 'Wrap <Supramark /> with <DiagramRenderProvider /> when using WebView-based diagram engines.',
+                },
+              });
+
+      renderPromise
         .then(result => {
           if (cancelled) return;
 
@@ -59,7 +92,9 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
           if (result.format === 'svg') {
             let normalized;
             try {
-              normalized = normalizeSvg(result.payload);
+              normalized = result.payload.includes('<style')
+                ? normalizeSvg(result.payload)
+                : normalizeSvgLight(result.payload);
             } catch (err) {
               setError(`SVG 处理错误: ${err}`);
               setLoading(false);
@@ -85,7 +120,7 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
     return () => {
       cancelled = true;
     };
-  }, [node.engine, node.code, node.meta, diagramConfig, render, retryCount]);
+  }, [node.engine, node.code, node.meta, diagramConfig, diagramRender, retryCount]);
 
   if (loading && !svg && !error) {
     return (
@@ -105,29 +140,47 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
   }
 
   if (svg) {
-    // 从 SVG 中提取 viewBox 来计算合适的高度
     const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
-    let height = 300; // 默认高度
+    const widthAttrMatch = svg.match(/<svg[^>]*\bwidth="([^"]+)"/);
+    const heightAttrMatch = svg.match(/<svg[^>]*\bheight="([^"]+)"/);
+
+    const { width: screenWidth } = Dimensions.get('window');
+    const containerWidth = screenWidth - 32;
+    let svgWidth = 0;
+    let svgHeight = 0;
 
     if (viewBoxMatch) {
-      const viewBoxParts = viewBoxMatch[1].split(/\s+/);
-      if (viewBoxParts.length === 4) {
-        const viewBoxWidth = parseFloat(viewBoxParts[2]);
-        const viewBoxHeight = parseFloat(viewBoxParts[3]);
-        if (viewBoxWidth > 0 && viewBoxHeight > 0) {
-          // 根据 viewBox 的宽高比计算高度
-          // 假设容器宽度为 350（接近典型手机屏幕宽度）
-          const containerWidth = 350;
-          height = (viewBoxHeight / viewBoxWidth) * containerWidth;
-          // 限制最大高度为 500
-          height = Math.min(height, 500);
-        }
+      const parts = viewBoxMatch[1].split(/[\s,]+/);
+      if (parts.length === 4) {
+        svgWidth = parseFloat(parts[2]);
+        svgHeight = parseFloat(parts[3]);
       }
     }
 
+    if (svgWidth <= 0 && widthAttrMatch) svgWidth = parseFloat(widthAttrMatch[1]);
+    if (svgHeight <= 0 && heightAttrMatch) svgHeight = parseFloat(heightAttrMatch[1]);
+
+    let height = 300;
+    if (svgWidth > 0 && svgHeight > 0) {
+      height = (svgHeight / svgWidth) * containerWidth;
+      height = Math.min(height, 500);
+    }
+
+    let scalableSvg = svg;
+    if (!viewBoxMatch && svgWidth > 0 && svgHeight > 0) {
+      scalableSvg = scalableSvg.replace(
+        /<svg([^>]*)>/,
+        `<svg$1 viewBox="0 0 ${svgWidth} ${svgHeight}">`
+      );
+    }
+
+    scalableSvg = scalableSvg
+      .replace(/(<svg[^>]*)\bwidth="[^"]*"/, '$1')
+      .replace(/(<svg[^>]*)\bheight="[^"]*"/, '$1');
+
     return (
-      <View style={styles.diagram}>
-        <SvgXml xml={svg} width="100%" height={height} />
+      <View style={[styles.diagram, { width: containerWidth, height }]}>
+        <SvgXml xml={scalableSvg} width={containerWidth} height={height} />
       </View>
     );
   }
@@ -166,6 +219,16 @@ function buildRenderOptions(
     }
     if (engineConfig.cache) {
       base.cache = engineConfig.cache;
+    }
+
+    for (const [key, value] of Object.entries(engineConfig as Record<string, unknown>)) {
+      if (value === undefined) {
+        continue;
+      }
+      if (key === 'enabled' || key === 'timeoutMs' || key === 'server' || key === 'cache') {
+        continue;
+      }
+      base[key] = value;
     }
   }
 

@@ -26,7 +26,7 @@ if (!existsSync(join(rootDir, 'node_modules'))) {
 
 // 确保 @supramark/core 和 @supramark/web 的构建产物存在
 const coreRemarkPath = join(rootDir, 'packages/core/dist/remark.js');
-const webIndexPath = join(rootDir, 'packages/web/dist/index.js');
+const webIndexPath = join(rootDir, 'packages/renderers/web/dist/index.js');
 
 if (!existsSync(coreRemarkPath)) {
   console.log(
@@ -37,7 +37,7 @@ if (!existsSync(coreRemarkPath)) {
 
 if (!existsSync(webIndexPath)) {
   console.log(
-    '[supramark/react-web] 未检测到 packages/web/dist/index.js，正在执行 bun run --filter @supramark/web build...',
+    '[supramark/react-web] 未检测到 packages/renderers/web/dist/index.js，正在执行 bun run --filter @supramark/web build...',
   );
   run('bun', ['run', '--filter', '@supramark/web', 'build'], rootDir);
 }
@@ -48,4 +48,3 @@ import('./index.mjs').catch((err) => {
   console.error('Error in react-web demo:', err);
   process.exitCode = 1;
 });
-

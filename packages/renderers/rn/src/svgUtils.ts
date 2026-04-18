@@ -2,15 +2,53 @@
 // 调整为更适合 react-native-svg 渲染的形式。
 
 /**
+ * 对已经完成样式内联的 SVG 做轻量清理。
+ */
+export function normalizeSvgLight(xml: string): string {
+  let normalized = xml;
+
+  normalized = normalized
+    .replace(/<\?xml[\s\S]*?\?>/gi, '')
+    .replace(/<\?[\s\S]*?\?>/g, '')
+    .replace(/<!doctype[\s\S]*?>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<title[\s\S]*?<\/title>/gi, '')
+    .replace(/<desc[\s\S]*?<\/desc>/gi, '')
+    .replace(/<metadata[\s\S]*?<\/metadata>/gi, '');
+
+  normalized = normalized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  normalized = normalized.replace(/>\s+</g, '><');
+
+  return normalized;
+}
+
+/**
  * 规范化 SVG：
  * - 移除 <style> 标签（react-native-svg 不支持内联 CSS）
  * - 为常见元素添加一些默认样式（主要针对 Mermaid 导出的图表）
- *
- * 对于 MathJax 导出的公式 SVG，即使没有这些默认样式，也能正常显示；
- * 因此本函数可以安全地复用于 diagram / math 两类场景。
  */
 export function normalizeSvg(xml: string): string {
   let normalized = xml;
+
+  // 先保留语义 text 节点，避免后续移除裸文本时把标签内容也删掉。
+  const preservedTextNodes: string[] = [];
+  normalized = normalized.replace(/<text\b[\s\S]*?<\/text>/gi, match => {
+    const token = `<smtext_placeholder data-i="${preservedTextNodes.length}" />`;
+    preservedTextNodes.push(match);
+    return token;
+  });
+
+  normalized = normalized
+    .replace(/<\?xml[\s\S]*?\?>/gi, '')
+    .replace(/<\?[\s\S]*?\?>/g, '')
+    .replace(/<!doctype[\s\S]*?>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<title[\s\S]*?<\/title>/gi, '')
+    .replace(/<desc[\s\S]*?<\/desc>/gi, '')
+    .replace(/<metadata[\s\S]*?<\/metadata>/gi, '');
+
+  normalized = normalized.replace(/>\s+</g, '><');
+  normalized = normalized.replace(/>[^<]+</g, '><');
 
   const styleMatch = normalized.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
   let defaultTextFill = '#333';
@@ -42,13 +80,11 @@ export function normalizeSvg(xml: string): string {
     if (strokeWidthMatch) defaultStrokeWidth = strokeWidthMatch[1];
   }
 
-  // 移除 <style>...</style> 标签（react-native-svg 不支持）
   normalized = normalized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
 
-  // 为所有 text 元素添加默认样式
   normalized = normalized.replace(
     /<text([^>]*?)style="([^"]*)"/gi,
-    (match, attrs, existingStyle) => {
+    (_match, attrs, existingStyle) => {
       const styles: string[] = [];
       if (existingStyle && existingStyle.trim()) styles.push(existingStyle.trim());
 
@@ -61,27 +97,26 @@ export function normalizeSvg(xml: string): string {
     }
   );
 
-  // 为所有 rect 元素添加默认样式
   normalized = normalized.replace(
     /<rect([^>]*?)style="([^"]*)"/gi,
-    (match, attrs, existingStyle) => {
+    (_match, attrs, existingStyle) => {
       const styles: string[] = [];
       if (existingStyle && existingStyle.trim()) styles.push(existingStyle.trim());
 
       if (!existingStyle?.includes('fill:')) styles.push(`fill: ${defaultNodeFill}`);
       if (!existingStyle?.includes('stroke:')) styles.push(`stroke: ${defaultStroke}`);
-      if (!existingStyle?.includes('stroke-width:'))
+      if (!existingStyle?.includes('stroke-width:')) {
         styles.push(`stroke-width: ${defaultStrokeWidth}`);
+      }
 
       const attrsWithSpace = attrs && attrs.trim() ? attrs + ' ' : attrs;
       return `<rect${attrsWithSpace}style="${styles.join('; ')}"`;
     }
   );
 
-  // 为 path 元素添加默认样式（主要用于箭头等）
   normalized = normalized.replace(
     /<path\s+([^>]*?)style="([^"]*)"/gi,
-    (match, attrs, existingStyle) => {
+    (_match, attrs, existingStyle) => {
       const styles: string[] = [];
       if (existingStyle && existingStyle.trim()) {
         styles.push(existingStyle.trim());
@@ -96,6 +131,11 @@ export function normalizeSvg(xml: string): string {
 
       return `<path ${attrs}style="${styles.join('; ')}"`;
     }
+  );
+
+  normalized = normalized.replace(
+    /<smtext_placeholder\s+data-i="(\d+)"\s*\/>/g,
+    (_match, indexText) => preservedTextNodes[Number(indexText)] ?? ''
   );
 
   return normalized;

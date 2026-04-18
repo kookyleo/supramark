@@ -68,10 +68,23 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
     rn: {
       platform: 'rn',
       infrastructure: {
-        needsWorker: true,
-        needsCache: true,
-        workerType: 'webview',
+        needsWorker: false,
+        needsCache: false,
       },
+      dependencies: [
+        {
+          name: 'react-native-svg',
+          version: '^13.0.0',
+          type: 'npm',
+          optional: false,
+        },
+        {
+          name: 'beautiful-mermaid',
+          version: '^1.1.3',
+          type: 'npm',
+          optional: false,
+        },
+      ],
     },
     web: {
       platform: 'web',
@@ -160,7 +173,7 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
 
 - 语法：使用 \`\\\`\\\`mermaid\` 围栏代码块；
 - AST：解析为 \`diagram\` 节点，engine = "mermaid"；
-- 渲染：通过统一图表子系统生成 SVG。
+- 渲染：Web 端通过统一图表子系统生成 SVG，RN 端直接在本地调用 beautiful-mermaid 生成 SVG。
     `.trim(),
 
     api: {
@@ -210,7 +223,7 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
 
     bestPractices: [
       '将 Mermaid 代码保持在最小可复用片段，便于在 Web 与 RN 端共享。',
-      '与其把布局参数塞进 markdown，不如优先使用统一 diagram 配置来控制超时与缓存。',
+      '与其把布局参数塞进 markdown，不如优先使用统一 diagram 配置来控制主题与布局。',
     ],
 
     faq: [
@@ -218,6 +231,11 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
         question: '为什么 Mermaid 现在也需要独立 Feature 包？',
         answer:
           '因为 parser / renderer / feature gating 需要对齐。独立 Feature 包能把 Mermaid 纳入同一套能力发现、配置与文档体系。',
+      },
+      {
+        question: 'React Native 端还依赖 headless WebView 吗？',
+        answer:
+          '不需要。RN 端直接在本地调用 beautiful-mermaid，把输出的 SVG 样式内联后交给 react-native-svg 渲染。',
       },
     ],
   },

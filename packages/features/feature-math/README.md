@@ -46,7 +46,7 @@ interface SupramarkMathBlockNode {
 
 ## 平台支持
 
-- [x] React Native（通过 `@supramark/rn` + headless WebView + MathJax/KaTeX 渲染为 SVG）
+- [x] React Native（通过 `@supramark/rn` + 本地 MathJax 渲染为 SVG）
 - [x] Web (React)（通过 `@supramark/web` + KaTeX / MathJax 渲染）
 - [ ] CLI (终端)
 
@@ -54,7 +54,7 @@ interface SupramarkMathBlockNode {
 
 - [x] AST 定义（在 `@supramark/core` 中完成）
 - [x] 解析器实现（由 `parseMarkdown()` 集成 `markdown-it-texmath` 完成）
-- [x] RN 渲染器（首版 SVG 管线已实现）
+- [x] RN 渲染器（本地 MathJax SVG 管线已实现）
 - [x] Web 渲染器（首版 KaTeX/MathJax 管线已实现）
 - [ ] Feature 级测试用例（当前仅元数据测试）
 - [ ] 文档进一步完善

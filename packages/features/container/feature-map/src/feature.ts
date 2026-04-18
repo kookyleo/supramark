@@ -1,11 +1,28 @@
 import type {
-  SupramarkMapNode,
+  SupramarkContainerNode,
+  SupramarkNode,
   FeatureConfigWithOptions,
   SupramarkConfig,
   SupramarkFeature,
 } from '@supramark/core';
 import { getFeatureOptionsAs, FeatureRegistry } from '@supramark/core';
 import { mapExamples } from './examples.js';
+
+interface MapContainerData {
+  center: [number, number];
+  zoom?: number;
+  marker?: { lat: number; lng: number };
+  meta?: Record<string, unknown>;
+}
+
+type SupramarkMapContainerNode = SupramarkContainerNode & {
+  name: 'map';
+  data: MapContainerData;
+};
+
+const isMapContainer = (node: SupramarkNode): node is SupramarkMapContainerNode => {
+  return node.type === 'container' && (node as SupramarkContainerNode).name === 'map';
+};
 
 /**
  * Map Feature
@@ -28,7 +45,7 @@ import { mapExamples } from './examples.js';
  * - 通过 center / zoom / marker 字段表达地图视图；
  * - 具体地图容器（Web / RN）由宿主实现。
  */
-export const mapFeature: SupramarkFeature<SupramarkMapNode> = {
+export const mapFeature: SupramarkFeature<SupramarkMapContainerNode> = {
   metadata: {
     id: '@supramark/feature-map',
     name: 'Map',
@@ -42,32 +59,25 @@ export const mapFeature: SupramarkFeature<SupramarkMapNode> = {
 
   syntax: {
     ast: {
-      type: 'map',
+      type: 'container',
+      selector: isMapContainer,
 
       // 可选：描述节点接口
       interface: {
-        required: ['type', 'center'],
-        optional: ['zoom', 'marker', 'meta'],
+        required: ['type', 'name', 'data', 'children'],
+        optional: ['params'],
         fields: {
           type: {
             type: 'string',
-            description: '节点类型，固定为 "map"。',
+            description: '节点类型，固定为 "container"。',
           },
-          center: {
-            type: 'array',
-            description: '地图中心点 [lat, lng]，必填。',
+          name: {
+            type: 'string',
+            description: '容器名称，固定为 "map"。',
           },
-          zoom: {
-            type: 'number',
-            description: '缩放级别（数值越大越放大），可选。',
-          },
-          marker: {
+          data: {
             type: 'object',
-            description: '单个标记点坐标，可选。',
-          },
-          meta: {
-            type: 'object',
-            description: '附加元信息，例如 provider / style / 交互行为等。',
+            description: '地图数据，包含 center / zoom / marker / meta 等结构化字段。',
           },
         },
       },
@@ -81,11 +91,15 @@ export const mapFeature: SupramarkFeature<SupramarkMapNode> = {
       // 可选：示例节点
       examples: [
         {
-          type: 'map',
-          center: [34.05, -118.24],
-          zoom: 12,
-          marker: { lat: 34.05, lng: -118.24 },
-        } as SupramarkMapNode,
+          type: 'container',
+          name: 'map',
+          data: {
+            center: [34.05, -118.24],
+            zoom: 12,
+            marker: { lat: 34.05, lng: -118.24 },
+          },
+          children: [],
+        } as SupramarkMapContainerNode,
       ],
     },
 
@@ -143,8 +157,9 @@ export const mapFeature: SupramarkFeature<SupramarkMapNode> = {
             ':::',
           ].join('\n'),
           expected: {
-            type: 'map',
-          } as SupramarkMapNode,
+            type: 'container',
+            name: 'map',
+          } as SupramarkMapContainerNode,
           options: {
             typeOnly: true,
           },
@@ -156,9 +171,11 @@ export const mapFeature: SupramarkFeature<SupramarkMapNode> = {
         {
           name: 'Web 渲染 map 节点（占位卡片存在）',
           input: {
-            type: 'map',
-            center: [0, 0],
-          } as SupramarkMapNode,
+            type: 'container',
+            name: 'map',
+            data: { center: [0, 0] },
+            children: [],
+          } as SupramarkMapContainerNode,
           expected: (output: unknown) => output !== null && output !== undefined,
           snapshot: false,
         },
@@ -167,9 +184,11 @@ export const mapFeature: SupramarkFeature<SupramarkMapNode> = {
         {
           name: 'RN 渲染 map 节点（占位卡片存在）',
           input: {
-            type: 'map',
-            center: [0, 0],
-          } as SupramarkMapNode,
+            type: 'container',
+            name: 'map',
+            data: { center: [0, 0] },
+            children: [],
+          } as SupramarkMapContainerNode,
           expected: (output: unknown) => output !== null && output !== undefined,
           snapshot: false,
         },
@@ -190,7 +209,7 @@ export const mapFeature: SupramarkFeature<SupramarkMapNode> = {
             if (!result || typeof result !== 'object') return false;
             const root = result as any;
             const children = Array.isArray(root.children) ? root.children : [];
-            return children.some((n: any) => n.type === 'map');
+            return children.some((n: any) => n.type === 'container' && n.name === 'map');
           },
           platforms: ['web', 'rn'],
         },

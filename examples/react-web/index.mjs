@@ -7,31 +7,36 @@ import {
   buildDiagramSupportScripts,
   buildMathSupportScripts,
 } from '@supramark/web';
-import { DEMOS } from '../demos.mjs';
+import { DEMOS } from './demos.mjs';
 import {
   createCoreMarkdownFeatureConfig,
-} from '@supramark/feature-core-markdown';
+} from '../../packages/features/feature-core-markdown/src/feature.ts';
 import {
   createGfmFeatureConfig,
-} from '@supramark/feature-gfm';
-import {
-  createAdmonitionFeatureConfig,
-} from '@supramark/feature-admonition';
+} from '../../packages/features/feature-gfm/src/feature.ts';
 import {
   createDefinitionListFeatureConfig,
-} from '@supramark/feature-definition-list';
+} from '../../packages/features/feature-definition-list/src/feature.ts';
 import {
   createHtmlPageFeatureConfig,
-} from '@supramark/feature-html-page';
+} from '../../packages/features/container/feature-html-page/src/feature.ts';
 import {
   createMapFeatureConfig,
-} from '@supramark/feature-map';
+} from '../../packages/features/container/feature-map/src/feature.ts';
 import {
   createDiagramVegaLiteFeatureConfig,
-} from '@supramark/feature-diagram-vega-lite';
+} from '../../packages/features/feature-diagram-vega-lite/src/feature.ts';
 import {
   createDiagramEchartsFeatureConfig,
-} from '@supramark/feature-diagram-echarts';
+} from '../../packages/features/feature-diagram-echarts/src/feature.ts';
+
+function createAdmonitionFeatureConfig(enabled = true, options = {}) {
+  return {
+    id: '@supramark/feature-admonition',
+    enabled,
+    options,
+  };
+}
 
 // 统一的 Supramark 配置示例：
 // - 展示如何只启用部分 Feature，并通过 options 调整行为；

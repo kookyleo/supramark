@@ -1,6 +1,6 @@
 import type { ContainerHookContext } from '@supramark/core';
 import { registerContainerHook } from '@supramark/core';
-import type { SupramarkHtmlPageNode } from '@supramark/core';
+import type { SupramarkContainerNode } from '@supramark/core';
 
 function extractInnerText(ctx: ContainerHookContext): string {
   const { token, sourceLines } = ctx;
@@ -19,12 +19,13 @@ registerContainerHook({
   opaque: true,
   onOpen(ctx: ContainerHookContext) {
     const html = extractInnerText(ctx);
-    const htmlPage: SupramarkHtmlPageNode = {
-      type: 'html_page',
-      html,
+    const htmlPage: SupramarkContainerNode = {
+      type: 'container',
+      name: 'html',
+      data: { html },
+      children: [],
     };
     const parent = ctx.stack[ctx.stack.length - 1];
     parent.children.push(htmlPage);
   },
 });
-

@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Supramark } from '@supramark/rn';
-// import { DiagramRenderProvider } from '@supramark/rn-diagram-worker'; // 临时注释掉以避免LRUCache问题
+import { DiagramRenderProvider } from '@supramark/rn-diagram-worker';
 import type { SupramarkConfig } from '@supramark/core';
 import {
   createCoreMarkdownFeatureConfig,
@@ -248,10 +248,9 @@ function InnerApp() {
 
 export default function App() {
   return (
-    // 临时注释掉DiagramRenderProvider以避免LRUCache兼容性问题
-    // <DiagramRenderProvider diagramConfig={BASE_CONFIG.diagram}>
+    <DiagramRenderProvider diagramConfig={BASE_CONFIG.diagram}>
       <InnerApp />
-    // </DiagramRenderProvider>
+    </DiagramRenderProvider>
   );
 }
 

@@ -1,6 +1,6 @@
 import type { ContainerHookContext } from '@supramark/core';
 import { registerContainerHook } from '@supramark/core';
-import type { SupramarkMapNode } from '@supramark/core';
+import type { SupramarkContainerNode } from '@supramark/core';
 
 interface ParsedMapConfig {
   center?: [number, number];
@@ -131,12 +131,16 @@ registerContainerHook({
       (marker ? [marker.lat, marker.lng] : undefined) ??
       [0, 0];
 
-    const mapNode: SupramarkMapNode = {
-      type: 'map',
-      center: resolvedCenter,
-      zoom: parsed.zoom,
-      marker,
-      meta: parsed.meta,
+    const mapNode: SupramarkContainerNode = {
+      type: 'container',
+      name: 'map',
+      data: {
+        center: resolvedCenter,
+        zoom: parsed.zoom,
+        marker,
+        meta: parsed.meta,
+      },
+      children: [],
     };
 
     const parentForMap = ctx.stack[ctx.stack.length - 1];

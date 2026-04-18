@@ -1,62 +1,59 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import type { SupramarkMathBlockNode } from '@supramark/core';
-import { useDiagramRender } from '@supramark/rn-diagram-worker';
-import { normalizeSvg } from './svgUtils';
+import { getSvgViewBoxSize } from '@supramark/diagram-engine';
+import { createReactNativeDiagramEngine } from '@supramark/diagram-engine/rn';
+import { normalizeSvgLight } from './svgUtils';
 
 interface MathBlockProps {
   node: SupramarkMathBlockNode;
 }
 
+const defaultDiagramEngine = createReactNativeDiagramEngine();
+
 export const MathBlock: React.FC<MathBlockProps> = ({ node }) => {
-  const { render } = useDiagramRender();
   const [svg, setSvg] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const nextWidth = Math.max(0, Math.floor(event.nativeEvent.layout.width));
+    setContainerWidth(prev => (prev === nextWidth ? prev : nextWidth));
+  };
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setError(null);
     setSvg(null);
 
-    render({
+    defaultDiagramEngine.render({
       engine: 'math',
       code: node.value,
       options: { displayMode: true },
     })
       .then(result => {
         if (cancelled) return;
-
         if (!result.success || result.format !== 'svg') {
-          const msg = result.error?.message || result.payload || 'Math rendering failed';
-          setError(msg);
-          setLoading(false);
-          return;
+          throw new Error(result.error?.details || result.payload);
         }
-
-        try {
-          const normalized = normalizeSvg(result.payload);
-          setSvg(normalized);
-          setLoading(false);
-        } catch (err) {
-          setError(String(err));
-          setLoading(false);
-        }
+        const normalized = normalizeSvgLight(result.payload);
+        setSvg(normalized);
+        setLoading(false);
       })
       .catch(err => {
         if (cancelled) return;
-        setError(String(err));
+        if (__DEV__) {
+          console.error('[Supramark MathBlock] Local MathJax render failed, fallback to TeX:', err);
+        }
         setLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [node.value, render]);
+  }, [node.value]);
 
-  if (loading && !svg && !error) {
+  if (loading && !svg) {
     return (
       <View style={styles.placeholder}>
         <ActivityIndicator size="small" />
@@ -65,41 +62,26 @@ export const MathBlock: React.FC<MathBlockProps> = ({ node }) => {
     );
   }
 
-  if (error) {
-    return (
-      <View style={styles.placeholder}>
-        <Text style={styles.errorText}>公式渲染错误：{error}</Text>
-      </View>
-    );
-  }
-
   if (svg) {
-    const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
+    const effectiveWidth = containerWidth > 0 ? containerWidth : 320;
     let height = 80;
+    const size = getSvgViewBoxSize(svg);
 
-    if (viewBoxMatch) {
-      const parts = viewBoxMatch[1].split(/\s+/);
-      if (parts.length === 4) {
-        const w = parseFloat(parts[2]);
-        const h = parseFloat(parts[3]);
-        if (w > 0 && h > 0) {
-          const containerWidth = 300;
-          height = Math.min((h / w) * containerWidth, 200);
-        }
-      }
+    if (size) {
+      height = Math.min((size.height / size.width) * effectiveWidth, 240);
+      height += 8;
     }
 
     return (
-      <View style={styles.mathContainer}>
-        <SvgXml xml={svg} width="100%" height={height} />
+      <View style={styles.mathContainer} onLayout={handleLayout}>
+        <SvgXml xml={svg} width={effectiveWidth} height={height} />
       </View>
     );
   }
 
-  // 完全没有结果时，回退为原始 TeX 文本
   return (
-    <View style={styles.placeholder}>
-      <Text style={styles.placeholderText}>{node.value}</Text>
+    <View style={styles.codeBlock} onLayout={handleLayout}>
+      <Text style={styles.codeText}>{node.value}</Text>
     </View>
   );
 };
@@ -107,6 +89,11 @@ export const MathBlock: React.FC<MathBlockProps> = ({ node }) => {
 const styles = StyleSheet.create({
   mathContainer: {
     marginVertical: 8,
+  },
+  placeholderText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 6,
   },
   placeholder: {
     padding: 8,
@@ -117,13 +104,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  placeholderText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 6,
+  codeBlock: {
+    backgroundColor: '#f5f5f5',
+    padding: 8,
+    borderRadius: 4,
+    marginVertical: 8,
   },
-  errorText: {
+  codeText: {
+    fontFamily: 'Menlo',
     fontSize: 12,
-    color: '#d4380d',
+    color: '#262626',
   },
 });

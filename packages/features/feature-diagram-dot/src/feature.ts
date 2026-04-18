@@ -9,12 +9,11 @@ import { FeatureRegistry, getFeatureOptionsAs } from '@supramark/core';
 import { diagramDotExamples } from './examples.js';
 
 /**
- * DOT / Graphviz 图表 Feature（规范层，占位实现）
+ * DOT / Graphviz 图表 Feature
  *
  * - 复用通用 `diagram` AST 节点；
  * - 只关心 engine 为 'dot' 或 'graphviz' 的 diagram；
- * - 当前阶段：仅解析为 diagram 节点，在 RN / Web 中以占位方式展示；
- *   未来可以接入 wasm / 远端服务生成 SVG。
+ * - 由 `@supramark/diagram-engine` 在 RN / Web 侧将 DOT 源码转换为 SVG。
  *
  * @example
  * ```markdown
@@ -38,8 +37,7 @@ export const diagramDotFeature: SupramarkFeature<SupramarkDiagramNode> = {
     name: 'Diagram (DOT / Graphviz)',
     version: '0.1.0',
     author: 'Supramark Team',
-    description:
-      'Placeholder support for DOT / Graphviz diagrams. Currently parsed as diagram nodes with textual fallback rendering.',
+    description: 'DOT / Graphviz diagrams rendered to SVG through @supramark/diagram-engine.',
     license: 'Apache-2.0',
     tags: ['diagram', 'dot', 'graphviz'],
     syntaxFamily: 'fence',
@@ -119,7 +117,7 @@ export const diagramDotFeature: SupramarkFeature<SupramarkDiagramNode> = {
     renderTests: {
       web: [
         {
-          name: 'Web 渲染 DOT diagram（占位文本）',
+          name: 'Web 渲染 DOT diagram',
           input: {
             type: 'diagram',
             engine: 'dot',
@@ -131,7 +129,7 @@ export const diagramDotFeature: SupramarkFeature<SupramarkDiagramNode> = {
       ],
       rn: [
         {
-          name: 'RN 渲染 DOT diagram（占位文本）',
+          name: 'RN 渲染 DOT diagram',
           input: {
             type: 'diagram',
             engine: 'dot',
@@ -174,18 +172,18 @@ export const diagramDotFeature: SupramarkFeature<SupramarkDiagramNode> = {
     readme: `
 # Diagram (DOT / Graphviz) Feature
 
-为 supramark 提供 DOT / Graphviz 围栏代码块的 AST 建模，目前渲染为占位文本。
+为 supramark 提供 DOT / Graphviz 围栏代码块的 AST 建模，并在 RN / Web 端通过 Graphviz 渲染为 SVG。
 
 - 语法：使用 \`\\\`\\\`dot\` 或 \`\\\`\\\`graphviz\` 围栏；
 - AST：解析为 \`diagram\` 节点，engine = "dot" 或 "graphviz"，code 为 DOT 源码；
-- 渲染：当前仅以文本占位，未来可接入 wasm / 远端服务生成 SVG。
+- 渲染：由 \`@supramark/diagram-engine\` 基于 Graphviz 渲染为 SVG。
     `.trim(),
 
     api: {
       interfaces: [
         {
           name: 'DiagramDotFeatureOptions',
-          description: 'DOT / Graphviz Feature 的配置选项（占位）。',
+          description: 'DOT / Graphviz Feature 的配置选项。',
           fields: [],
         },
       ],
@@ -226,13 +224,13 @@ export const diagramDotFeature: SupramarkFeature<SupramarkDiagramNode> = {
       types: [],
     },
 
-    bestPractices: ['在 AST 层就保持 DOT 源码完整，方便未来接入真实渲染引擎。'],
+    bestPractices: ['在 AST 层保持 DOT 源码完整，并通过 diagram-engine 在各平台统一输出 SVG。'],
 
     faq: [
       {
-        question: '为什么目前只有占位渲染？',
+        question: 'DOT / Graphviz 是如何渲染的？',
         answer:
-          'DOT / Graphviz 的 SVG 渲染通常依赖 C / wasm 或外部服务，目前阶段先保证语法与 AST 完整，渲染能力会在后续迭代中补上。',
+          'Supramark 会把 ```dot / ```graphviz 围栏解析为 diagram 节点，再由 @supramark/diagram-engine 在 Web 侧通过 Wasm、在 RN 侧通过原生 Graphviz 模块输出 SVG。',
       },
     ],
   },
@@ -241,7 +239,7 @@ export const diagramDotFeature: SupramarkFeature<SupramarkDiagramNode> = {
 FeatureRegistry.register(diagramDotFeature);
 
 export interface DiagramDotFeatureOptions {
-  // 占位：未来可加入 layout / engine 等选项
+  // 预留：未来可加入默认布局引擎、属性注入等选项
 }
 
 export type DiagramDotFeatureConfig = FeatureConfigWithOptions<DiagramDotFeatureOptions>;

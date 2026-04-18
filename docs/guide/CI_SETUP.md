@@ -18,35 +18,12 @@
 **步骤**：
 
 1. **代码检出**：使用 `actions/checkout@v4`
-2. **环境配置**：设置 Node.js 环境并使用 npm cache
-3. **安装依赖**：运行 `npm ci --legacy-peer-deps`
-4. **运行测试**：执行 `npm test -- --coverage`
+2. **环境配置**：设置 Node.js 与 Bun
+3. **安装依赖**：运行 `bun install --no-progress`
+4. **运行测试**：执行 `bun run test:core -- --coverage`
 5. **上传覆盖率**：将覆盖率报告上传到 Codecov（仅 Node 20.x）
-6. **构建项目**：编译 TypeScript 代码
+6. **构建项目**：执行 `bun run build`
 7. **质量检查**：运行 `scripts/quality-check.js`（仅 Node 20.x）
-
-#### Docs Job
-
-**运行环境**：
-
-- Ubuntu Latest
-- Node.js 20.x
-
-**触发条件**：
-
-- 仅在 push 到 `main` 分支时运行
-- 依赖于 `test` job 成功完成
-
-**步骤**：
-
-1. **代码检出**：使用 `actions/checkout@v4`
-2. **环境配置**：设置 Node.js 20.x
-3. **安装依赖**：安装 core 包的依赖
-4. **生成文档**：运行 `npm run docs`
-5. **部署到 GitHub Pages**：使用 `peaceiris/actions-gh-pages@v3`
-   - 发布目录：`./packages/core/docs/api`
-   - 部署到：`/api` 子目录
-   - 提交信息：`docs: update API documentation`
 
 ## Badges
 
@@ -56,7 +33,6 @@
 [![CI](https://github.com/supramark/supramark/actions/workflows/ci.yml/badge.svg)](https://github.com/supramark/supramark/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/supramark/supramark/branch/main/graph/badge.svg)](https://codecov.io/gh/supramark/supramark)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![API Docs](https://img.shields.io/badge/docs-API-brightgreen.svg)](https://supramark.github.io/supramark/api/)
 ```
 
 ## 设置步骤
@@ -67,19 +43,9 @@
 
 - `CODECOV_TOKEN`：从 [codecov.io](https://codecov.io) 获取
 
-### 2. GitHub Pages 设置
+### 2. GitHub Actions 权限
 
-1. 进入仓库 Settings → Pages
-2. Source 选择 "GitHub Actions"
-3. 或者选择 "Deploy from a branch" → 选择 `gh-pages` 分支
-
-### 3. 权限设置
-
-确保 GitHub Actions 有写入权限：
-
-1. 进入仓库 Settings → Actions → General
-2. Workflow permissions 选择 "Read and write permissions"
-3. 勾选 "Allow GitHub Actions to create and approve pull requests"
+当前 CI 只需要读取仓库内容并上传覆盖率，不再依赖额外的文档发布权限。
 
 ## 本地测试 CI
 
@@ -87,21 +53,15 @@
 
 ```bash
 # 安装依赖
-npm ci --legacy-peer-deps
-cd packages/core && npm ci --legacy-peer-deps
+bun install --no-progress
 
 # 运行测试
-cd packages/core
-npm test -- --coverage
+bun run test:core -- --coverage
 
 # 构建
-npm run build
-
-# 生成文档
-npm run docs
+bun run build
 
 # 质量检查
-cd ../..
 node scripts/quality-check.js
 ```
 
@@ -119,37 +79,22 @@ node scripts/quality-check.js
 - Lines: 55%
 - Statements: 55%
 
-## API 文档部署
-
-API 文档会自动部署到 GitHub Pages：
-
-- 文档地址：`https://supramark.github.io/supramark/api/`
-- 每次 push 到 `main` 分支且测试通过后自动更新
-
 ## 故障排查
 
 ### 测试失败
 
 查看 GitHub Actions 日志中的测试输出，通常问题包括：
 
-- 依赖安装失败：检查 `package.json` 和 `--legacy-peer-deps` 选项
+- 依赖安装失败：检查 `package.json`、`bun.lock` 与 Bun 版本
 - 测试超时：检查测试代码和 jest 配置
 - 覆盖率不达标：补充测试用例
-
-### 文档部署失败
-
-常见问题：
-
-- **权限问题**：确保 Workflow permissions 设置正确
-- **分支不存在**：首次部署会自动创建 `gh-pages` 分支
-- **TypeDoc 错误**：检查 TypeScript 编译错误
 
 ### 本地与 CI 结果不一致
 
 可能原因：
 
 - Node.js 版本差异：CI 使用 18.x 和 20.x
-- npm cache 问题：CI 使用 `npm ci` 而非 `npm install`
+- Bun 版本或锁文件不一致：CI 使用 `bun install --no-progress`
 - 操作系统差异：CI 使用 Ubuntu，本地可能是 macOS/Windows
 
 ## 未来改进
@@ -164,6 +109,5 @@ API 文档会自动部署到 GitHub Pages：
 ## 相关资源
 
 - [GitHub Actions 文档](https://docs.github.com/en/actions)
-- [peaceiris/actions-gh-pages](https://github.com/peaceiris/actions-gh-pages)
 - [codecov/codecov-action](https://github.com/codecov/codecov-action)
 - [TypeDoc 文档](https://typedoc.org/)

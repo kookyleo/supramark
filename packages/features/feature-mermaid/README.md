@@ -14,7 +14,7 @@ graph TD
 ````
 
 - AST：统一解析为 `diagram` 节点，`engine` 为 `mermaid`。
-- 渲染：通过统一图表子系统生成 SVG。Web 端使用 `@supramark/web-diagram`，RN 端使用 `@supramark/rn-diagram-worker`。
+- 渲染：通过统一图表子系统生成 SVG。Web 端使用 `@supramark/web-diagram`，RN 端由 `@supramark/rn` 直接在本地调用 `beautiful-mermaid` 生成 SVG。
 
 本包当前主要用于：
 

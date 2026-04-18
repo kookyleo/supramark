@@ -1,0 +1,18 @@
+{
+  "name": "output",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./wasm/viz.js": {
+      "types": "./wasm/viz.d.ts",
+      "default": "./wasm/viz.js"
+    }
+  },
+  "scripts": {
+    "build": "echo \"skip output build\""
+  },
+  "dependencies": {
+    "@viz-js/viz": "^3.25.0"
+  }
+}

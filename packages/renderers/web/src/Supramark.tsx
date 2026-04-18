@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, ReactNode } from 'react';
+import React, { useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import type {
   SupramarkRootNode,
   SupramarkNode,
@@ -26,8 +26,14 @@ import type {
   SupramarkFootnoteDefinitionNode,
   SupramarkDefinitionListNode,
   SupramarkDefinitionItemNode,
+  SupramarkDiagramConfig,
   SupramarkConfig,
 } from '@supramark/core';
+import {
+  type DiagramRenderResult,
+  type DiagramRenderService,
+} from '@supramark/diagram-engine';
+import { createWebDiagramEngine } from '@supramark/diagram-engine/web';
 import {
   parseMarkdown,
   isFeatureEnabled,
@@ -41,7 +47,10 @@ import {
   tailwindClassNames,
   minimalClassNames,
 } from './classNames.js';
+import { DiagramBlock } from './DiagramBlock.js';
+import { DiagramEngineContext } from './DiagramEngineProvider.js';
 import { ErrorBoundary, ErrorInfo, ErrorDisplay } from './ErrorBoundary.js';
+import { MathBlockWeb, MathInlineWeb } from './MathBlockWeb.js';
 
 export interface ContainerRendererWeb {
   (args: {
@@ -55,30 +64,25 @@ export interface ContainerRendererWeb {
 }
 
 export interface SupramarkWebProps {
-  /** Markdown 源文本 */
   markdown: string;
-  /** 预解析的 AST（优先级高于 markdown） */
   ast?: SupramarkRootNode;
-  /** 自定义 className（覆盖默认 className） */
   classNames?: SupramarkClassNames;
-  /** 主题：'tailwind' | 'minimal' | 自定义 classNames 对象 */
   theme?: 'tailwind' | 'minimal' | SupramarkClassNames;
-  /** Feature 配置（用于按需启用/禁用扩展能力） */
   config?: SupramarkConfig;
-  /** 错误回调（可选） */
   onError?: (error: Error, errorInfo?: React.ErrorInfo) => void;
-  /** 自定义错误展示组件（可选） */
   errorFallback?: (error: ErrorInfo) => ReactNode;
-  /** CSS 类名前缀，默认 'sm-error' */
   errorClassNamePrefix?: string;
-
-  /**
-   * Container 扩展渲染器注册表：node.type === 'container' 时按 node.name 委派。
-   *
-   * 优先从 config.features 自动解析，也可由此处手动注入。
-   */
   containerRenderers?: Record<string, ContainerRendererWeb>;
 }
+
+type RenderTask = {
+  key: string;
+  engine: 'mermaid' | 'math' | 'dot' | 'graphviz';
+  code: string;
+  options?: Record<string, unknown>;
+};
+
+const defaultDiagramEngine = createWebDiagramEngine();
 
 export const Supramark: React.FC<SupramarkWebProps> = ({
   markdown,
@@ -91,10 +95,11 @@ export const Supramark: React.FC<SupramarkWebProps> = ({
   errorClassNamePrefix = 'sm-error',
   containerRenderers,
 }) => {
+  const diagramEngine = useContext(DiagramEngineContext) ?? defaultDiagramEngine;
   const [root, setRoot] = useState<SupramarkRootNode | null>(ast ?? null);
+  const [rendered, setRendered] = useState<Map<string, DiagramRenderResult>>(new Map());
   const [parseError, setParseError] = useState<ErrorInfo | null>(null);
 
-  // 合并 className：theme -> customClassNames -> defaultClassNames
   const mergedClassNames = useMemo(() => {
     let themeClassNames: SupramarkClassNames | undefined;
 
@@ -104,43 +109,39 @@ export const Supramark: React.FC<SupramarkWebProps> = ({
       themeClassNames = theme;
     }
 
-    // 如果同时提供了 theme 和 customClassNames，customClassNames 优先级更高
-    const finalCustomClassNames = {
+    return mergeClassNames({
       ...themeClassNames,
       ...customClassNames,
-    };
-
-    return mergeClassNames(finalCustomClassNames);
+    });
   }, [customClassNames, theme]);
 
   useEffect(() => {
-    if (ast) {
-      setRoot(ast);
-      setParseError(null);
-      return;
-    }
-
     let cancelled = false;
+
     (async () => {
       try {
-        const parsed = await parseMarkdown(markdown, { config });
+        const parsed = ast ?? (await parseMarkdown(markdown, { config }));
+        const renderedMap = await preRenderAll(
+          collectRenderTasks(parsed.children, config),
+          diagramEngine
+        );
+
         if (!cancelled) {
           setRoot(parsed);
+          setRendered(renderedMap);
           setParseError(null);
         }
       } catch (error) {
         if (!cancelled) {
           const err = error as Error;
-          const errorInfo: ErrorInfo = {
+          setParseError({
             type: 'parse',
             message: err.message || '解析 Markdown 失败',
             details: err.toString(),
             stack: err.stack,
-          };
-          setParseError(errorInfo);
+          });
+          setRendered(new Map());
           setRoot(null);
-
-          // 调用错误回调
           if (onError) {
             onError(err);
           }
@@ -151,15 +152,12 @@ export const Supramark: React.FC<SupramarkWebProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [markdown, ast, onError]);
+  }, [markdown, ast, config, diagramEngine, onError]);
 
   const mergedContainerRenderers = useMemo(() => {
-    // FeatureConfig 只描述启用状态与 options，不再携带 renderer 定义。
-    // container 渲染器需要由宿主显式注入，避免运行时隐式耦合到 feature 包实现。
     return containerRenderers ?? {};
   }, [containerRenderers]);
 
-  // 解析错误降级：显示错误信息或原始 markdown
   if (parseError) {
     if (errorFallback) {
       return <>{errorFallback(parseError)}</>;
@@ -186,7 +184,7 @@ export const Supramark: React.FC<SupramarkWebProps> = ({
     >
       <div className={mergedClassNames.root}>
         {root.children.map((node, index) =>
-          renderNode(node, index, mergedClassNames, config, mergedContainerRenderers)
+          renderNode(node, index, mergedClassNames, rendered, config, mergedContainerRenderers)
         )}
       </div>
     </ErrorBoundary>
@@ -197,6 +195,7 @@ function renderNode(
   node: SupramarkNode,
   key: number,
   classNames: SupramarkClassNames,
+  rendered: Map<string, DiagramRenderResult>,
   config?: SupramarkConfig,
   containerRenderers?: Record<string, ContainerRendererWeb>
 ): React.ReactNode {
@@ -204,12 +203,12 @@ function renderNode(
     case 'paragraph':
       return (
         <p key={key} className={classNames.paragraph}>
-          {renderInlineNodes((node as SupramarkParagraphNode).children, classNames, config)}
+          {renderInlineNodes((node as SupramarkParagraphNode).children, classNames, rendered, config)}
         </p>
       );
     case 'heading': {
       const heading = node as SupramarkHeadingNode;
-      const content = renderInlineNodes(heading.children, classNames, config);
+      const content = renderInlineNodes(heading.children, classNames, rendered, config);
       switch (heading.depth) {
         case 1:
           return (
@@ -267,15 +266,18 @@ function renderNode(
         );
       }
       return (
-        <div key={key} data-suprimark-math="block" className={classNames.codeBlock}>
-          <code className={classNames.code}>{mathBlock.value}</code>
-        </div>
+        <MathBlockWeb
+          key={key}
+          classNames={classNames}
+          value={mathBlock.value}
+          result={rendered.get(buildRenderKey('math', mathBlock.value, { displayMode: true }))}
+        />
       );
     }
     case 'list': {
       const list = node as SupramarkListNode;
       const items = list.children.map((item, index) =>
-        renderNode(item, index, classNames, config, containerRenderers)
+        renderNode(item, index, classNames, rendered, config, containerRenderers)
       );
       return list.ordered ? (
         <ol key={key} className={classNames.listOrdered}>
@@ -302,7 +304,7 @@ function renderNode(
               className={classNames.taskCheckbox}
             />
             {item.children.map((child, index) =>
-              renderNode(child, index, classNames, config, containerRenderers)
+              renderNode(child, index, classNames, rendered, config, containerRenderers)
             )}
           </li>
         );
@@ -311,7 +313,7 @@ function renderNode(
       return (
         <li key={key} className={classNames.listItem}>
           {item.children.map((child, index) =>
-            renderNode(child, index, classNames, config, containerRenderers)
+            renderNode(child, index, classNames, rendered, config, containerRenderers)
           )}
         </li>
       );
@@ -321,8 +323,19 @@ function renderNode(
       if (!isDiagramFeatureEnabled(config, diagram.engine, 'web:diagram-feature')) {
         return renderDisabledDiagram(diagram, key, classNames);
       }
-      // Web 端 diagram 渲染由脚本（@supramark/web-diagram）在浏览器中负责。
-      // 这里只渲染占位符，实际渲染由 buildDiagramSupportScripts 提供的客户端脚本完成。
+
+      if (isPreRenderedDiagramEngine(diagram.engine)) {
+        return (
+          <DiagramBlock
+            key={key}
+            classNames={classNames}
+            code={diagram.code}
+            engine={diagram.engine}
+            result={rendered.get(buildRenderKey(diagram.engine, diagram.code, diagram.meta))}
+          />
+        );
+      }
+
       return (
         <div key={key} data-suprimark-diagram={diagram.engine} className={classNames.diagram}>
           <pre className={classNames.diagramPre}>
@@ -335,34 +348,32 @@ function renderNode(
       const container = node as SupramarkContainerNode;
       const containerName = container.name;
 
-      // 检查是否有注册的自定义渲染器
       if (containerRenderers && containerRenderers[containerName]) {
         return containerRenderers[containerName]({
           node: container,
           key,
           classNames,
           config,
-          renderNode: (n, k) => renderNode(n, k, classNames, config, containerRenderers),
-          renderChildren: (children) =>
+          renderNode: (nextNode, nextKey) =>
+            renderNode(nextNode, nextKey, classNames, rendered, config, containerRenderers),
+          renderChildren: children =>
             children.map((child, index) =>
-              renderNode(child, index, classNames, config, containerRenderers)
+              renderNode(child, index, classNames, rendered, config, containerRenderers)
             ),
         });
       }
 
-      // 内置处理：admonition 类型 (note, tip, warning, etc.)
       if (SUPRAMARK_ADMONITION_KINDS.includes(containerName as any)) {
         const title = container.params || (container.data?.title as string | undefined);
         const kind = containerName;
 
         if (!isFeatureGroupEnabled(config, ['@supramark/feature-admonition'])) {
-          // 禁用时退化为普通段落
           return (
             <p key={key} className={classNames.paragraph}>
               {title ? <strong>{title}</strong> : null}
               {title ? ' ' : null}
               {container.children.map((child, index) =>
-                renderNode(child, index, classNames, config, containerRenderers)
+                renderNode(child, index, classNames, rendered, config, containerRenderers)
               )}
             </p>
           );
@@ -370,18 +381,16 @@ function renderNode(
 
         const adOptions =
           getFeatureOptionsAs<{ kinds?: string[] }>(config, '@supramark/feature-admonition') ?? {};
-        if (Array.isArray(adOptions.kinds) && adOptions.kinds.length > 0) {
-          if (!adOptions.kinds.includes(kind)) {
-            return (
-              <p key={key} className={classNames.paragraph}>
-                {title ? <strong>{title}</strong> : null}
-                {title ? ' ' : null}
-                {container.children.map((child, index) =>
-                  renderNode(child, index, classNames, config, containerRenderers)
-                )}
-              </p>
-            );
-          }
+        if (Array.isArray(adOptions.kinds) && adOptions.kinds.length > 0 && !adOptions.kinds.includes(kind)) {
+          return (
+            <p key={key} className={classNames.paragraph}>
+              {title ? <strong>{title}</strong> : null}
+              {title ? ' ' : null}
+              {container.children.map((child, index) =>
+                renderNode(child, index, classNames, rendered, config, containerRenderers)
+              )}
+            </p>
+          );
         }
 
         return (
@@ -396,14 +405,13 @@ function renderNode(
             ) : null}
             <div>
               {container.children.map((child, index) =>
-                renderNode(child, index, classNames, config, containerRenderers)
+                renderNode(child, index, classNames, rendered, config, containerRenderers)
               )}
             </div>
           </div>
         );
       }
 
-      // 内置处理：map 类型
       if (containerName === 'map') {
         const data = container.data || {};
         const center = data.center as [number, number] | undefined;
@@ -432,13 +440,12 @@ function renderNode(
         );
       }
 
-      // 默认：渲染为通用容器块
       return (
         <div key={key} className={`container container-${containerName} ${classNames.paragraph ?? ''}`.trim()}>
           {container.params && <div className="container-params">{container.params}</div>}
           <div className="container-content">
             {container.children.map((child, index) =>
-              renderNode(child, index, classNames, config, containerRenderers)
+              renderNode(child, index, classNames, rendered, config, containerRenderers)
             )}
           </div>
         </div>
@@ -451,18 +458,17 @@ function renderNode(
         {};
       const isCompact = defOptions.compact !== false;
       if (!isFeatureGroupEnabled(config, ['@supramark/feature-definition-list'])) {
-        // 禁用时，将定义列表退化为普通段落 + 加粗术语
         return (
           <div key={key} className={classNames.paragraph}>
             {list.children.map((item, index) => {
               const defItem = item as SupramarkDefinitionItemNode;
-              const termContent = renderInlineNodes(defItem.term, classNames, config);
+              const termContent = renderInlineNodes(defItem.term, classNames, rendered, config);
               return (
                 <p key={index} className={classNames.paragraph}>
                   <strong>{termContent}</strong>{' '}
                   {defItem.descriptions.map((descNodes, idx) => (
                     <span key={idx}>
-                      {renderInlineNodes(descNodes, classNames, config)}
+                      {renderInlineNodes(descNodes, classNames, rendered, config)}
                       {idx < defItem.descriptions.length - 1 ? ' ' : null}
                     </span>
                   ))}
@@ -476,7 +482,7 @@ function renderNode(
         <dl key={key} className={classNames.paragraph}>
           {list.children.map((item, index) => {
             const defItem = item as SupramarkDefinitionItemNode;
-            const termContent = renderInlineNodes(defItem.term, classNames, config);
+            const termContent = renderInlineNodes(defItem.term, classNames, rendered, config);
             return (
               <React.Fragment key={index}>
                 <dt>
@@ -484,7 +490,7 @@ function renderNode(
                 </dt>
                 {defItem.descriptions.map((descNodes, idx) => (
                   <dd key={idx}>
-                    {renderInlineNodes(descNodes, classNames, config)}
+                    {renderInlineNodes(descNodes, classNames, rendered, config)}
                     {isCompact ? null : <br />}
                   </dd>
                 ))}
@@ -500,7 +506,7 @@ function renderNode(
         <table key={key} className={classNames.table}>
           <tbody className={classNames.tableBody}>
             {table.children.map((row, index) =>
-              renderNode(row, index, classNames, config, containerRenderers)
+              renderNode(row, index, classNames, rendered, config, containerRenderers)
             )}
           </tbody>
         </table>
@@ -511,7 +517,7 @@ function renderNode(
       return (
         <tr key={key} className={classNames.tableRow}>
           {row.children.map((cell, index) =>
-            renderNode(cell, index, classNames, config, containerRenderers)
+            renderNode(cell, index, classNames, rendered, config, containerRenderers)
           )}
         </tr>
       );
@@ -519,7 +525,7 @@ function renderNode(
     case 'table_cell': {
       const cell = node as SupramarkTableCellNode;
       const alignStyle = cell.align ? { textAlign: cell.align } : undefined;
-      const content = renderInlineNodes(cell.children, classNames, config);
+      const content = renderInlineNodes(cell.children, classNames, rendered, config);
 
       if (cell.header) {
         return (
@@ -537,18 +543,16 @@ function renderNode(
     }
     case 'footnote_definition': {
       const def = node as SupramarkFootnoteDefinitionNode;
-      // 简单的脚注列表项，后续可改为单独 <section> 包裹
       if (!isFeatureGroupEnabled(config, ['@supramark/feature-footnote'])) {
-        // 禁用脚注 Feature 时，直接渲染为普通段落内容
         return (
           <p key={key} className={classNames.paragraph}>
-            {renderInlineNodes(def.children, classNames, config)}
+            {renderInlineNodes(def.children, classNames, rendered, config)}
           </p>
         );
       }
       return (
         <p key={key} className={classNames.paragraph}>
-          <sup>[{def.index}]</sup> {renderInlineNodes(def.children, classNames, config)}
+          <sup>[{def.index}]</sup> {renderInlineNodes(def.children, classNames, rendered, config)}
         </p>
       );
     }
@@ -562,15 +566,17 @@ function renderNode(
 function renderInlineNodes(
   nodes: SupramarkNode[],
   classNames: SupramarkClassNames,
+  rendered: Map<string, DiagramRenderResult>,
   config?: SupramarkConfig
 ): React.ReactNode {
-  return nodes.map((node, index) => renderInlineNode(node, index, classNames, config));
+  return nodes.map((node, index) => renderInlineNode(node, index, classNames, rendered, config));
 }
 
 function renderInlineNode(
   node: SupramarkNode,
   key: number,
   classNames: SupramarkClassNames,
+  rendered: Map<string, DiagramRenderResult>,
   config?: SupramarkConfig
 ): React.ReactNode {
   switch (node.type) {
@@ -582,7 +588,7 @@ function renderInlineNode(
       const strongNode = node as SupramarkStrongNode;
       return (
         <strong key={key} className={classNames.strong}>
-          {renderInlineNodes(strongNode.children, classNames)}
+          {renderInlineNodes(strongNode.children, classNames, rendered, config)}
         </strong>
       );
     }
@@ -590,7 +596,7 @@ function renderInlineNode(
       const emphasisNode = node as SupramarkEmphasisNode;
       return (
         <em key={key} className={classNames.emphasis}>
-          {renderInlineNodes(emphasisNode.children, classNames)}
+          {renderInlineNodes(emphasisNode.children, classNames, rendered, config)}
         </em>
       );
     }
@@ -608,16 +614,19 @@ function renderInlineNode(
         return mathNode.value;
       }
       return (
-        <span key={key} data-suprimark-math="inline" className={classNames.inlineCode}>
-          {mathNode.value}
-        </span>
+        <MathInlineWeb
+          key={key}
+          classNames={classNames}
+          value={mathNode.value}
+          result={rendered.get(buildRenderKey('math', mathNode.value, { displayMode: false }))}
+        />
       );
     }
     case 'link': {
       const linkNode = node as SupramarkLinkNode;
       return (
         <a key={key} href={linkNode.url} title={linkNode.title} className={classNames.link}>
-          {renderInlineNodes(linkNode.children, classNames)}
+          {renderInlineNodes(linkNode.children, classNames, rendered, config)}
         </a>
       );
     }
@@ -633,32 +642,198 @@ function renderInlineNode(
         />
       );
     }
-    case 'break': {
+    case 'break':
       return <br key={key} />;
-    }
     case 'delete': {
       const deleteNode = node as SupramarkDeleteNode;
       if (!isFeatureGroupEnabled(config, ['@supramark/feature-gfm'])) {
-        return renderInlineNodes(deleteNode.children, classNames, config);
+        return renderInlineNodes(deleteNode.children, classNames, rendered, config);
       }
       return (
         <del key={key} className={classNames.delete}>
-          {renderInlineNodes(deleteNode.children, classNames, config)}
+          {renderInlineNodes(deleteNode.children, classNames, rendered, config)}
         </del>
       );
     }
     case 'footnote_reference': {
       const ref = node as SupramarkFootnoteReferenceNode;
-      const label = ref.index;
       return (
         <sup key={key} className={classNames.inlineCode}>
-          [{label}]
+          [{ref.index}]
         </sup>
       );
     }
     default:
       return null;
   }
+}
+
+function collectRenderTasks(nodes: SupramarkNode[], config?: SupramarkConfig): RenderTask[] {
+  const tasks: RenderTask[] = [];
+
+  function walk(list: SupramarkNode[]) {
+    for (const node of list) {
+      if (node.type === 'diagram') {
+        const diagram = node as SupramarkDiagramNode;
+        if (
+          isPreRenderedDiagramEngine(diagram.engine) &&
+          isDiagramFeatureEnabled(config, diagram.engine, 'web:diagram-feature')
+        ) {
+          tasks.push({
+            key: buildRenderKey(diagram.engine, diagram.code, diagram.meta),
+            engine: normalizeRenderEngine(diagram.engine),
+            code: diagram.code,
+            options: buildDiagramRenderOptions(diagram.engine, diagram.meta, config?.diagram),
+          });
+        }
+      } else if (node.type === 'math_block') {
+        const mathBlock = node as SupramarkMathBlockNode;
+        if (isFeatureGroupEnabled(config, ['@supramark/feature-math'])) {
+          tasks.push({
+            key: buildRenderKey('math', mathBlock.value, { displayMode: true }),
+            engine: 'math',
+            code: mathBlock.value,
+            options: { displayMode: true },
+          });
+        }
+      } else if (node.type === 'math_inline') {
+        const mathInline = node as SupramarkMathInlineNode;
+        if (isFeatureGroupEnabled(config, ['@supramark/feature-math'])) {
+          tasks.push({
+            key: buildRenderKey('math', mathInline.value, { displayMode: false }),
+            engine: 'math',
+            code: mathInline.value,
+            options: { displayMode: false },
+          });
+        }
+      }
+
+      if ('children' in node && Array.isArray((node as { children?: SupramarkNode[] }).children)) {
+        walk((node as { children: SupramarkNode[] }).children);
+      }
+
+      if (node.type === 'definition_item') {
+        const item = node as SupramarkDefinitionItemNode;
+        walk(item.term);
+        for (const description of item.descriptions) {
+          walk(description);
+        }
+      }
+    }
+  }
+
+  walk(nodes);
+  return tasks;
+}
+
+async function preRenderAll(
+  tasks: RenderTask[],
+  engine: DiagramRenderService
+): Promise<Map<string, DiagramRenderResult>> {
+  if (tasks.length === 0) {
+    return new Map();
+  }
+
+  const unique = new Map<string, RenderTask>();
+  for (const task of tasks) {
+    if (!unique.has(task.key)) {
+      unique.set(task.key, task);
+    }
+  }
+
+  const taskList = [...unique.values()];
+  const results = await Promise.all(
+    taskList.map(task =>
+      engine.render({
+        engine: task.engine,
+        code: task.code,
+        options: task.options,
+      })
+    )
+  );
+
+  return new Map(taskList.map((task, index) => [task.key, results[index]]));
+}
+
+function buildRenderKey(
+  engine: string,
+  code: string,
+  options?: Record<string, unknown>
+): string {
+  return `${normalizeRenderEngine(engine)}:${code}:${stableSerialize(options)}`;
+}
+
+function normalizeRenderEngine(engine: string): 'mermaid' | 'math' | 'dot' | 'graphviz' {
+  const normalized = String(engine || '').toLowerCase();
+  if (normalized === 'graphviz') {
+    return 'graphviz';
+  }
+  if (normalized === 'dot') {
+    return 'dot';
+  }
+  if (normalized === 'math') {
+    return 'math';
+  }
+  return 'mermaid';
+}
+
+function isPreRenderedDiagramEngine(engine: string): boolean {
+  const normalized = String(engine || '').toLowerCase();
+  return normalized === 'mermaid' || normalized === 'dot' || normalized === 'graphviz';
+}
+
+function buildDiagramRenderOptions(
+  engine: string,
+  meta: SupramarkDiagramNode['meta'],
+  diagramConfig?: SupramarkDiagramConfig
+): Record<string, unknown> | undefined {
+  const base: Record<string, unknown> = {};
+  const engineConfig = diagramConfig?.engines?.[engine];
+
+  if (engineConfig) {
+    if (typeof engineConfig.server === 'string') {
+      base.server = engineConfig.server;
+      base.plantumlServer = engineConfig.server;
+    }
+    if (typeof engineConfig.timeoutMs === 'number') {
+      base.timeout = engineConfig.timeoutMs;
+    }
+    if (engineConfig.cache) {
+      base.cache = engineConfig.cache;
+    }
+
+    for (const [key, value] of Object.entries(engineConfig as Record<string, unknown>)) {
+      if (value === undefined) {
+        continue;
+      }
+      if (key === 'enabled' || key === 'timeoutMs' || key === 'server' || key === 'cache') {
+        continue;
+      }
+      base[key] = value;
+    }
+  }
+
+  if (!meta) {
+    return Object.keys(base).length > 0 ? base : undefined;
+  }
+
+  return { ...base, ...meta };
+}
+
+function stableSerialize(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(',')}]`;
+  }
+  if (typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entryValue]) => `${key}:${stableSerialize(entryValue)}`)
+      .join(',')}}`;
+  }
+  return String(value);
 }
 
 function renderDisabledDiagram(
@@ -674,20 +849,12 @@ function renderDisabledDiagram(
   );
 }
 
-/**
- * 判断一组 Feature ID 是否被启用。
- *
- * 约定与 RN 端保持一致：
- * - 未提供 config 或 config.features 为空 → 视为全部启用；
- * - 如果 config 中根本没有提到这些 ID → 视为使用默认行为（启用）；
- * - 一旦显式配置了其中任意一个 ID，则以配置为准，只要有一个 enabled:true 就认为启用。
- */
 function isFeatureGroupEnabled(config: SupramarkConfig | undefined, ids: string[]): boolean {
   if (!config || !config.features || config.features.length === 0) {
     return true;
   }
 
-  const hasAny = ids.some(id => config.features!.some(f => f.id === id));
+  const hasAny = ids.some(id => config.features!.some(feature => feature.id === id));
   if (!hasAny) {
     return true;
   }
