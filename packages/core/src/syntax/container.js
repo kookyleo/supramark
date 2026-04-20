@@ -165,8 +165,6 @@ export function extractContainerInnerText(token, sourceLines) {
     if (!token.map || token.map.length !== 2)
         return '';
     const [start, end] = token.map;
-    const innerStart = start + 1;
-    const innerEnd = end - 1 > innerStart ? end - 1 : end;
-    return sourceLines.slice(innerStart, innerEnd).join('\n');
+    return sourceLines.slice(start + 1, end).join('\n');
 }
 //# sourceMappingURL=container.js.map

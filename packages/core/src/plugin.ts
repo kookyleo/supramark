@@ -451,6 +451,17 @@ function mapInlineTokens(tokens: Token[] | null, parent: SupramarkParentNode): v
         current.children.push(breakNode);
         break;
       }
+      case 'emoji': {
+        // markdown-it-emoji 把 :smile: 等短代码替换为 emoji token，
+        // 其中 token.content 已是对应的 Unicode 字符（如 "😄"），markup 为原短代码名。
+        // 直接落到 text 节点即可，渲染端无须知情。
+        const textNode: SupramarkTextNode = {
+          type: 'text',
+          value: token.content,
+        };
+        current.children.push(textNode);
+        break;
+      }
       case 'softbreak': {
         // softbreak 通常转换为空格或换行
         const textNode: SupramarkTextNode = {

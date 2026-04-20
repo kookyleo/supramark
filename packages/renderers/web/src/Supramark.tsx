@@ -84,6 +84,16 @@ type RenderTask = {
 
 const defaultDiagramEngine = createWebDiagramEngine();
 
+// Admonition 默认主题（仅在未给出自定义 className 时生效）。
+// key 对应 SUPRAMARK_ADMONITION_KINDS：note / tip / info / warning / danger。
+const ADMONITION_STYLES: Record<string, { border: string; background: string; icon: string }> = {
+  note: { border: '#3b82f6', background: '#eff6ff', icon: 'ℹ️' },
+  tip: { border: '#10b981', background: '#ecfdf5', icon: '💡' },
+  info: { border: '#0ea5e9', background: '#f0f9ff', icon: 'ℹ️' },
+  warning: { border: '#f59e0b', background: '#fffbeb', icon: '⚠️' },
+  danger: { border: '#ef4444', background: '#fef2f2', icon: '⛔' },
+};
+
 export const Supramark: React.FC<SupramarkWebProps> = ({
   markdown,
   ast,
@@ -363,9 +373,21 @@ function renderNode(
         });
       }
 
-      if (SUPRAMARK_ADMONITION_KINDS.includes(containerName as any)) {
-        const title = container.params || (container.data?.title as string | undefined);
-        const kind = containerName;
+      // Admonition 可能以两种形态到达这里：
+      //   1. 直接用 kind 作为 name（container.ts 内置解析）→ containerName ∈ SUPRAMARK_ADMONITION_KINDS
+      //   2. 来自 @supramark/feature-admonition（feature 注册的 hook）→ name='admonition', data.kind=实际种类
+      const kindFromData = container.data?.kind as string | undefined;
+      const isAdmonition =
+        SUPRAMARK_ADMONITION_KINDS.includes(containerName as any) ||
+        (containerName === 'admonition' &&
+          kindFromData !== undefined &&
+          SUPRAMARK_ADMONITION_KINDS.includes(kindFromData as any));
+      if (isAdmonition) {
+        const kind = (kindFromData as string) || containerName;
+        // title 优先使用 data.title（已剥离 kind 名），否则退回 params（可能含 kind 前缀）
+        const title =
+          (container.data?.title as string | undefined) ||
+          (containerName === 'admonition' ? undefined : container.params);
 
         if (!isFeatureGroupEnabled(config, ['@supramark/feature-admonition'])) {
           return (
@@ -393,14 +415,26 @@ function renderNode(
           );
         }
 
+        const admonitionStyle = ADMONITION_STYLES[kind] ?? ADMONITION_STYLES.note;
+
         return (
           <div
             key={key}
             className={`admonition admonition-${kind} ${classNames.paragraph ?? ''}`.trim()}
+            style={{
+              margin: '1em 0',
+              padding: '0.75em 1em',
+              borderLeft: `4px solid ${admonitionStyle.border}`,
+              background: admonitionStyle.background,
+              borderRadius: 4,
+            }}
           >
             {title ? (
-              <p>
-                <strong>{title}</strong>
+              <p style={{ margin: '0 0 0.25em', color: admonitionStyle.border, fontWeight: 600 }}>
+                <span aria-hidden="true" style={{ marginRight: 6 }}>
+                  {admonitionStyle.icon}
+                </span>
+                {title}
               </p>
             ) : null}
             <div>
@@ -543,17 +577,38 @@ function renderNode(
     }
     case 'footnote_definition': {
       const def = node as SupramarkFootnoteDefinitionNode;
+      // def.children 是块级节点（通常是单个 paragraph），不能直接喂给 renderInlineNodes。
+      // 常见形态 `[^1]: 内容。` → children = [{ type: 'paragraph', children: [text] }]
+      // 做一次扁平化：若 children 就是单个 paragraph，把其 inline 内容直接铺出来；
+      // 否则按块级节点渲染（允许多段脚注）。
+      const soleParagraph =
+        def.children.length === 1 && def.children[0]?.type === 'paragraph'
+          ? (def.children[0] as SupramarkParagraphNode)
+          : null;
+      const body = soleParagraph
+        ? renderInlineNodes(soleParagraph.children, classNames, rendered, config)
+        : def.children.map((child, index) =>
+            renderNode(child, index, classNames, rendered, config, containerRenderers)
+          );
       if (!isFeatureGroupEnabled(config, ['@supramark/feature-footnote'])) {
-        return (
+        return soleParagraph ? (
           <p key={key} className={classNames.paragraph}>
-            {renderInlineNodes(def.children, classNames, rendered, config)}
+            {body}
           </p>
+        ) : (
+          <div key={key} className={classNames.paragraph}>
+            {body}
+          </div>
         );
       }
-      return (
-        <p key={key} className={classNames.paragraph}>
-          <sup>[{def.index}]</sup> {renderInlineNodes(def.children, classNames, rendered, config)}
+      return soleParagraph ? (
+        <p key={key} id={`fn-${def.index}`} className={classNames.paragraph}>
+          <sup>[{def.index}]</sup> {body}
         </p>
+      ) : (
+        <div key={key} id={`fn-${def.index}`} className={classNames.paragraph}>
+          <sup>[{def.index}]</sup> {body}
+        </div>
       );
     }
     case 'text':
@@ -659,7 +714,9 @@ function renderInlineNode(
       const ref = node as SupramarkFootnoteReferenceNode;
       return (
         <sup key={key} className={classNames.inlineCode}>
-          [{ref.index}]
+          <a href={`#fn-${ref.index}`} className={classNames.link}>
+            [{ref.index}]
+          </a>
         </sup>
       );
     }

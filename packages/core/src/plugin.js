@@ -273,6 +273,14 @@ function mapInlineTokens(tokens, parent) {
                 current.children.push(breakNode);
                 break;
             }
+            case 'emoji': {
+                const textNode = {
+                    type: 'text',
+                    value: token.content,
+                };
+                current.children.push(textNode);
+                break;
+            }
             case 'softbreak': {
                 // softbreak 通常转换为空格或换行
                 const textNode = {

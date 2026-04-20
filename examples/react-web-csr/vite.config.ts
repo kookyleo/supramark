@@ -15,7 +15,20 @@ export default defineConfig({
     mainFields: ['module', 'main', 'types'],
   },
   optimizeDeps: {
-    exclude: ['react-native', '@react-native', '@react-native/virtualized-lists'],
-    include: ['@supramark/web', '@supramark/web/client', '@supramark/web/server'],
+    // Workspace packages must NOT be prebundled — prebundling inlines a private
+    // copy of @supramark/core, which desyncs `customContainerHooks` between
+    // Supramark (prebundled) and the feature packages (loaded from source).
+    // See: https://vitejs.dev/guide/dep-pre-bundling.html
+    exclude: [
+      'react-native',
+      '@react-native',
+      '@react-native/virtualized-lists',
+      '@supramark/core',
+      '@supramark/web',
+      '@supramark/web/client',
+      '@supramark/web/server',
+      '@supramark/diagram-engine',
+      '@supramark/diagram-engine/web',
+    ],
   },
 });
