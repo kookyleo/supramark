@@ -284,3 +284,47 @@ export async function renderMermaidSvg(
   }
   return inlineMermaidSvg(normalized, options);
 }
+
+// ============================================================================
+// v0.2 unified engine factory
+// ============================================================================
+
+import type { RenderOptions } from '../types.js';
+import { DiagramRenderError } from '../types.js';
+
+/** Mermaid engine 的渲染选项。 */
+export interface Options extends RenderOptions {
+  /** Mermaid 主题（mermaid 自家枚举），默认 'default' */
+  mermaidTheme?: 'default' | 'dark' | 'neutral' | 'forest';
+  /** 传给 mermaid 的其它 style/theme 变量（如 fontFamily, primaryColor 等） */
+  [key: string]: unknown;
+}
+
+/**
+ * Mermaid engine 工厂。Mermaid 无装配期依赖，`modules` 保留为占位让形态统一。
+ *
+ * @example
+ * ```ts
+ * import mermaid from '@supramark/diagram-engine/mermaid';
+ * const render = mermaid();
+ * const svg = await render('graph TD\n  A --> B');
+ * ```
+ */
+export default function mermaid(_modules?: unknown[]) {
+  return async (code: string, options?: Options): Promise<string> => {
+    options?.signal?.throwIfAborted();
+    try {
+      return await renderMermaidSvg(code, options as Record<string, unknown> | undefined);
+    } catch (e) {
+      throw new DiagramRenderError(
+        `Mermaid render failed: ${e instanceof Error ? e.message : String(e)}`,
+        {
+          engine: 'mermaid',
+          code: 'render_error',
+          input: code.slice(0, 200),
+          cause: e,
+        }
+      );
+    }
+  };
+}

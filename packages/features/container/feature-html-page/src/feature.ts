@@ -135,7 +135,7 @@ export const htmlPageFeature: SupramarkFeature<SupramarkHtmlPageContainerNode> =
             data: { html: '...' },
             children: [],
           } as SupramarkHtmlPageContainerNode,
-          expected: (output) => output !== null,
+          expected: (output: unknown) => output !== null,
         },
       ],
     },

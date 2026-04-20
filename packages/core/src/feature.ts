@@ -1630,14 +1630,12 @@ export function isFeatureEnabled(config: SupramarkConfig, featureId: string): bo
 
 export type DiagramFeatureFamilyId =
   | 'mermaid'
-  | 'plantuml'
   | 'vega-family'
   | 'echarts'
   | 'graphviz-family';
 
 const DIAGRAM_FEATURE_IDS_BY_FAMILY: Record<DiagramFeatureFamilyId, readonly string[]> = {
   mermaid: ['@supramark/feature-mermaid'],
-  plantuml: ['@supramark/feature-diagram-plantuml'],
   'vega-family': ['@supramark/feature-diagram-vega-lite'],
   echarts: ['@supramark/feature-diagram-echarts'],
   'graphviz-family': ['@supramark/feature-diagram-dot'],
@@ -1660,10 +1658,6 @@ export function getDiagramFeatureFamily(
 
   if (normalized === 'mermaid') {
     return 'mermaid';
-  }
-
-  if (normalized === 'plantuml') {
-    return 'plantuml';
   }
 
   if (

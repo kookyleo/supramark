@@ -1,7 +1,9 @@
 import type {
   GraphvizDiagramOptions,
   GraphvizRenderAdapter,
-} from './types';
+  RenderOptions,
+} from '../types.js';
+import { DiagramRenderError } from '../types.js';
 
 type GraphvizOptionSource = GraphvizDiagramOptions | Record<string, unknown>;
 
@@ -90,4 +92,64 @@ function isGraphvizImageSize(value: unknown): value is NonNullable<GraphvizDiagr
     (typeof value.width === 'string' || typeof value.width === 'number') &&
     (typeof value.height === 'string' || typeof value.height === 'number')
   );
+}
+
+// ============================================================================
+// v0.2 unified engine factory（见 docs/architecture/ENGINES_AND_CLI_PLAN.md）
+// ============================================================================
+
+/**
+ * Graphviz engine 的渲染选项（在通用 RenderOptions 基础上加平台 / 布局选项）。
+ */
+export interface Options extends RenderOptions, GraphvizDiagramOptions {}
+
+/**
+ * Graphviz engine 工厂。
+ *
+ * `modules` 必须包含至少一个 `GraphvizRenderAdapter`，通常来自：
+ * - `@supramark/diagram-engine/graphviz/web-adapter`
+ * - `@supramark/diagram-engine/graphviz/rn-adapter`
+ *
+ * @example
+ * ```ts
+ * import graphviz  from '@supramark/diagram-engine/graphviz';
+ * import webAdapter from '@supramark/diagram-engine/graphviz/web-adapter';
+ *
+ * const render = graphviz([webAdapter]);
+ * const svg = await render('digraph G { a -> b }');
+ * ```
+ */
+export default function graphviz(modules?: unknown[]) {
+  const adapter = modules?.find((m): m is GraphvizRenderAdapter => {
+    return (
+      typeof m === 'object' &&
+      m !== null &&
+      typeof (m as GraphvizRenderAdapter).renderToSvg === 'function'
+    );
+  });
+
+  return async (code: string, options?: Options): Promise<string> => {
+    options?.signal?.throwIfAborted();
+    if (!adapter) {
+      throw new DiagramRenderError(
+        'Graphviz engine requires an adapter module. ' +
+          'Pass it via modules, e.g. graphviz([webAdapter]).',
+        { engine: 'graphviz', code: 'engine_unavailable' }
+      );
+    }
+    try {
+      return await renderGraphvizSvg(code, options, adapter);
+    } catch (e) {
+      if (e instanceof DiagramRenderError) throw e;
+      throw new DiagramRenderError(
+        `Graphviz render failed: ${e instanceof Error ? e.message : String(e)}`,
+        {
+          engine: 'graphviz',
+          code: 'render_error',
+          input: code.slice(0, 200),
+          cause: e,
+        }
+      );
+    }
+  };
 }

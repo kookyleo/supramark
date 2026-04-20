@@ -17,6 +17,10 @@
     "./client": {
       "types": "./src/client.ts",
       "default": "./src/client.ts"
+    },
+    "./createSupramark": {
+      "types": "./src/createSupramark.tsx",
+      "default": "./src/createSupramark.tsx"
     }
   },
   "license": "MIT",
@@ -33,8 +37,7 @@
   },
   "dependencies": {
     "@supramark/core": "workspace:*",
-    "@supramark/diagram-engine": "workspace:*",
-    "@supramark/web-diagram": "workspace:*"
+    "@supramark/diagram-engine": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

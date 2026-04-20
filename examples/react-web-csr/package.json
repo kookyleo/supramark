@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "supramark:gen": "bun x supramark-gen",
+    "supramark:check": "bun x supramark-gen --check"
   },
   "dependencies": {
     "@supramark/core": "workspace:*",
@@ -17,7 +19,6 @@
     "@supramark/feature-definition-list": "workspace:*",
     "@supramark/feature-diagram-dot": "workspace:*",
     "@supramark/feature-diagram-echarts": "workspace:*",
-    "@supramark/feature-diagram-plantuml": "workspace:*",
     "@supramark/feature-diagram-vega-lite": "workspace:*",
     "@supramark/feature-mermaid": "workspace:*",
     "@supramark/feature-emoji": "workspace:*",

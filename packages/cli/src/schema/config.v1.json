@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://supramark.dev/schema/config.v1.json",
+  "title": "SupramarkConfig",
+  "description": "Supramark 使用方的配置表。由 @supramark/cli 读取并生成单一入口 generated 文件。",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "out": {
+      "type": "string",
+      "description": "生成文件路径。CLI 的 --out 会覆盖这里。默认 ./src/generated/supramark.ts"
+    },
+    "platform": {
+      "enum": ["web", "rn"],
+      "default": "web",
+      "description": "目标平台。决定 generated 文件从 @supramark/web 还是 @supramark/rn 取 Supramark 组件。"
+    },
+    "features": {
+      "type": "object",
+      "description": "Markdown 特性开关（基于 @supramark/feature-*）。未列出的默认不启用；除 core-markdown 外。",
+      "additionalProperties": false,
+      "properties": {
+        "gfm": {
+          "description": "删除线 / 任务列表 / 表格",
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "type": "object",
+              "properties": {
+                "tables":        { "type": "boolean" },
+                "taskListItems": { "type": "boolean" },
+                "strikethrough": { "type": "boolean" }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "math": {
+          "description": "数学公式 $...$ / $$...$$",
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "type": "object",
+              "properties": {
+                "engine": { "enum": ["mathjax", "katex"], "default": "mathjax" }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "footnote":        { "type": "boolean", "description": "脚注 [^n]" },
+        "emoji": {
+          "description": "Emoji 短代码 :smile: 及原生 Unicode",
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "type": "object",
+              "properties": {
+                "nativeOnly": { "type": "boolean" }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "admonition": {
+          "description": "::: note/tip/warning/danger/info",
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "type": "object",
+              "properties": {
+                "kinds": {
+                  "type": "array",
+                  "items": { "enum": ["note", "tip", "info", "warning", "danger"] }
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "definition-list": { "type": "boolean", "description": "定义列表" }
+      }
+    },
+    "mermaid": {
+      "description": "Mermaid 图表（flowchart / sequence / class / state / er 等）",
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "type": "object",
+          "properties": {
+            "theme": { "enum": ["default", "dark", "neutral", "forest"] }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "mathjax": {
+      "description": "MathJax 引擎（用于 math 特性的块级 / 行内公式渲染）",
+      "type": "boolean"
+    },
+    "graphviz": {
+      "description": "DOT / Graphviz 图。选平台 adapter：'web' 用 wasm，'rn' 用 native module，false 禁用。",
+      "enum": [false, "web", "rn"]
+    },
+    "echarts": {
+      "description": "ECharts 图表。charts / components 精确列出，bundler 能 tree-shake 到单个类型。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["charts"],
+      "properties": {
+        "charts": {
+          "description": "启用的 chart type 列表。'*' 表示全量（警告体积）。",
+          "oneOf": [
+            { "const": "*" },
+            {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "Line", "Bar", "Pie", "Scatter", "EffectScatter", "Radar",
+                  "Tree", "TreeMap", "Sunburst", "Boxplot", "Candlestick",
+                  "Heatmap", "Map", "Parallel", "Lines", "Graph", "Sankey",
+                  "Funnel", "Gauge", "PictorialBar", "ThemeRiver", "Custom"
+                ]
+              },
+              "uniqueItems": true
+            }
+          ]
+        },
+        "components": {
+          "description": "启用的 component 列表。'*' 表示全量。",
+          "oneOf": [
+            { "const": "*" },
+            {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "Grid", "Polar", "GeoComponent", "SingleAxis", "Parallel",
+                  "Calendar", "Graphic", "Toolbox", "Tooltip", "AxisPointer",
+                  "Brush", "Title", "Timeline", "MarkPoint", "MarkLine", "MarkArea",
+                  "Legend", "DataZoom", "VisualMap", "Dataset", "Transform", "Aria"
+                ]
+              },
+              "uniqueItems": true
+            }
+          ]
+        },
+        "renderers": {
+          "description": "渲染后端，默认 ['svg']。",
+          "type": "array",
+          "items": { "enum": ["svg", "canvas"] },
+          "default": ["svg"],
+          "uniqueItems": true
+        }
+      }
+    },
+    "vega-lite": {
+      "description": "Vega-Lite 图。启用后 generated 会从 'vega' + 'vega-lite' 取运行时并注入。",
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "type": "object",
+          "properties": {
+            "dialect": { "enum": ["vega", "vega-lite"], "default": "vega-lite" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

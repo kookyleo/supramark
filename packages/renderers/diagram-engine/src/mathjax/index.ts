@@ -215,3 +215,47 @@ export function getSvgViewBoxSize(svg: string): { width: number; height: number 
 
   return { width, height };
 }
+
+// ============================================================================
+// v0.2 unified engine factory
+// ============================================================================
+
+import type { RenderOptions } from '../types.js';
+import { DiagramRenderError } from '../types.js';
+
+/** MathJax engine 的渲染选项。 */
+export interface Options extends RenderOptions {
+  /** 是否为块级（$$…$$），默认 false（行内 $…$） */
+  displayMode?: boolean;
+}
+
+/**
+ * MathJax engine 工厂（用于 math_inline / math_block 节点）。
+ *
+ * @example
+ * ```ts
+ * import mathjax from '@supramark/diagram-engine/mathjax';
+ * const render = mathjax();
+ * const svg = await render('E = mc^2', { displayMode: false });
+ * ```
+ */
+function mathjaxFactory(_modules?: unknown[]) {
+  return async (code: string, options?: Options): Promise<string> => {
+    options?.signal?.throwIfAborted();
+    try {
+      return await renderMathJaxSvg(code, { displayMode: options?.displayMode });
+    } catch (e) {
+      throw new DiagramRenderError(
+        `MathJax render failed: ${e instanceof Error ? e.message : String(e)}`,
+        {
+          engine: 'math',
+          code: 'render_error',
+          input: code.slice(0, 200),
+          cause: e,
+        }
+      );
+    }
+  };
+}
+
+export default mathjaxFactory;

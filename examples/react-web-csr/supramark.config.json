@@ -1,0 +1,20 @@
+{
+  "$schema": "../../packages/cli/src/schema/config.v1.json",
+  "platform": "web",
+  "features": {
+    "gfm": true,
+    "math": true,
+    "footnote": true,
+    "emoji": true,
+    "admonition": true,
+    "definition-list": true
+  },
+  "mermaid": true,
+  "mathjax": true,
+  "graphviz": "web",
+  "echarts": {
+    "charts":     ["Line", "Bar", "Pie", "Scatter", "Heatmap"],
+    "components": ["Grid", "Tooltip", "Legend", "DataZoom"]
+  },
+  "vega-lite": true
+}

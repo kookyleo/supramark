@@ -204,7 +204,7 @@ describe('Feature 配置系统', () => {
   describe('diagram family helpers', () => {
     it('应该将内置 diagram engine 映射到约定的 family', () => {
       expect(getDiagramFeatureFamily('mermaid')).toBe('mermaid');
-      expect(getDiagramFeatureFamily('plantuml')).toBe('plantuml');
+      expect(getDiagramFeatureFamily('plantuml')).toBeNull();
       expect(getDiagramFeatureFamily('vega')).toBe('vega-family');
       expect(getDiagramFeatureFamily('vega-lite')).toBe('vega-family');
       expect(getDiagramFeatureFamily('chart')).toBe('vega-family');
@@ -217,9 +217,7 @@ describe('Feature 配置系统', () => {
 
     it('应该返回对应 family 的 feature ids', () => {
       expect(getDiagramFeatureIdsForEngine('mermaid')).toEqual(['@supramark/feature-mermaid']);
-      expect(getDiagramFeatureIdsForEngine('plantuml')).toEqual([
-        '@supramark/feature-diagram-plantuml',
-      ]);
+      expect(getDiagramFeatureIdsForEngine('plantuml')).toEqual([]);
       expect(getDiagramFeatureIdsForEngine('chart')).toEqual([
         '@supramark/feature-diagram-vega-lite',
       ]);

@@ -136,7 +136,7 @@ export const mapFeature: SupramarkFeature<SupramarkMapContainerNode> = {
             data: { center: [0, 0] },
             children: [],
           } as SupramarkMapContainerNode,
-          expected: (output) => output !== null,
+          expected: (output: unknown) => output !== null,
         },
       ],
     },

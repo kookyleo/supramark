@@ -17,10 +17,22 @@
       "@supramark/core": ["packages/core/src/index.ts"],
       "@supramark/feature-*": ["packages/features/feature-*/src/index.ts"],
       "@supramark/diagram-engine": ["packages/renderers/diagram-engine/src/index.ts"],
+      "@supramark/diagram-engine/types": ["packages/renderers/diagram-engine/src/types.ts"],
+      "@supramark/diagram-engine/runtime": ["packages/renderers/diagram-engine/src/runtime/index.ts"],
+      "@supramark/diagram-engine/runtime/createRender": ["packages/renderers/diagram-engine/src/runtime/createRender.ts"],
+      "@supramark/diagram-engine/mermaid": ["packages/renderers/diagram-engine/src/mermaid/index.ts"],
+      "@supramark/diagram-engine/mathjax": ["packages/renderers/diagram-engine/src/mathjax/index.ts"],
+      "@supramark/diagram-engine/graphviz": ["packages/renderers/diagram-engine/src/graphviz/index.ts"],
+      "@supramark/diagram-engine/graphviz/web-adapter": ["packages/renderers/diagram-engine/src/graphviz/web-adapter.ts"],
+      "@supramark/diagram-engine/graphviz/rn-adapter": ["packages/renderers/diagram-engine/src/graphviz/rn-adapter.ts"],
+      "@supramark/diagram-engine/echarts": ["packages/renderers/diagram-engine/src/echarts/index.ts"],
+      "@supramark/diagram-engine/vega-lite": ["packages/renderers/diagram-engine/src/vega-lite/index.ts"],
       "@supramark/diagram-engine/web": ["packages/renderers/diagram-engine/src/web.ts"],
       "@supramark/diagram-engine/rn": ["packages/renderers/diagram-engine/src/rn.ts"],
       "@supramark/web": ["packages/renderers/web/src/index.ts"],
-      "@supramark/rn": ["packages/renderers/rn/src/index.ts"]
+      "@supramark/web/createSupramark": ["packages/renderers/web/src/createSupramark.tsx"],
+      "@supramark/rn": ["packages/renderers/rn/src/index.ts"],
+      "@supramark/cli": ["packages/cli/src/index.ts"]
     }
   }
 }

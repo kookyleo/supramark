@@ -40,6 +40,5 @@ export type { SupramarkRootNode, SupramarkNode } from '@supramark/core';
 // HTML 渲染功能
 export { astToHtml, escapeHtml } from './html.js';
 
-// Diagram / Math 支持脚本生成
-export { buildDiagramSupportScripts } from '@supramark/web-diagram';
+// Math 支持脚本生成
 export { buildMathSupportScripts } from './mathSupport.js';

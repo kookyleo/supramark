@@ -1,0 +1,15 @@
+{
+  "$schema": "https://supramark.dev/schema/config.v1.json",
+  "platform": "web",
+  "features": {
+    "gfm": true,
+    "math": true
+  },
+  "mathjax": true,
+  "mermaid": true,
+  "echarts": {
+    "charts":     ["Line", "Bar", "Pie", "Scatter", "Heatmap"],
+    "components": ["Grid", "Tooltip", "Legend", "DataZoom"]
+  },
+  "vega-lite": true
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://supramark.dev/schema/config.v1.json",
+  "platform": "web",
+  "features": {
+    "gfm": true,
+    "math": true,
+    "footnote": true,
+    "emoji": true
+  },
+  "mathjax": true
+}

@@ -17,8 +17,6 @@ import { diagramDotFeature } from '@supramark/feature-diagram-dot';
 import { diagramDotExamples } from '@supramark/feature-diagram-dot';
 import { diagramEchartsFeature } from '@supramark/feature-diagram-echarts';
 import { diagramEchartsExamples } from '@supramark/feature-diagram-echarts';
-import { diagramPlantUmlFeature } from '@supramark/feature-diagram-plantuml';
-import { diagramPlantUmlExamples } from '@supramark/feature-diagram-plantuml';
 import { diagramVegaLiteFeature } from '@supramark/feature-diagram-vega-lite';
 import { diagramVegaLiteExamples } from '@supramark/feature-diagram-vega-lite';
 import { mermaidFeature } from '@supramark/feature-mermaid';
@@ -66,7 +64,6 @@ export const featureRegistry: FeatureEntry[] = [
   { shortName: shortName(definitionListFeature.metadata.id), displayName: definitionListFeature.metadata.name, version: definitionListFeature.metadata.version, examples: definitionListExamples },
   { shortName: shortName(diagramDotFeature.metadata.id), displayName: diagramDotFeature.metadata.name, version: diagramDotFeature.metadata.version, examples: diagramDotExamples },
   { shortName: shortName(diagramEchartsFeature.metadata.id), displayName: diagramEchartsFeature.metadata.name, version: diagramEchartsFeature.metadata.version, examples: diagramEchartsExamples },
-  { shortName: shortName(diagramPlantUmlFeature.metadata.id), displayName: diagramPlantUmlFeature.metadata.name, version: diagramPlantUmlFeature.metadata.version, examples: diagramPlantUmlExamples },
   { shortName: shortName(diagramVegaLiteFeature.metadata.id), displayName: diagramVegaLiteFeature.metadata.name, version: diagramVegaLiteFeature.metadata.version, examples: diagramVegaLiteExamples },
   { shortName: shortName(mermaidFeature.metadata.id), displayName: mermaidFeature.metadata.name, version: mermaidFeature.metadata.version, examples: mermaidExamples },
   { shortName: shortName(emojiFeature.metadata.id), displayName: emojiFeature.metadata.name, version: emojiFeature.metadata.version, examples: emojiExamples },
