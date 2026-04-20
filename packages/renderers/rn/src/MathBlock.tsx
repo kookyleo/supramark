@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import type { SupramarkMathBlockNode } from '@supramark/core';
-import { getSvgViewBoxSize } from '@supramark/diagram-engine';
-import { createReactNativeDiagramEngine } from '@supramark/diagram-engine/rn';
+import { getSvgViewBoxSize } from '@supramark/engines';
+import { createReactNativeDiagramEngine } from '@supramark/engines/rn';
 import { normalizeSvgLight } from './svgUtils';
 
 interface MathBlockProps {

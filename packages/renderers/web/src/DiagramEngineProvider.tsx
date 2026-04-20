@@ -1,11 +1,11 @@
 import React, { createContext, useMemo } from 'react';
 import {
   type DiagramRenderService,
-} from '@supramark/diagram-engine';
+} from '@supramark/engines';
 import {
   createWebDiagramEngine,
   type WebDiagramEngineOptions,
-} from '@supramark/diagram-engine/web';
+} from '@supramark/engines/web';
 
 export const DiagramEngineContext = createContext<DiagramRenderService | null>(null);
 

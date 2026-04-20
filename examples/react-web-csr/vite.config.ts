@@ -27,8 +27,8 @@ export default defineConfig({
       '@supramark/web',
       '@supramark/web/client',
       '@supramark/web/server',
-      '@supramark/diagram-engine',
-      '@supramark/diagram-engine/web',
+      '@supramark/engines',
+      '@supramark/engines/web',
     ],
   },
 });

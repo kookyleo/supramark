@@ -32,8 +32,8 @@ import type {
 import {
   type DiagramRenderResult,
   type DiagramRenderService,
-} from '@supramark/diagram-engine';
-import { createWebDiagramEngine } from '@supramark/diagram-engine/web';
+} from '@supramark/engines';
+import { createWebDiagramEngine } from '@supramark/engines/web';
 import {
   parseMarkdown,
   isFeatureEnabled,

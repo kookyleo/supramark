@@ -47,14 +47,14 @@ export function generate(input: GenerateInput): string {
 
   // —— Mermaid
   if (truthy(config.mermaid)) {
-    engineFactoryImports.push(`import mermaid from '@supramark/diagram-engine/mermaid';`);
+    engineFactoryImports.push(`import mermaid from '@supramark/engines/mermaid';`);
     engineAssignments.push(`  mermaid: mermaid(),`);
   }
 
   // —— MathJax（math 特性启用时自动加载）
   const mathOn = config.mathjax === true || truthy(config.features?.math);
   if (mathOn) {
-    engineFactoryImports.push(`import mathjax from '@supramark/diagram-engine/mathjax';`);
+    engineFactoryImports.push(`import mathjax from '@supramark/engines/mathjax';`);
     engineAssignments.push(`  math: mathjax(),`);
   }
 
@@ -62,8 +62,8 @@ export function generate(input: GenerateInput): string {
   if (config.graphviz === 'web' || config.graphviz === 'rn') {
     const adapterPath =
       config.graphviz === 'rn' ? 'rn-adapter' : 'web-adapter';
-    engineFactoryImports.push(`import graphviz    from '@supramark/diagram-engine/graphviz';`);
-    engineDepImports.push(`import gvAdapter   from '@supramark/diagram-engine/graphviz/${adapterPath}';`);
+    engineFactoryImports.push(`import graphviz    from '@supramark/engines/graphviz';`);
+    engineDepImports.push(`import gvAdapter   from '@supramark/engines/graphviz/${adapterPath}';`);
     engineAssignments.push(`  dot:      graphviz([gvAdapter]),`);
     engineAssignments.push(`  graphviz: graphviz([gvAdapter]),`);
   }
@@ -79,7 +79,7 @@ export function generate(input: GenerateInput): string {
       r === 'canvas' ? 'CanvasRenderer' : 'SVGRenderer'
     );
 
-    engineFactoryImports.push(`import echarts     from '@supramark/diagram-engine/echarts';`);
+    engineFactoryImports.push(`import echarts     from '@supramark/engines/echarts';`);
     engineDepImports.push(`import * as echartsCore from 'echarts/core';`);
     if (charts.length > 0) {
       engineDepImports.push(
@@ -106,7 +106,7 @@ export function generate(input: GenerateInput): string {
 
   // —— Vega-Lite
   if (truthy(config['vega-lite'])) {
-    engineFactoryImports.push(`import vegaLite    from '@supramark/diagram-engine/vega-lite';`);
+    engineFactoryImports.push(`import vegaLite    from '@supramark/engines/vega-lite';`);
     engineDepImports.push(`import * as Vega     from 'vega';`);
     engineDepImports.push(`import * as VegaLite from 'vega-lite';`);
     engineAssignments.push(`  'vega-lite': vegaLite([Vega, VegaLite]),`);
@@ -135,7 +135,7 @@ ${engineAssignments.join('\n')}
 export const render    = createRender(spec);
 export const Supramark = createSupramark(spec);
 
-export type { RenderOptions } from '@supramark/diagram-engine/types';
+export type { RenderOptions } from '@supramark/engines/types';
 `;
 }
 

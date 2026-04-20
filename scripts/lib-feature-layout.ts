@@ -293,13 +293,22 @@ export function findFeaturePackageByShortName(shortName: string): FeaturePackage
 
 export function getNewFeatureLocation(
   kebabName: string,
-  _syntaxFamily = 'main'
+  syntaxFamily: 'main' | 'container' | 'containers' | 'fence' | 'diagrams' = 'main'
 ): {
   dir: string;
   relativeDir: string;
 } {
-  const dirName = `feature-${kebabName}`;
-  const dir = path.join(PACKAGES_DIR, 'features', dirName);
+  // 新目录约定：packages/features/<family>/<kebab-name>/
+  //   main → main
+  //   container / containers → containers
+  //   fence / diagrams → diagrams
+  const familyFolder =
+    syntaxFamily === 'main'
+      ? 'main'
+      : syntaxFamily === 'fence' || syntaxFamily === 'diagrams'
+        ? 'diagrams'
+        : 'containers';
+  const dir = path.join(PACKAGES_DIR, 'features', familyFolder, kebabName);
   const relativeDir = path.relative(REPO_ROOT, dir) || '.';
 
   return {

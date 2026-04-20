@@ -4,8 +4,8 @@ import { SvgXml } from 'react-native-svg';
 import type { SupramarkDiagramNode, SupramarkDiagramConfig } from '@supramark/core';
 import {
   type DiagramRenderResult as LocalDiagramRenderResult,
-} from '@supramark/diagram-engine';
-import { createReactNativeDiagramEngine } from '@supramark/diagram-engine/rn';
+} from '@supramark/engines';
+import { createReactNativeDiagramEngine } from '@supramark/engines/rn';
 import type { DiagramRenderResult as WorkerDiagramRenderResult } from '@supramark/rn-diagram-worker';
 import { useOptionalDiagramRender } from '@supramark/rn-diagram-worker';
 import { normalizeSvg, normalizeSvgLight } from './svgUtils';

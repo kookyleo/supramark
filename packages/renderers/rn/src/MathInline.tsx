@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Text, type TextStyle } from 'react-native';
 import { SvgXml } from 'react-native-svg';
-import { getSvgViewBoxSize } from '@supramark/diagram-engine';
-import { createReactNativeDiagramEngine } from '@supramark/diagram-engine/rn';
+import { getSvgViewBoxSize } from '@supramark/engines';
+import { createReactNativeDiagramEngine } from '@supramark/engines/rn';
 import { normalizeSvgLight } from './svgUtils';
 
 interface MathInlineProps {

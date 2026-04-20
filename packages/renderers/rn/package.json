@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@supramark/core": "workspace:*",
-    "@supramark/diagram-engine": "workspace:*"
+    "@supramark/engines": "workspace:*"
   },
   "devDependencies": {
     "graphviz-anywhere-react-native": "file:/tmp/graphviz-anywhere/react-native",

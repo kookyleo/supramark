@@ -1,6 +1,6 @@
 # Supramark · Engines & CLI 重构方案
 
-> 本文是 `@supramark/diagram-engine` 从"service-based wiring"迁移到
+> 本文是 `@supramark/engines` 从"service-based wiring"迁移到
 > "纯函数 engine + config 驱动 codegen"的总设计文档。它**取代** 
 > `DIAGRAM_ENGINE_TARGET.md` 作为后续实施依据。
 >
@@ -42,7 +42,7 @@
                             │ static default imports
                             ↓
 ┌─────────────────────────────────────────────────┐
-│  @supramark/diagram-engine                       │
+│  @supramark/engines                       │
 │    runtime/{createRender,createSupramark}        │
 │    types.ts                                      │
 │    mermaid / mathjax / graphviz / echarts /      │
@@ -61,7 +61,7 @@
 
 `@supramark/cli` 只出现在 devDependency + `prebuild` 脚本中，**不进运行时 bundle**。
 
-## 4 · `@supramark/diagram-engine` 设计
+## 4 · `@supramark/engines` 设计
 
 ### 4.1 · 目录结构
 
@@ -464,24 +464,24 @@ supramark-gen [options]
 // Do not edit manually. Re-run: bun x supramark-gen
 /* eslint-disable */
 
-import { createRender }    from '@supramark/diagram-engine/runtime/createRender';
-import { createSupramark } from '@supramark/diagram-engine/runtime/createSupramark';
+import { createRender }    from '@supramark/engines/runtime/createRender';
+import { createSupramark } from '@supramark/engines/runtime/createSupramark';
 
 // engine factories
-import mermaid    from '@supramark/diagram-engine/mermaid';
-import mathjax    from '@supramark/diagram-engine/mathjax';
-import graphviz   from '@supramark/diagram-engine/graphviz';
-import echarts    from '@supramark/diagram-engine/echarts';
-import vegaLite   from '@supramark/diagram-engine/vega-lite';
+import mermaid    from '@supramark/engines/mermaid';
+import mathjax    from '@supramark/engines/mathjax';
+import graphviz   from '@supramark/engines/graphviz';
+import echarts    from '@supramark/engines/echarts';
+import vegaLite   from '@supramark/engines/vega-lite';
 
 // adapters & subtypes
-import webAdapter from '@supramark/diagram-engine/graphviz/web-adapter';
-import LineChart        from '@supramark/diagram-engine/echarts/LineChart';
-import BarChart         from '@supramark/diagram-engine/echarts/BarChart';
-import GridComponent    from '@supramark/diagram-engine/echarts/GridComponent';
-import TooltipComponent from '@supramark/diagram-engine/echarts/TooltipComponent';
-import vega     from '@supramark/diagram-engine/vega-lite/vega';
-import compile  from '@supramark/diagram-engine/vega-lite/compile';
+import webAdapter from '@supramark/engines/graphviz/web-adapter';
+import LineChart        from '@supramark/engines/echarts/LineChart';
+import BarChart         from '@supramark/engines/echarts/BarChart';
+import GridComponent    from '@supramark/engines/echarts/GridComponent';
+import TooltipComponent from '@supramark/engines/echarts/TooltipComponent';
+import vega     from '@supramark/engines/vega-lite/vega';
+import compile  from '@supramark/engines/vega-lite/compile';
 
 const spec = {
   engines: {
@@ -513,7 +513,7 @@ export const Supramark = createSupramark(spec);
 
 ```bash
 # 1. 装
-bun add @supramark/diagram-engine @supramark/web echarts vega vega-lite graphviz-anywhere-web
+bun add @supramark/engines @supramark/web echarts vega vega-lite graphviz-anywhere-web
 bun add -D @supramark/cli
 
 # 2. 起初始 config
@@ -555,7 +555,7 @@ import { Supramark } from '@/generated/supramark';
 | 包 | 影响 |
 |---|---|
 | `@supramark/core` | 无变动。AST / parser / feature 契约稳定 |
-| `@supramark/diagram-engine` | **大重构**：删 `engine.ts` / `web.ts` / `rn.ts` / provider；加 runtime / types / 各 engine 独立目录 / subtype codegen |
+| `@supramark/engines` | **大重构**：删 `engine.ts` / `web.ts` / `rn.ts` / provider；加 runtime / types / 各 engine 独立目录 / subtype codegen |
 | `@supramark/web` | **简化**：`Supramark.tsx` 不再自造 DiagramRenderService；runtime 层迁到 `diagram-engine/runtime`；保留 `Supramark` 薄壳（由 `createSupramark` 生成） |
 | `@supramark/rn` | **简化**：同上 |
 | `@supramark/feature-*` | 不变。 |

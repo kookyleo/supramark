@@ -1,5 +1,5 @@
 import React from 'react';
-import type { DiagramRenderResult } from '@supramark/diagram-engine';
+import type { DiagramRenderResult } from '@supramark/engines';
 import type { SupramarkClassNames } from './classNames';
 
 interface MathBlockWebProps {

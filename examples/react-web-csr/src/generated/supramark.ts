@@ -5,12 +5,12 @@
 
 import { createRender, createSupramark } from '@supramark/web/createSupramark';
 
-import mermaid from '@supramark/diagram-engine/mermaid';
-import mathjax from '@supramark/diagram-engine/mathjax';
-import graphviz    from '@supramark/diagram-engine/graphviz';
-import echarts     from '@supramark/diagram-engine/echarts';
-import vegaLite    from '@supramark/diagram-engine/vega-lite';
-import gvAdapter   from '@supramark/diagram-engine/graphviz/web-adapter';
+import mermaid from '@supramark/engines/mermaid';
+import mathjax from '@supramark/engines/mathjax';
+import graphviz    from '@supramark/engines/graphviz';
+import echarts     from '@supramark/engines/echarts';
+import vegaLite    from '@supramark/engines/vega-lite';
+import gvAdapter   from '@supramark/engines/graphviz/web-adapter';
 import * as echartsCore from 'echarts/core';
 import { LineChart, BarChart, PieChart, ScatterChart, HeatmapChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components';
@@ -40,4 +40,4 @@ const spec = {
 export const render    = createRender(spec);
 export const Supramark = createSupramark(spec);
 
-export type { RenderOptions } from '@supramark/diagram-engine/types';
+export type { RenderOptions } from '@supramark/engines/types';

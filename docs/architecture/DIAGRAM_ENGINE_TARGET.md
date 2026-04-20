@@ -15,9 +15,9 @@
 
 本次架构收敛的目标只有两条。
 
-### A. 所有 diagram family 的生成过程都进入 `@supramark/diagram-engine`
+### A. 所有 diagram family 的生成过程都进入 `@supramark/engines`
 
-所有 diagram family 都应该统一由 `@supramark/diagram-engine` 负责把源代码转换为 SVG 输出。
+所有 diagram family 都应该统一由 `@supramark/engines` 负责把源代码转换为 SVG 输出。
 
 统一接口目标：
 
@@ -46,9 +46,9 @@ render({
 
 补充说明：
 
-- `Math / LaTeX` 虽然不属于 `diagram` AST family，但也建议沿用同样的 `engine-first` 路线，即由 `@supramark/diagram-engine` 产出 SVG，再由各平台展示。
+- `Math / LaTeX` 虽然不属于 `diagram` AST family，但也建议沿用同样的 `engine-first` 路线，即由 `@supramark/engines` 产出 SVG，再由各平台展示。
 
-### B. 所有 diagram 的消费，无论 RN 还是 Web，都只从 `@supramark/diagram-engine` 获取 SVG
+### B. 所有 diagram 的消费，无论 RN 还是 Web，都只从 `@supramark/engines` 获取 SVG
 
 `@supramark/rn` 和 `@supramark/web` 的职责应该收敛为“消费 SVG 输出”，而不是各自直接运行图表库。
 
@@ -56,11 +56,11 @@ render({
 
 - `@supramark/rn`
   - 输入：AST 节点
-  - 调用：`@supramark/diagram-engine`
+  - 调用：`@supramark/engines`
   - 输出：React Native 组件树与 SVG 展示
 - `@supramark/web`
   - 输入：AST 节点
-  - 调用：`@supramark/diagram-engine`
+  - 调用：`@supramark/engines`
   - 输出：React DOM / SSR HTML 与 SVG 展示
 
 Renderer 侧不再负责：
@@ -77,7 +77,7 @@ Renderer 侧不再负责：
 @supramark/core
   └─ 负责 AST、parser、feature 配置
 
-@supramark/diagram-engine
+@supramark/engines
   └─ 负责 diagram source -> svg
 
 @supramark/rn
@@ -89,7 +89,7 @@ Renderer 侧不再负责：
 
 在这个结构下：
 
-- `@supramark/diagram-engine` 是唯一 diagram 渲染入口
+- `@supramark/engines` 是唯一 diagram 渲染入口
 - `@supramark/rn-diagram-worker` 最终应删除
 - `@supramark/web-diagram` 最终应删除
 
@@ -98,8 +98,8 @@ Renderer 侧不再负责：
 在完全迁移完成前，允许存在过渡方案，但必须遵守以下原则：
 
 1. 新增 diagram 能力时，不再扩散到新的 renderer 私有实现。
-2. 任何已完成本地 `lib -> svg` 的 family，都优先迁入 `@supramark/diagram-engine`。
-3. `@supramark/rn` 与 `@supramark/web` 即使暂时保留 fallback，也应优先通过 `@supramark/diagram-engine.render()` 获取结果。
+2. 任何已完成本地 `lib -> svg` 的 family，都优先迁入 `@supramark/engines`。
+3. `@supramark/rn` 与 `@supramark/web` 即使暂时保留 fallback，也应优先通过 `@supramark/engines.render()` 获取结果。
 4. `rn-diagram-worker` 与 `web-diagram` 只作为未迁移 family 的临时兼容层，不再作为长期架构继续扩展。
 
 ## 迁移顺序
@@ -108,7 +108,7 @@ Renderer 侧不再负责：
 
 ### 第一阶段：统一入口
 
-- 为 `@supramark/diagram-engine` 建立统一 `render()` / `createDiagramEngine()` 入口
+- 为 `@supramark/engines` 建立统一 `render()` / `createDiagramEngine()` 入口
 - 已完成本地化的 `mermaid`、`math`、`latex` 先统一接入该入口
 - `@supramark/rn` 与 `@supramark/web` 先改成消费统一接口
 
@@ -136,7 +136,7 @@ Renderer 侧不再负责：
 
 满足以下条件时，可以认为 diagram 架构收敛完成：
 
-1. 所有 diagram family 都能通过 `@supramark/diagram-engine.render()` 返回 SVG。
+1. 所有 diagram family 都能通过 `@supramark/engines.render()` 返回 SVG。
 2. `@supramark/rn` 不再依赖 `@supramark/rn-diagram-worker`。
 3. `@supramark/web` 不再依赖 `@supramark/web-diagram`。
 4. React Native 与 Web 的 diagram 渲染入口一致，只保留展示层差异。
@@ -152,4 +152,4 @@ Renderer 侧不再负责：
 
 本目标只解决一件事：
 
-把 diagram 渲染链统一收口到 `@supramark/diagram-engine`，并让各平台 renderer 只消费 SVG 输出。
+把 diagram 渲染链统一收口到 `@supramark/engines`，并让各平台 renderer 只消费 SVG 输出。

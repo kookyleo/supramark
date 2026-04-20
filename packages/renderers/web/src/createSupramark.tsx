@@ -3,7 +3,7 @@ import type {
   RenderFn,
   DiagramRenderService,
   DiagramRenderResult,
-} from '@supramark/diagram-engine';
+} from '@supramark/engines';
 import { DiagramEngineContext } from './DiagramEngineProvider.js';
 import { Supramark, type SupramarkWebProps } from './Supramark.js';
 
@@ -15,8 +15,8 @@ import { Supramark, type SupramarkWebProps } from './Supramark.js';
  *
  * @example（生成文件里会自动写这个用法）
  * ```ts
- * import mermaid from '@supramark/diagram-engine/mermaid';
- * import mathjax from '@supramark/diagram-engine/mathjax';
+ * import mermaid from '@supramark/engines/mermaid';
+ * import mathjax from '@supramark/engines/mathjax';
  * import { createSupramark } from '@supramark/web/createSupramark';
  *
  * export const Supramark = createSupramark({
