@@ -163,20 +163,20 @@ async function loadWebPlantumlRender(): Promise<DiagramRenderFn> {
 /**
  * Default web-side lazy loader for D2.
  *
- * Loads `@kookyleo/d2-lib-web` (Rust → wasm) on first use and returns a
+ * Loads `@kookyleo/d2-little-web` (Rust → wasm) on first use and returns a
  * `RenderFn`. Unlike plantuml-little-web, d2-little ships a pure-Rust layout
  * engine so there is no Graphviz bridge to wire — this loader is a thin
  * adapter over the wasm module's `convert(code) -> svg` entry.
  *
  * The wasm binary initialises as a side effect of the ES-module import
- * (`import * as wasm from "./d2_lib_web_bg.wasm"`). Some wasm-bindgen builds
+ * (`import * as wasm from "./d2_little_web_bg.wasm"`). Some wasm-bindgen builds
  * still ship a default `init()` — we probe defensively and `await` it if
  * present, swallowing errors caused by re-init.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function loadWebD2Render(): Promise<DiagramRenderFn> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const d2: any = await import('@kookyleo/d2-lib-web' as string);
+  const d2: any = await import('@kookyleo/d2-little-web' as string);
 
   const init =
     (typeof d2.default === 'function' && d2.default) ||
@@ -197,7 +197,7 @@ async function loadWebD2Render(): Promise<DiagramRenderFn> {
     null;
   if (!convert) {
     throw new Error(
-      '`@kookyleo/d2-lib-web` is missing a convert / render entry. Expected one of: convert, render, renderSvg.'
+      '`@kookyleo/d2-little-web` is missing a convert / render entry. Expected one of: convert, render, renderSvg.'
     );
   }
 

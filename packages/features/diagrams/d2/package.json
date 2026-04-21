@@ -1,7 +1,7 @@
 {
   "name": "@supramark/feature-d2",
   "version": "0.1.0",
-  "description": "D2 图表支持（diagram fence: ```d2 -> SVG via d2-lib-web）。",
+  "description": "D2 图表支持（diagram fence: ```d2 -> SVG via d2-little-web）。",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",

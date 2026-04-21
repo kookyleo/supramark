@@ -74,14 +74,14 @@
     "vega":      "^5",
     "vega-lite": "^5",
     "@kookyleo/plantuml-little-web": "^1.2026.2-3",
-    "@kookyleo/d2-lib-web": "^0.7.1"
+    "@kookyleo/d2-little-web": "^0.7.2"
   },
   "peerDependenciesMeta": {
     "echarts":   { "optional": true },
     "vega":      { "optional": true },
     "vega-lite": { "optional": true },
     "@kookyleo/plantuml-little-web": { "optional": true },
-    "@kookyleo/d2-lib-web": { "optional": true }
+    "@kookyleo/d2-little-web": { "optional": true }
   },
   "devDependencies": {
     "typescript": "^5.5.0"

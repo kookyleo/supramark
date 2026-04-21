@@ -72,7 +72,7 @@ declare module '@kookyleo/plantuml-little-web' {
   ): void;
 }
 
-declare module '@kookyleo/d2-lib-web' {
+declare module '@kookyleo/d2-little-web' {
   /** wasm-bindgen default async initialiser. */
   const init: (input?: unknown) => Promise<unknown>;
   export default init;

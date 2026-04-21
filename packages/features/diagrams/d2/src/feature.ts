@@ -13,7 +13,7 @@ import { d2Examples } from './examples.js';
  *
  * - 复用通用 `diagram` AST 节点；
  * - 只关心 engine 为 'd2' 的 diagram；
- * - 由 `@supramark/engines` 借助 `@kookyleo/d2-lib-web`（Rust wasm，纯 Rust
+ * - 由 `@supramark/engines` 借助 `@kookyleo/d2-little-web`（Rust wasm，纯 Rust
  *   布局引擎，无需外部 Graphviz 桥）在 Web 端将 D2 源码转换为 SVG。
  *
  * @example
@@ -38,7 +38,7 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
     name: 'Diagram (D2)',
     version: '0.1.0',
     author: 'Supramark Team',
-    description: 'D2 diagrams rendered to SVG through @supramark/engines + d2-lib-web.',
+    description: 'D2 diagrams rendered to SVG through @supramark/engines + d2-little-web.',
     license: 'Apache-2.0',
     tags: ['diagram', 'd2'],
     syntaxFamily: 'fence',
@@ -101,11 +101,11 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
       infrastructure: {
         needsClientScript: true,
         clientScriptBuilder: () =>
-          '<!-- D2 rendering provided by @supramark/engines (d2-lib-web wasm). -->',
+          '<!-- D2 rendering provided by @supramark/engines (d2-little-web wasm). -->',
       },
       dependencies: [
         {
-          name: '@kookyleo/d2-lib-web',
+          name: '@kookyleo/d2-little-web',
           version: '>=0.7.1',
           type: 'npm',
           optional: false,
@@ -194,11 +194,11 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
 # Diagram (D2) Feature
 
 为 supramark 提供 D2 围栏代码块的 AST 建模，并在 Web 端通过
-\`@kookyleo/d2-lib-web\`（Rust wasm）渲染为 SVG。
+\`@kookyleo/d2-little-web\`（Rust wasm）渲染为 SVG。
 
 - 语法：使用 \`\\\`\\\`d2\` 围栏；
 - AST：解析为 \`diagram\` 节点，engine = "d2"，code 为 D2 源码；
-- 渲染：由 \`@supramark/engines\` 在 Web 侧调用 d2-lib-web 输出 SVG。
+- 渲染：由 \`@supramark/engines\` 在 Web 侧调用 d2-little-web 输出 SVG。
     `.trim(),
 
     api: {
@@ -255,7 +255,7 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
       {
         question: 'D2 是如何渲染的？',
         answer:
-          'Web 端通过 @kookyleo/d2-lib-web（Rust → wasm）把 D2 源码转为 SVG。d2-little 自带纯 Rust 布局引擎，不需要像 PlantUML 那样外挂 Graphviz 桥。',
+          'Web 端通过 @kookyleo/d2-little-web（Rust → wasm）把 D2 源码转为 SVG。d2-little 自带纯 Rust 布局引擎，不需要像 PlantUML 那样外挂 Graphviz 桥。',
       },
       {
         question: 'D2 和 mermaid / plantuml 的区别？',

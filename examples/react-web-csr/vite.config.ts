@@ -51,9 +51,9 @@ export default defineConfig({
       // `import * as wasm from "./plantuml_little_web_bg.wasm"`. Prebundling
       // breaks that relative import.
       '@kookyleo/plantuml-little-web',
-      // d2-lib-web is the same story — wasm-bindgen sibling .wasm blob
+      // d2-little-web is the same story — wasm-bindgen sibling .wasm blob
       // resolved as a relative module import. Prebundling would strip it.
-      '@kookyleo/d2-lib-web',
+      '@kookyleo/d2-little-web',
     ],
   },
 });
