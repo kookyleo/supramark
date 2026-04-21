@@ -73,13 +73,15 @@
     "echarts":   "^5",
     "vega":      "^5",
     "vega-lite": "^5",
-    "@kookyleo/plantuml-little-web": "^1.2026.2-3"
+    "@kookyleo/plantuml-little-web": "^1.2026.2-3",
+    "@kookyleo/d2-lib-web": "^0.7.1"
   },
   "peerDependenciesMeta": {
     "echarts":   { "optional": true },
     "vega":      { "optional": true },
     "vega-lite": { "optional": true },
-    "@kookyleo/plantuml-little-web": { "optional": true }
+    "@kookyleo/plantuml-little-web": { "optional": true },
+    "@kookyleo/d2-lib-web": { "optional": true }
   },
   "devDependencies": {
     "typescript": "^5.5.0"

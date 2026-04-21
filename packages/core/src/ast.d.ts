@@ -23,7 +23,7 @@ export interface SupramarkTextNode extends SupramarkBaseNode {
  * - 与 parseMarkdown() 中 isDiagramLanguage() 的列表保持一致；
  * - 允许扩展字符串，方便宿主添加自定义引擎。
  */
-export declare const BUILT_IN_DIAGRAM_ENGINES: readonly ["mermaid", "plantuml", "vega", "vega-lite", "echarts", "chart", "chartjs", "dot", "graphviz"];
+export declare const BUILT_IN_DIAGRAM_ENGINES: readonly ["mermaid", "plantuml", "vega", "vega-lite", "echarts", "chart", "chartjs", "dot", "graphviz", "d2"];
 export type BuiltInDiagramEngineId = (typeof BUILT_IN_DIAGRAM_ENGINES)[number];
 export type SupramarkDiagramEngineId = BuiltInDiagramEngineId | string;
 export interface SupramarkDiagramNode extends SupramarkBaseNode {
@@ -120,6 +120,7 @@ export interface SupramarkDiagramConfig {
         chartjs?: SupramarkDiagramEngineConfig;
         dot?: SupramarkDiagramEngineConfig;
         graphviz?: SupramarkDiagramEngineConfig;
+        d2?: SupramarkDiagramEngineConfig;
         [engineId: string]: SupramarkDiagramEngineConfig | undefined;
     };
 }
