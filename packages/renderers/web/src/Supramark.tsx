@@ -830,6 +830,7 @@ const PRE_RENDERED_DIAGRAM_ENGINES = new Set([
   'vegalite',
   'vega',
   'plantuml',
+  'd2',
 ]);
 
 function normalizeRenderEngine(engine: string): string {

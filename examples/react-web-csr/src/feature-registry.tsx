@@ -12,6 +12,8 @@ import { admonitionFeature } from '@supramark/feature-admonition';
 import { admonitionExamples } from '@supramark/feature-admonition';
 import { coreMarkdownFeature } from '@supramark/feature-core-markdown';
 import { coreMarkdownExamples } from '@supramark/feature-core-markdown';
+import { d2Feature } from '@supramark/feature-d2';
+import { d2Examples } from '@supramark/feature-d2';
 import { definitionListFeature } from '@supramark/feature-definition-list';
 import { definitionListExamples } from '@supramark/feature-definition-list';
 import { diagramDotFeature } from '@supramark/feature-diagram-dot';
@@ -130,6 +132,7 @@ function shortName(id: string): string {
 export const featureRegistry: FeatureEntry[] = [
   { shortName: shortName(admonitionFeature.id), displayName: admonitionFeature.name, version: admonitionFeature.version, examples: admonitionExamples },
   { shortName: shortName(coreMarkdownFeature.metadata.id), displayName: coreMarkdownFeature.metadata.name, version: coreMarkdownFeature.metadata.version, examples: coreMarkdownExamples },
+  { shortName: shortName(d2Feature.metadata.id), displayName: d2Feature.metadata.name, version: d2Feature.metadata.version, examples: d2Examples },
   { shortName: shortName(definitionListFeature.metadata.id), displayName: definitionListFeature.metadata.name, version: definitionListFeature.metadata.version, examples: definitionListExamples },
   { shortName: shortName(diagramDotFeature.metadata.id), displayName: diagramDotFeature.metadata.name, version: diagramDotFeature.metadata.version, examples: diagramDotExamples },
   { shortName: shortName(diagramEchartsFeature.metadata.id), displayName: diagramEchartsFeature.metadata.name, version: diagramEchartsFeature.metadata.version, examples: diagramEchartsExamples },

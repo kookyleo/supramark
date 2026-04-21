@@ -69,6 +69,7 @@ export const BUILT_IN_DIAGRAM_ENGINES = [
   'chartjs',
   'dot',
   'graphviz',
+  'd2',
 ] as const;
 
 export type BuiltInDiagramEngineId = (typeof BUILT_IN_DIAGRAM_ENGINES)[number];
@@ -179,6 +180,7 @@ export interface SupramarkDiagramConfig {
     chartjs?: SupramarkDiagramEngineConfig;
     dot?: SupramarkDiagramEngineConfig;
     graphviz?: SupramarkDiagramEngineConfig;
+    d2?: SupramarkDiagramEngineConfig;
     [engineId: string]: SupramarkDiagramEngineConfig | undefined;
   };
 }

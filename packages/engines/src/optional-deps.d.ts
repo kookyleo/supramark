@@ -72,6 +72,19 @@ declare module '@kookyleo/plantuml-little-web' {
   ): void;
 }
 
+declare module '@kookyleo/d2-lib-web' {
+  /** wasm-bindgen default async initialiser. */
+  const init: (input?: unknown) => Promise<unknown>;
+  export default init;
+
+  /** Convert D2 source to an SVG string. */
+  export function convert(d2: string): Promise<string> | string;
+
+  /** Alternative names the package may expose depending on build shape. */
+  export function render(d2: string): Promise<string> | string;
+  export function renderSvg(d2: string): Promise<string> | string;
+}
+
 declare module '@kookyleo/graphviz-anywhere-rn' {
   export type GraphvizEngine =
     | 'dot'

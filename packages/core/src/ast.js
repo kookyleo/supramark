@@ -14,6 +14,7 @@ export const BUILT_IN_DIAGRAM_ENGINES = [
     'chartjs',
     'dot',
     'graphviz',
+    'd2',
 ];
 /**
  * 判断给定 engine 是否为内置图表引擎。
