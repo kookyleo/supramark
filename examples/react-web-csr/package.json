@@ -12,7 +12,7 @@
     "supramark:check": "bun x supramark-gen --check"
   },
   "dependencies": {
-    "@kookyleo/plantuml-little-web": "file:/Users/leo/XData/Starbucks/kookyleo/plantuml-little/packages/web/dist",
+    "@kookyleo/plantuml-little-web": "^1.2026.2-3",
     "@supramark/core": "workspace:*",
     "@supramark/feature-admonition": "workspace:*",
     "@supramark/feature-core-markdown": "workspace:*",

@@ -22,9 +22,6 @@ import { diagramVegaLiteFeature } from '@supramark/feature-diagram-vega-lite';
 import { diagramVegaLiteExamples } from '@supramark/feature-diagram-vega-lite';
 import { mermaidFeature } from '@supramark/feature-mermaid';
 import { mermaidExamples } from '@supramark/feature-mermaid';
-// TODO: swap `@kookyleo/plantuml-little-web` in examples/react-web-csr/package.json
-//       from the local `file:…/packages/web/dist` path dep to the published
-//       npm version (^1.2026.2-3) once the sibling package ships to npm.
 import { plantumlFeature } from '@supramark/feature-plantuml';
 import { plantumlExamples } from '@supramark/feature-plantuml';
 import { emojiFeature } from '@supramark/feature-emoji';
