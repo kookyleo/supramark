@@ -12,7 +12,7 @@
     "supramark:check": "bun x supramark-gen --check"
   },
   "dependencies": {
-    "@kookyleo/d2-lib-web": "file:/Users/leo/XData/Starbucks/kookyleo/d2-little/packages/web",
+    "@kookyleo/d2-lib-web": "^0.7.1",
     "@kookyleo/plantuml-little-web": "^1.2026.2-3",
     "@supramark/core": "workspace:*",
     "@supramark/feature-admonition": "workspace:*",
