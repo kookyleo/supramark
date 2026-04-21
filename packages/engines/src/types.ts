@@ -57,10 +57,31 @@ export interface GraphvizRenderAdapter {
   getCapabilities?(): Promise<GraphvizCapabilities>;
 }
 
+/**
+ * A generic async render function: `(code, options?) => Promise<svgString>`.
+ * Produced by engine factories (e.g. `echarts([core, SVGRenderer, ...])`).
+ */
+export type DiagramRenderFn = (
+  code: string,
+  options?: Record<string, unknown>
+) => Promise<string>;
+
 export interface DiagramEngineOptions {
   graphviz?: {
     adapter?: GraphvizRenderAdapter;
     loadAdapter?: () => Promise<GraphvizRenderAdapter>;
+  };
+  echarts?: {
+    render?: DiagramRenderFn;
+    loadRender?: () => Promise<DiagramRenderFn>;
+  };
+  vegaLite?: {
+    render?: DiagramRenderFn;
+    loadRender?: () => Promise<DiagramRenderFn>;
+  };
+  plantuml?: {
+    render?: DiagramRenderFn;
+    loadRender?: () => Promise<DiagramRenderFn>;
   };
 }
 
