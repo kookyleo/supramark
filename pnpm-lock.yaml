@@ -188,6 +188,9 @@ importers:
       '@supramark/feature-core-markdown':
         specifier: workspace:*
         version: link:../../packages/features/core-markdown
+      '@supramark/feature-d2':
+        specifier: workspace:*
+        version: link:../../packages/features/diagrams/d2
       '@supramark/feature-definition-list':
         specifier: workspace:*
         version: link:../../packages/features/main/definition-list
@@ -441,6 +444,19 @@ importers:
       '@supramark/core':
         specifier: '*'
         version: link:../../core
+    devDependencies:
+      '@types/jest':
+        specifier: ^29.5.0
+        version: 29.5.14
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/features/diagrams/d2:
+    dependencies:
+      '@supramark/core':
+        specifier: '*'
+        version: link:../../../core
     devDependencies:
       '@types/jest':
         specifier: ^29.5.0

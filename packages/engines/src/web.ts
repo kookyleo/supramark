@@ -41,6 +41,10 @@ export function createWebDiagramEngine(
       render: options.plantuml?.render,
       loadRender: options.plantuml?.loadRender ?? loadWebPlantumlRender,
     },
+    d2: {
+      render: options.d2?.render,
+      loadRender: options.d2?.loadRender ?? loadWebD2Render,
+    },
   });
 }
 
@@ -156,6 +160,59 @@ async function loadWebPlantumlRender(): Promise<DiagramRenderFn> {
   };
 }
 
+/**
+ * Default web-side lazy loader for D2.
+ *
+ * Loads `@kookyleo/d2-lib-web` (Rust → wasm) on first use and returns a
+ * `RenderFn`. Unlike plantuml-little-web, d2-little ships a pure-Rust layout
+ * engine so there is no Graphviz bridge to wire — this loader is a thin
+ * adapter over the wasm module's `convert(code) -> svg` entry.
+ *
+ * The wasm binary initialises as a side effect of the ES-module import
+ * (`import * as wasm from "./d2_lib_web_bg.wasm"`). Some wasm-bindgen builds
+ * still ship a default `init()` — we probe defensively and `await` it if
+ * present, swallowing errors caused by re-init.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function loadWebD2Render(): Promise<DiagramRenderFn> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d2: any = await import('@kookyleo/d2-lib-web' as string);
+
+  const init =
+    (typeof d2.default === 'function' && d2.default) ||
+    (typeof d2.init === 'function' && d2.init) ||
+    null;
+  if (init) {
+    try {
+      await init();
+    } catch {
+      // Already initialised via the module-import side effect — ignore.
+    }
+  }
+
+  const convert =
+    (typeof d2.convert === 'function' && d2.convert) ||
+    (typeof d2.render === 'function' && d2.render) ||
+    (typeof d2.renderSvg === 'function' && d2.renderSvg) ||
+    null;
+  if (!convert) {
+    throw new Error(
+      '`@kookyleo/d2-lib-web` is missing a convert / render entry. Expected one of: convert, render, renderSvg.'
+    );
+  }
+
+  return async (code: string): Promise<string> => {
+    // `convert` is synchronous (wasm-bindgen-generated) but `await` handles
+    // both sync and async return shapes uniformly.
+    const svg = await convert(code);
+    const normalized = String(svg ?? '');
+    if (!normalized.includes('<svg')) {
+      throw new Error('D2 renderer did not return SVG output.');
+    }
+    return normalized;
+  };
+}
+
 function createWebGraphvizAdapterLoader(): () => Promise<GraphvizRenderAdapter> {
   let adapterPromise: Promise<GraphvizRenderAdapter> | null = null;
 
@@ -188,3 +245,4 @@ async function loadWebGraphvizAdapter(): Promise<GraphvizRenderAdapter> {
 
 export { GRAPHVIZ_LAYOUT_ENGINES };
 export { loadWebPlantumlRender };
+export { loadWebD2Render };

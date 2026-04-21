@@ -16,6 +16,7 @@ class LocalDiagramEngine implements DiagramRenderService {
   private echartsRenderPromise: Promise<DiagramRenderFn> | null = null;
   private vegaLiteRenderPromise: Promise<DiagramRenderFn> | null = null;
   private plantumlRenderPromise: Promise<DiagramRenderFn> | null = null;
+  private d2RenderPromise: Promise<DiagramRenderFn> | null = null;
 
   constructor(private readonly options: DiagramEngineOptions = {}) {}
 
@@ -71,6 +72,12 @@ class LocalDiagramEngine implements DiagramRenderService {
         }
         case 'plantuml': {
           const render = await this.getPlantumlRender();
+          if (!render) return this.unsupported(id, normalizedEngine, params.engine);
+          const payload = await render(params.code, params.options);
+          return { id, engine: normalizedEngine, success: true, format: 'svg', payload };
+        }
+        case 'd2': {
+          const render = await this.getD2Render();
           if (!render) return this.unsupported(id, normalizedEngine, params.engine);
           const payload = await render(params.code, params.options);
           return { id, engine: normalizedEngine, success: true, format: 'svg', payload };
@@ -176,6 +183,15 @@ class LocalDiagramEngine implements DiagramRenderService {
       this.plantumlRenderPromise = this.options.plantuml.loadRender();
     }
     return this.plantumlRenderPromise;
+  }
+
+  private async getD2Render(): Promise<DiagramRenderFn | null> {
+    if (this.options.d2?.render) return this.options.d2.render;
+    if (!this.options.d2?.loadRender) return null;
+    if (!this.d2RenderPromise) {
+      this.d2RenderPromise = this.options.d2.loadRender();
+    }
+    return this.d2RenderPromise;
   }
 
   private unsupported(id: string, normalized: string, original: DiagramEngineType): DiagramRenderResult {

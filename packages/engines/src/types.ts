@@ -83,6 +83,10 @@ export interface DiagramEngineOptions {
     render?: DiagramRenderFn;
     loadRender?: () => Promise<DiagramRenderFn>;
   };
+  d2?: {
+    render?: DiagramRenderFn;
+    loadRender?: () => Promise<DiagramRenderFn>;
+  };
 }
 
 // ============================================================================
