@@ -1,5 +1,3 @@
-/// <reference path="../optional-deps.d.ts" />
-
 import type {
   GraphvizCapabilities,
   GraphvizRenderAdapter,

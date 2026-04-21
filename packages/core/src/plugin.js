@@ -143,7 +143,7 @@ function createRoot() {
     };
 }
 function mapInlineTokens(tokens, parent) {
-    var _a;
+    let _a;
     if (!tokens)
         return;
     const stack = [parent];
@@ -348,7 +348,7 @@ function sortPluginsByDependencies(plugins) {
     return sorted;
 }
 export async function parseMarkdown(markdown, options = {}) {
-    var _a, _b;
+    let _a, _b;
     const root = createRoot();
     const stack = [root];
     const md = createMarkdownIt(options.config);

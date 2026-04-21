@@ -10,7 +10,7 @@ function createRoot() {
     };
 }
 function mapMdastNode(node) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+    let _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     switch (node.type) {
         case 'paragraph': {
             const paragraph = {
@@ -122,7 +122,7 @@ function mapMdastInline(node) {
     return mapped ? [mapped] : [];
 }
 export async function parseMarkdownWithRemark(markdown, options = {}) {
-    var _a, _b;
+    let _a, _b;
     const mdast = processor.parse(markdown);
     const root = createRoot();
     root.children = (_a = mdast.children) === null || _a === void 0 ? void 0 : _a.map(child => mapMdastNode(child)).filter(Boolean);

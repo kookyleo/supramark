@@ -1,5 +1,3 @@
-/// <reference path="./optional-deps.d.ts" />
-
 import { createDiagramEngine } from './engine';
 import {
   GRAPHVIZ_LAYOUT_ENGINES,

@@ -21,7 +21,7 @@ export function isDiagramFenceLanguage(lang) {
  * Note: diagram 是否真正渲染由运行时（RN/Web）按 Feature 配置决定。
  */
 export function mapFenceTokenToBlockNode(token, parent) {
-    var _a;
+    let _a;
     const rawInfo = (_a = token.info) !== null && _a !== void 0 ? _a : '';
     const info = typeof rawInfo === 'string' ? rawInfo.trim() : '';
     const [langRaw, ...metaParts] = info.split(/\s+/);

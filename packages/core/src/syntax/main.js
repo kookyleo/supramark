@@ -123,7 +123,7 @@ function strikethroughPlugin(md) {
  * - 当未提供 config 或 features 为空时，视为所有内置扩展均启用。
  */
 export function registerMainSyntaxPlugins(md, config) {
-    var _a, _b;
+    let _a, _b;
     const hasConfig = !!config && !!config.features && config.features.length > 0;
     const isFeatureOn = (id) => {
         if (!hasConfig)

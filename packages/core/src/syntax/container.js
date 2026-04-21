@@ -130,7 +130,7 @@ export function createContainerTokenProcessor(context) {
 // 内部工具函数
 // ----------------------------------------------------------------------------
 function resolveContainerRuntimeConfig(config) {
-    var _a;
+    let _a;
     const hasConfig = !!config && !!config.features && config.features.length > 0;
     const isFeatureOn = (id) => {
         if (!hasConfig)

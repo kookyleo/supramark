@@ -24,7 +24,7 @@
  */
 export class LRUCache {
     constructor(options = {}) {
-        var _a, _b;
+        let _a, _b;
         this.totalSize = 0;
         this.cache = new Map();
         this.maxSize = (_a = options.maxSize) !== null && _a !== void 0 ? _a : 100;

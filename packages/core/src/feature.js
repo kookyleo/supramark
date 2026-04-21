@@ -91,7 +91,7 @@ export class FeatureRegistry {
      * @returns 包含该标签的所有 Feature
      */
     static findByTag(tag) {
-        return this.list().filter(feature => { var _a; return 'tags' in feature.metadata && ((_a = feature.metadata.tags) === null || _a === void 0 ? void 0 : _a.includes(tag)); });
+        return this.list().filter(feature => { let _a; return 'tags' in feature.metadata && ((_a = feature.metadata.tags) === null || _a === void 0 ? void 0 : _a.includes(tag)); });
     }
     /**
      * 查找匹配指定 AST 节点的 Feature
@@ -148,7 +148,7 @@ export function defineFeature(feature) {
  * @returns 验证结果
  */
 export function validateFeature(feature, options = {}) {
-    var _a, _b, _c;
+    let _a, _b, _c;
     const errors = [];
     const metadata = (_a = feature.metadata) !== null && _a !== void 0 ? _a : {};
     const syntax = (_b = feature.syntax) !== null && _b !== void 0 ? _b : {};
@@ -378,7 +378,7 @@ export function getEnabledFeatures(config) {
  * @returns 是否启用
  */
 export function isFeatureEnabled(config, featureId) {
-    var _a, _b;
+    let _a, _b;
     const featureConfig = (_a = config.features) === null || _a === void 0 ? void 0 : _a.find(f => f.id === featureId);
     return (_b = featureConfig === null || featureConfig === void 0 ? void 0 : featureConfig.enabled) !== null && _b !== void 0 ? _b : false;
 }
@@ -468,7 +468,7 @@ export function isDiagramFeatureEnabled(config, engine, context) {
  * @returns Feature 配置选项，如果未配置则返回空对象
  */
 export function getFeatureOptions(config, featureId) {
-    var _a;
+    let _a;
     const featureConfig = (_a = config.features) === null || _a === void 0 ? void 0 : _a.find(f => f.id === featureId);
     const raw = featureConfig === null || featureConfig === void 0 ? void 0 : featureConfig.options;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -483,7 +483,7 @@ export function getFeatureOptions(config, featureId) {
  * - 如果未配置对应 Feature，返回 undefined。
  */
 export function getFeatureOptionsAs(config, featureId) {
-    var _a;
+    let _a;
     if (!config || !config.features || config.features.length === 0) {
         return undefined;
     }
