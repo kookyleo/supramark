@@ -77,7 +77,7 @@ export interface SupramarkWebProps {
 
 type RenderTask = {
   key: string;
-  engine: 'mermaid' | 'math' | 'dot' | 'graphviz';
+  engine: string;
   code: string;
   options?: Record<string, unknown>;
 };
@@ -347,7 +347,7 @@ function renderNode(
       }
 
       return (
-        <div key={key} data-suprimark-diagram={diagram.engine} className={classNames.diagram}>
+        <div key={key} data-supramark-diagram={diagram.engine} className={classNames.diagram}>
           <pre className={classNames.diagramPre}>
             <code className={classNames.diagramCode}>{diagram.code}</code>
           </pre>
@@ -820,23 +820,25 @@ function buildRenderKey(
   return `${normalizeRenderEngine(engine)}:${code}:${stableSerialize(options)}`;
 }
 
-function normalizeRenderEngine(engine: string): 'mermaid' | 'math' | 'dot' | 'graphviz' {
+const PRE_RENDERED_DIAGRAM_ENGINES = new Set([
+  'mermaid',
+  'math',
+  'dot',
+  'graphviz',
+  'echarts',
+  'vega-lite',
+  'vegalite',
+  'vega',
+  'plantuml',
+]);
+
+function normalizeRenderEngine(engine: string): string {
   const normalized = String(engine || '').toLowerCase();
-  if (normalized === 'graphviz') {
-    return 'graphviz';
-  }
-  if (normalized === 'dot') {
-    return 'dot';
-  }
-  if (normalized === 'math') {
-    return 'math';
-  }
-  return 'mermaid';
+  return PRE_RENDERED_DIAGRAM_ENGINES.has(normalized) ? normalized : 'mermaid';
 }
 
 function isPreRenderedDiagramEngine(engine: string): boolean {
-  const normalized = String(engine || '').toLowerCase();
-  return normalized === 'mermaid' || normalized === 'dot' || normalized === 'graphviz';
+  return PRE_RENDERED_DIAGRAM_ENGINES.has(String(engine || '').toLowerCase());
 }
 
 function buildDiagramRenderOptions(

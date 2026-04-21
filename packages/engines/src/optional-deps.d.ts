@@ -45,7 +45,34 @@ declare module 'mathjax-full/js/input/tex/AllPackages.js' {
   export const AllPackages: unknown;
 }
 
-declare module 'graphviz-anywhere-react-native' {
+declare module '@kookyleo/plantuml-little-web' {
+  /** wasm-bindgen default async initialiser. */
+  const init: (input?: unknown) => Promise<unknown>;
+  export default init;
+
+  /** Convert PlantUML source to an SVG string. */
+  export function convert(puml: string): Promise<string> | string;
+
+  /** Alternative names the package may expose depending on build shape. */
+  export function render(puml: string): Promise<string> | string;
+  export function renderSvg(puml: string): Promise<string> | string;
+
+  /** Register a Graphviz bridge (dot -> svg). */
+  export function setGraphvizBridge(
+    fn: (dot: string, engine?: string) => Promise<string> | string
+  ): void;
+  export function set_graphviz_bridge(
+    fn: (dot: string, engine?: string) => Promise<string> | string
+  ): void;
+  export function setGraphvizRenderer(
+    fn: (dot: string, engine?: string) => Promise<string> | string
+  ): void;
+  export function registerGraphviz(
+    fn: (dot: string, engine?: string) => Promise<string> | string
+  ): void;
+}
+
+declare module '@kookyleo/graphviz-anywhere-rn' {
   export type GraphvizEngine =
     | 'dot'
     | 'neato'
@@ -73,8 +100,4 @@ declare module 'graphviz-anywhere-react-native' {
   ): Promise<string>;
 
   export function getVersion(): Promise<string>;
-}
-
-declare module 'graphviz-anywhere-react-native/src/index' {
-  export * from 'graphviz-anywhere-react-native';
 }

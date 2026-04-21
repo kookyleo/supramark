@@ -1,38 +1,17 @@
+import echartsFactory from './echarts';
 import { createDiagramEngine } from './engine';
-import {
-  GRAPHVIZ_LAYOUT_ENGINES,
-  pickGraphvizDiagramOptions,
-} from './graphviz';
+import { GRAPHVIZ_LAYOUT_ENGINES, pickGraphvizDiagramOptions } from './graphviz';
 import type {
   DiagramEngineOptions,
+  DiagramRenderFn,
   DiagramRenderService,
-  GraphvizCapabilities,
-  GraphvizDiagramOptions,
   GraphvizRenderAdapter,
 } from './types';
-
-interface GraphvizWebRenderer {
-  render(
-    dot: string,
-    options?: {
-      engine?: string;
-      format?: string;
-      yInvert?: boolean;
-      reduce?: boolean;
-      graphAttributes?: GraphvizDiagramOptions['graphAttributes'];
-      nodeAttributes?: GraphvizDiagramOptions['nodeAttributes'];
-      edgeAttributes?: GraphvizDiagramOptions['edgeAttributes'];
-      images?: GraphvizDiagramOptions['images'];
-    }
-  ): Promise<string>;
-  getCapabilities(): Promise<GraphvizCapabilities>;
-}
+import vegaLiteFactory from './vega-lite';
 
 export interface WebGraphvizAdapterOptions {
   adapter?: GraphvizRenderAdapter;
   loadAdapter?: () => Promise<GraphvizRenderAdapter>;
-  loadModule?: () => Promise<unknown>;
-  warmup?: boolean;
 }
 
 export interface WebDiagramEngineOptions extends DiagramEngineOptions {
@@ -48,54 +27,164 @@ export function createWebDiagramEngine(
     ...options,
     graphviz: {
       adapter: graphviz.adapter,
-      loadAdapter: graphviz.loadAdapter ?? createWebGraphvizAdapterLoader(graphviz),
+      loadAdapter: graphviz.loadAdapter ?? createWebGraphvizAdapterLoader(),
+    },
+    echarts: {
+      render: options.echarts?.render,
+      loadRender: options.echarts?.loadRender ?? loadWebEchartsRender,
+    },
+    vegaLite: {
+      render: options.vegaLite?.render,
+      loadRender: options.vegaLite?.loadRender ?? loadWebVegaLiteRender,
+    },
+    plantuml: {
+      render: options.plantuml?.render,
+      loadRender: options.plantuml?.loadRender ?? loadWebPlantumlRender,
     },
   });
 }
 
-function createWebGraphvizAdapterLoader(
-  options: WebGraphvizAdapterOptions
-): () => Promise<GraphvizRenderAdapter> {
+/**
+ * Default web-side lazy loader for the ECharts engine. Requires `echarts`
+ * to be installed as a peer dep; dynamic-imports `echarts/core` + common
+ * renderers / charts / components and wires them via the engine factory.
+ */
+async function loadWebEchartsRender(): Promise<DiagramRenderFn> {
+  const [core, renderers, charts, components] = await Promise.all([
+    import('echarts/core' as string),
+    import('echarts/renderers' as string),
+    import('echarts/charts' as string),
+    import('echarts/components' as string),
+  ]);
+  return echartsFactory([
+    core,
+    renderers.SVGRenderer,
+    charts.LineChart, charts.BarChart, charts.PieChart, charts.ScatterChart,
+    components.GridComponent, components.TooltipComponent,
+    components.TitleComponent, components.LegendComponent,
+  ]) as DiagramRenderFn;
+}
+
+/**
+ * Default web-side lazy loader for Vega-Lite. Requires `vega` + `vega-lite`
+ * peer deps.
+ */
+async function loadWebVegaLiteRender(): Promise<DiagramRenderFn> {
+  const [Vega, VegaLite] = await Promise.all([
+    import('vega' as string),
+    import('vega-lite' as string),
+  ]);
+  return vegaLiteFactory([Vega, VegaLite]) as DiagramRenderFn;
+}
+
+/**
+ * Default web-side lazy loader for PlantUML.
+ *
+ * Loads `@kookyleo/plantuml-little-web` (Rust → wasm) on first use and
+ * returns a `RenderFn`. The wasm binary initialises as a side effect of the
+ * ES-module import (`import * as wasm from "./plantuml_little_web_bg.wasm"`).
+ *
+ * Graphviz bridge contract (see `packages/web/src/lib.rs`):
+ *
+ *   globalThis.__graphviz_anywhere_render(dot, engine, format) -> string
+ *
+ * `plantuml-little-web` delegates layout for component / activity / state /
+ * use-case diagrams to Graphviz via this global. We install a synchronous
+ * wrapper backed by `@kookyleo/graphviz-anywhere-web` (pre-loaded) so the
+ * wasm call site can invoke it without returning to the JS event loop.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function loadWebPlantumlRender(): Promise<DiagramRenderFn> {
+  // 1. Preload graphviz-anywhere-web so its sync `.layout()` is ready before
+  //    plantuml-little-web ever triggers a layout pass.
+  //    eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { Graphviz } = await import('@kookyleo/graphviz-anywhere-web' as string);
+  const graphviz = await Graphviz.load();
+
+  // 2. Install the global bridge the wasm module expects. Use a guard so we
+  //    only install once per realm even if the loader fires concurrently.
+  //    eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g = globalThis as any;
+  if (typeof g.__graphviz_anywhere_render !== 'function') {
+    g.__graphviz_anywhere_render = (
+      dot: string,
+      engine?: string,
+      format?: string
+    ): string => {
+      return graphviz.layout(dot, (format ?? 'svg') as string, (engine ?? 'dot') as string);
+    };
+  }
+
+  // 3. Load the wasm module. wasm-bindgen's ESM-wasm build initialises via
+  //    the `import * from '*.wasm'` side effect, so no separate init call is
+  //    needed. Some builds still ship a default `init()` — probe defensively.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const puml: any = await import('@kookyleo/plantuml-little-web' as string);
+
+  const init =
+    (typeof puml.default === 'function' && puml.default) ||
+    (typeof puml.init === 'function' && puml.init) ||
+    null;
+  if (init) {
+    try {
+      await init();
+    } catch {
+      // Already initialised via the module-import side effect — ignore.
+    }
+  }
+
+  const convert =
+    (typeof puml.convert === 'function' && puml.convert) ||
+    (typeof puml.render === 'function' && puml.render) ||
+    (typeof puml.renderSvg === 'function' && puml.renderSvg) ||
+    null;
+  if (!convert) {
+    throw new Error(
+      '`@kookyleo/plantuml-little-web` is missing a convert / render entry. Expected one of: convert, render, renderSvg.'
+    );
+  }
+
+  return async (code: string): Promise<string> => {
+    // `convert` is synchronous (wasm-bindgen-generated) but `await` handles
+    // both sync and async return shapes uniformly.
+    const svg = await convert(code);
+    const normalized = String(svg ?? '');
+    if (!normalized.includes('<svg')) {
+      throw new Error('PlantUML renderer did not return SVG output.');
+    }
+    return normalized;
+  };
+}
+
+function createWebGraphvizAdapterLoader(): () => Promise<GraphvizRenderAdapter> {
   let adapterPromise: Promise<GraphvizRenderAdapter> | null = null;
 
   return () => {
     if (!adapterPromise) {
-      adapterPromise = loadWebGraphvizAdapter(options);
+      adapterPromise = loadWebGraphvizAdapter();
     }
     return adapterPromise;
   };
 }
 
-async function loadWebGraphvizAdapter(
-  options: WebGraphvizAdapterOptions
-): Promise<GraphvizRenderAdapter> {
-  const module = await import('graphviz-anywhere-web');
-  const renderer = (module.createLazyWasmRenderer as (args?: {
-    loadModule?: () => Promise<unknown>;
-    warmup?: boolean;
-  }) => GraphvizWebRenderer)({
-    loadModule: options.loadModule,
-    warmup: options.warmup,
-  });
+async function loadWebGraphvizAdapter(): Promise<GraphvizRenderAdapter> {
+  const { Graphviz } = await import('@kookyleo/graphviz-anywhere-web');
+  const graphviz = await Graphviz.load();
 
   return {
     async renderToSvg(code, rawOptions) {
-      const graphvizOptions = pickGraphvizDiagramOptions(rawOptions);
-      return renderer.render(code, {
-        engine: graphvizOptions.layoutEngine,
-        format: 'svg',
-        yInvert: graphvizOptions.yInvert,
-        reduce: graphvizOptions.reduce,
-        graphAttributes: graphvizOptions.graphAttributes,
-        nodeAttributes: graphvizOptions.nodeAttributes,
-        edgeAttributes: graphvizOptions.edgeAttributes,
-        images: graphvizOptions.images,
-      });
+      const opt = pickGraphvizDiagramOptions(rawOptions);
+      return graphviz.layout(code, 'svg', opt.layoutEngine ?? 'dot');
     },
     async getCapabilities() {
-      return renderer.getCapabilities();
+      return {
+        graphvizVersion: graphviz.version(),
+        engines: ['dot', 'neato', 'fdp', 'sfdp', 'circo', 'twopi', 'osage', 'patchwork'],
+        formats: ['svg', 'dot', 'json', 'xdot', 'plain'],
+      };
     },
   };
 }
 
 export { GRAPHVIZ_LAYOUT_ENGINES };
+export { loadWebPlantumlRender };
