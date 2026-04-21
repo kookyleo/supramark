@@ -58,8 +58,8 @@ function nodeToHtml(node: SupramarkNode): string {
     }
     case 'math_inline': {
       const math = node as SupramarkMathInlineNode;
-      // 与 React Web 一致：使用 data-suprimark-math 占位，供浏览器端 KaTeX 渲染
-      return `<span data-suprimark-math="inline">${escapeHtml(math.value || '')}</span>`;
+      // 与 React Web 一致：使用 data-supramark-math 占位，供浏览器端 KaTeX 渲染
+      return `<span data-supramark-math="inline">${escapeHtml(math.value || '')}</span>`;
     }
     case 'link': {
       const link = node as SupramarkLinkNode;
@@ -85,7 +85,7 @@ function nodeToHtml(node: SupramarkNode): string {
     case 'math_block': {
       const mathBlock = node as SupramarkMathBlockNode;
       const value = escapeHtml(mathBlock.value || '');
-      return `<div data-suprimark-math="block"><code>${value}</code></div>`;
+      return `<div data-supramark-math="block"><code>${value}</code></div>`;
     }
     case 'list': {
       const list = node as SupramarkListNode;
@@ -100,7 +100,7 @@ function nodeToHtml(node: SupramarkNode): string {
     case 'diagram': {
       const diagram = node as SupramarkDiagramNode;
       const engine = escapeHtml(diagram.engine || '');
-      return `<div data-suprimark-diagram="${engine}"><pre><code>${escapeHtml(
+      return `<div data-supramark-diagram="${engine}"><pre><code>${escapeHtml(
         diagram.code || ''
       )}</code></pre></div>`;
     }

@@ -47,7 +47,7 @@ function createReactNativeGraphvizAdapterLoader(): () => Promise<GraphvizRenderA
 }
 
 async function loadReactNativeGraphvizAdapter(): Promise<GraphvizRenderAdapter> {
-  const module = await import('graphviz-anywhere-react-native/src/index');
+  const module = await import('@kookyleo/graphviz-anywhere-rn');
 
   return {
     async renderToSvg(code, rawOptions) {

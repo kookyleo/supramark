@@ -22,14 +22,6 @@ export default defineConfig({
     alias: {
       'react-native': resolve(__dirname, 'src/__mocks__/react-native.ts'),
       '@react-native': resolve(__dirname, 'src/__mocks__/react-native.ts'),
-      // @supramark/engines is a sibling workspace package that does not list
-      // plantuml-little-web in its own dependencies (it's consumed as an
-      // optional / host-provided engine). Aliasing the bare specifier to the
-      // example app's resolved copy lets Vite find it from engines/src/web.ts.
-      '@kookyleo/plantuml-little-web': resolve(
-        __dirname,
-        'node_modules/@kookyleo/plantuml-little-web/plantuml_little_web.js'
-      ),
     },
     // `browser` must come before `module`/`main` so packages like node-fetch
     // (pulled in by vega-loader) resolve to their browser entry instead of

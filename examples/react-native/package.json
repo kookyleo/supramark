@@ -25,7 +25,7 @@
     "@supramark/rn-diagram-worker": "workspace:*",
     "expo": "~54",
     "expo-status-bar": "~1.12.1",
-    "graphviz-anywhere-react-native": "file:/tmp/graphviz-anywhere/react-native",
+    "@kookyleo/graphviz-anywhere-rn": "^0.1.3",
     "react": "18.2.0",
     "react-native": "0.81.5",
     "react-native-maps": "1.14.0",

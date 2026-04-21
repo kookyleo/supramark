@@ -17,7 +17,7 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({ classNames, code, en
         : '';
 
     return (
-      <div data-suprimark-diagram={engine} className={classNames.diagram}>
+      <div data-supramark-diagram={engine} className={classNames.diagram}>
         <pre className={classNames.diagramPre}>
           <code className={classNames.diagramCode}>{errorHeader + code}</code>
         </pre>
@@ -27,8 +27,8 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({ classNames, code, en
 
   return (
     <div
-      data-suprimark-diagram={engine}
-      data-suprimark-diagram-rendered="svg"
+      data-supramark-diagram={engine}
+      data-supramark-diagram-rendered="svg"
       className={classNames.diagram}
       dangerouslySetInnerHTML={{ __html: result.payload }}
     />

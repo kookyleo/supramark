@@ -3,7 +3,7 @@
  *
  * 本模块用于在 Web / SSR 场景下为 supramark 的 math 节点
  * 注入必要的 CSS 与脚本，使浏览器在加载后自动将占位元素
- * （data-suprimark-math="inline|block"）渲染为真正的公式。
+ * （data-supramark-math="inline|block"）渲染为真正的公式。
  *
  * 设计与 diagram 支持类似：由宿主在 HTML 中插入脚本片段，
  * 业务侧只关心 <Supramark /> 的使用。
@@ -38,7 +38,7 @@ export function buildMathSupportScripts(): string {
             var nodes = document.querySelectorAll(selector);
             nodes.forEach(function (node) {
               // 跳过已经渲染过的节点
-              if (node.getAttribute('data-suprimark-math-rendered') === 'true') {
+              if (node.getAttribute('data-supramark-math-rendered') === 'true') {
                 return;
               }
 
@@ -51,7 +51,7 @@ export function buildMathSupportScripts(): string {
                   displayMode: !!displayMode,
                   throwOnError: false,
                 });
-                node.setAttribute('data-suprimark-math-rendered', 'true');
+                node.setAttribute('data-supramark-math-rendered', 'true');
               } catch (e) {
                 // 渲染失败时，保留原始 TeX 文本，避免破坏页面
                 // 可按需在此处添加错误提示
@@ -60,8 +60,8 @@ export function buildMathSupportScripts(): string {
             });
           }
 
-          renderElements('[data-suprimark-math="inline"]', false);
-          renderElements('[data-suprimark-math="block"]', true);
+          renderElements('[data-supramark-math="inline"]', false);
+          renderElements('[data-supramark-math="block"]', true);
         }
 
         if (document.readyState === 'loading') {

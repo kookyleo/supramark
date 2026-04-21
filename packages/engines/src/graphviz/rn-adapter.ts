@@ -9,7 +9,7 @@ import { GRAPHVIZ_LAYOUT_ENGINES, pickGraphvizDiagramOptions } from './index.js'
 let cached: Promise<GraphvizRenderAdapter> | null = null;
 
 async function loadAdapter(): Promise<GraphvizRenderAdapter> {
-  const module = await import('graphviz-anywhere-react-native/src/index');
+  const module = await import('@kookyleo/graphviz-anywhere-rn');
 
   return {
     async renderToSvg(code, rawOptions) {
@@ -28,9 +28,9 @@ async function loadAdapter(): Promise<GraphvizRenderAdapter> {
 }
 
 /**
- * Graphviz RN adapter（通过 graphviz-anywhere-react-native 的 native module）。
- *
- * 作为 `modules` 项传给 `graphviz()` 工厂。首次调用触发 native 初始化。
+ * Graphviz RN adapter — thin wrapper over `@kookyleo/graphviz-anywhere-rn`'s
+ * native module (JSI TurboModule on new arch, NativeModule bridge on old arch).
+ * First call triggers native initialization.
  */
 const rnAdapter: GraphvizRenderAdapter = {
   async renderToSvg(code, options) {
