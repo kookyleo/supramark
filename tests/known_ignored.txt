@@ -1,0 +1,12 @@
+# Fixtures intentionally skipped by the reference generator.
+#
+# Format:
+#   <relative-path-under-tests/>  TAB  <reason>
+#
+# Lines starting with `#` and blank lines are ignored.
+# Rust-side byte-exact tests must also skip these — they have no
+# paired tests/reference/.svg and never will, until the underlying
+# cause changes upstream.
+
+ext_fixtures/cypress/flowchart/46.mmd	MVP scope: `flowchart-elk LR` requires the opt-in @mermaid-js/layout-elk backend. See FEATURES.md (Non-Goals). Revisit if/when ELK support lands.
+ext_fixtures/demos/class/08.mmd	Upstream-bug: the fixture text is lifted verbatim from mermaid-js/mermaid@11.14.0 `demos/classchart.html` (block starting `class Person { ... } class People List~List~Person~~`). Mermaid's own jison classDiagram parser rejects the final `class People List~List~Person~~` line with `Parse error on line 11 ... got 'ALPHA'` — the syntax appears in the upstream demo but is not accepted by the parser shipped in the same release. Remove from this list once upstream fixes either the demo or the grammar.

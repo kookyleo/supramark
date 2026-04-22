@@ -721,11 +721,30 @@ if (argv[0] === '--batch') {
   // bursts (e.g. all flowchart/1*.mmd hit remote-image timeouts). The
   // shuffle spreads those hot spots across workers so no single
   // worker dominates wall-clock.
+  // Fixtures listed in tests/known_ignored.txt are skipped entirely
+  // (no render attempt, no failure entry). Used for fixtures that
+  // upstream mermaid itself can't render (broken demo syntax,
+  // opt-in subpackages we don't load, etc). Each non-empty, non-
+  // comment line is `<rel path>\t<reason>`.
+  const ignorePath = join(TESTS_DIR, 'known_ignored.txt');
+  const ignored = new Map(); // absolute mmd path → reason
+  if (existsSync(ignorePath)) {
+    for (const line of readFileSync(ignorePath, 'utf8').split('\n')) {
+      const trimmed = line.trimStart();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const [rel, ...reasonParts] = line.split('\t');
+      if (!rel || !reasonParts.length) continue;
+      ignored.set(join(TESTS_DIR, rel.trim()), reasonParts.join('\t').trim());
+    }
+  }
+
   const allFixtures = [];
   for (const root of sources) {
     if (!existsSync(root)) continue;
     for (const mmdPath of walk(root)) {
-      if (mmdPath.endsWith('.mmd')) allFixtures.push({ root, mmdPath });
+      if (!mmdPath.endsWith('.mmd')) continue;
+      if (ignored.has(mmdPath)) continue;
+      allFixtures.push({ root, mmdPath });
     }
   }
   allFixtures.sort((a, b) => a.mmdPath.localeCompare(b.mmdPath));
