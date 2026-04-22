@@ -217,44 +217,279 @@ fn xml_escape(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// `<style>` block — built from the shared base preamble + a slice of
-/// state-specific selectors + the shared neo-look tail. Still not
-/// byte-exact against upstream (the state CSS template has ~50 more
-/// rules than we emit), but the shell/preamble portion is now an
-/// exact match.
+/// `<style>` block — built from the shared base preamble + the full
+/// state-specific CSS (ported from upstream `state/styles.js`) + the
+/// shared neo-look tail.
 fn style_block(id: &str, theme: &ThemeVariables) -> String {
-    let mut s = String::with_capacity(2048);
+    let mut s = String::with_capacity(4096);
     s.push_str("<style>");
     s.push_str(&theme_css::base_preamble(id, theme));
-    // State-diagram specific subset — bare minimum for the rendered
-    // nodes / edges to look right. The full upstream CSS is ported in
-    // Wave 5.
-    s.push_str(&format!(
-        "#{id} .transition{{stroke:#333333;stroke-width:1;fill:none;}}"
-    ));
-    s.push_str(&format!(
-        "#{id} .node rect{{fill:#ECECFF;stroke:#9370DB;stroke-width:1px;}}"
-    ));
-    s.push_str(&format!(
-        "#{id} .node circle.state-start{{fill:#333333;stroke:#333333;}}"
-    ));
-    s.push_str(&format!(
-        "#{id} .node circle.state-end{{fill:#9370DB;stroke:white;stroke-width:1.5;}}"
-    ));
-    s.push_str(&format!(
-        "#{id} .node .fork-join{{fill:#333333;stroke:#333333;}}"
-    ));
-    s.push_str(&format!(
-        "#{id} .statediagram-cluster rect{{fill:#ECECFF;stroke:#9370DB;stroke-width:1px;}}"
-    ));
-    s.push_str(&format!(
-        "#{id} .statediagram-cluster rect.outer{{rx:5px;ry:5px;}}"
-    ));
-    s.push_str(&format!(
-        "#{id} .cluster-label,#{id} .nodeLabel{{color:#131300;}}"
-    ));
+    s.push_str(&state_specific_css(id, theme));
     s.push_str(&theme_css::neo_look_block(id, theme));
     s.push_str("</style>");
+    s
+}
+
+/// Full port of upstream `packages/mermaid/src/diagrams/state/styles.js`.
+/// All ~50 CSS rules, with theme variable interpolation matching the
+/// default theme's computed values. Stylis-minified (no whitespace,
+/// no comments).
+fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
+    let transition_color = theme.transition_color.as_deref().unwrap_or("#333333");
+    let node_border = theme.node_border.as_deref().unwrap_or("#9370DB");
+    let text_color = theme.text_color.as_deref().unwrap_or("#333");
+    let main_bkg = theme.main_bkg.as_deref().unwrap_or("#ECECFF");
+    let line_color = theme.line_color.as_deref().unwrap_or("#333333");
+    let stroke_width = theme.stroke_width.unwrap_or(1);
+    let state_label_color = theme.state_label_color.as_deref().unwrap_or("#131300");
+    let special_state_color = theme.special_state_color.as_deref().unwrap_or("#333333");
+    let inner_end_bg = theme.inner_end_background.as_deref().unwrap_or("#333333");
+    let background = theme.background.as_deref().unwrap_or("white");
+    let composite_bg = theme.composite_background.as_deref().or(theme.background.as_deref()).unwrap_or("white");
+    let composite_title_bg = theme.composite_title_background.as_deref().unwrap_or("#ECECFF");
+    let state_bkg = theme.state_bkg.as_deref().or(theme.main_bkg.as_deref()).unwrap_or("#ECECFF");
+    let state_border = theme.state_border.as_deref().or(theme.node_border.as_deref()).unwrap_or("#9370DB");
+    let alt_bg = theme.alt_background.as_deref().unwrap_or("#efefef");
+    let note_bkg = theme.note_bkg_color.as_deref().unwrap_or("#fff5ad");
+    let note_border = theme.note_border_color.as_deref().unwrap_or("#aaaa33");
+    let note_text = theme.note_text_color.as_deref().unwrap_or("#333");
+    let label_bg = theme.label_background_color.as_deref().unwrap_or("#ECECFF");
+    let edge_label_bg = theme.edge_label_background.as_deref().unwrap_or("rgba(232,232,232, 0.8)");
+    let transition_label_color = theme.transition_label_color.as_deref().or(theme.tertiary_text_color.as_deref()).unwrap_or("#333");
+    let radius = theme.radius.unwrap_or(5);
+    // drop-shadow for neo look
+    let drop_shadow = theme.drop_shadow.as_deref().unwrap_or("drop-shadow(1px 2px 2px rgba(185, 185, 185, 1))");
+    let neo_ds = drop_shadow.replace("url(#drop-shadow)", &format!("url({}-drop-shadow)", id));
+
+    let mut s = String::with_capacity(3000);
+
+    // defs [id$="-barbEnd"]
+    s.push_str(&format!(
+        "#{id} defs [id$=\"-barbEnd\"]{{fill:{tc};stroke:{tc};}}",
+        tc = transition_color,
+    ));
+    // g.stateGroup text (first occurrence)
+    s.push_str(&format!(
+        "#{id} g.stateGroup text{{fill:{nb};stroke:none;font-size:10px;}}",
+        nb = node_border,
+    ));
+    // g.stateGroup text (second occurrence — upstream emits it twice)
+    s.push_str(&format!(
+        "#{id} g.stateGroup text{{fill:{tc2};stroke:none;font-size:10px;}}",
+        tc2 = text_color,
+    ));
+    // g.stateGroup .state-title
+    s.push_str(&format!(
+        "#{id} g.stateGroup .state-title{{font-weight:bolder;fill:{slc};}}",
+        slc = state_label_color,
+    ));
+    // g.stateGroup rect
+    s.push_str(&format!(
+        "#{id} g.stateGroup rect{{fill:{mb};stroke:{nb};}}",
+        mb = main_bkg, nb = node_border,
+    ));
+    // g.stateGroup line
+    s.push_str(&format!(
+        "#{id} g.stateGroup line{{stroke:{lc};stroke-width:{sw};}}",
+        lc = line_color, sw = stroke_width,
+    ));
+    // .transition
+    s.push_str(&format!(
+        "#{id} .transition{{stroke:{tc};stroke-width:{sw};fill:none;}}",
+        tc = transition_color, sw = stroke_width,
+    ));
+    // .stateGroup .composit (upstream typo preserved)
+    s.push_str(&format!(
+        "#{id} .stateGroup .composit{{fill:{bg};border-bottom:1px;}}",
+        bg = background,
+    ));
+    // .stateGroup .alt-composit
+    s.push_str(&format!(
+        "#{id} .stateGroup .alt-composit{{fill:#e0e0e0;border-bottom:1px;}}",
+    ));
+    // .state-note
+    s.push_str(&format!(
+        "#{id} .state-note{{stroke:{nbc};fill:{nbg};}}",
+        nbc = note_border, nbg = note_bkg,
+    ));
+    // .state-note text
+    s.push_str(&format!(
+        "#{id} .state-note text{{fill:{ntc};stroke:none;font-size:10px;}}",
+        ntc = note_text,
+    ));
+    // .stateLabel .box
+    s.push_str(&format!(
+        "#{id} .stateLabel .box{{stroke:none;stroke-width:0;fill:{mb};opacity:0.5;}}",
+        mb = main_bkg,
+    ));
+    // .edgeLabel .label rect
+    s.push_str(&format!(
+        "#{id} .edgeLabel .label rect{{fill:{lbg};opacity:0.5;}}",
+        lbg = label_bg,
+    ));
+    // .edgeLabel
+    s.push_str(&format!(
+        "#{id} .edgeLabel{{background-color:{elbg};}}",
+        elbg = edge_label_bg,
+    ));
+    // .edgeLabel p
+    s.push_str(&format!(
+        "#{id} .edgeLabel p{{background-color:{elbg};}}",
+        elbg = edge_label_bg,
+    ));
+    // .edgeLabel rect
+    s.push_str(&format!(
+        "#{id} .edgeLabel rect{{opacity:0.5;background-color:{elbg};fill:{elbg};}}",
+        elbg = edge_label_bg,
+    ));
+    // .edgeLabel text-align
+    s.push_str(&format!(
+        "#{id} .edgeLabel{{text-align:center;}}",
+    ));
+    // .edgeLabel .label text
+    s.push_str(&format!(
+        "#{id} .edgeLabel .label text{{fill:{tlc};}}",
+        tlc = transition_label_color,
+    ));
+    // .label div .edgeLabel
+    s.push_str(&format!(
+        "#{id} .label div .edgeLabel{{color:{tlc};}}",
+        tlc = transition_label_color,
+    ));
+    // .stateLabel text
+    s.push_str(&format!(
+        "#{id} .stateLabel text{{fill:{slc};font-size:10px;font-weight:bold;}}",
+        slc = state_label_color,
+    ));
+    // .node circle.state-start
+    s.push_str(&format!(
+        "#{id} .node circle.state-start{{fill:{ssc};stroke:{ssc};}}",
+        ssc = special_state_color,
+    ));
+    // .node .fork-join
+    s.push_str(&format!(
+        "#{id} .node .fork-join{{fill:{ssc};stroke:{ssc};}}",
+        ssc = special_state_color,
+    ));
+    // .node circle.state-end
+    s.push_str(&format!(
+        "#{id} .node circle.state-end{{fill:{ieb};stroke:{bg};stroke-width:1.5;}}",
+        ieb = inner_end_bg, bg = background,
+    ));
+    // .end-state-inner
+    s.push_str(&format!(
+        "#{id} .end-state-inner{{fill:{cbg};stroke-width:1.5;}}",
+        cbg = composite_bg,
+    ));
+    // .node rect
+    s.push_str(&format!(
+        "#{id} .node rect{{fill:{sb};stroke:{sbr};stroke-width:{sw}px;}}",
+        sb = state_bkg, sbr = state_border, sw = stroke_width,
+    ));
+    // .node polygon
+    s.push_str(&format!(
+        "#{id} .node polygon{{fill:{mb};stroke:{sbr};stroke-width:{sw}px;}}",
+        mb = main_bkg, sbr = state_border, sw = stroke_width,
+    ));
+    // [id$="-barbEnd"]
+    s.push_str(&format!(
+        "#{id} [id$=\"-barbEnd\"]{{fill:{lc};}}",
+        lc = line_color,
+    ));
+    // .statediagram-cluster rect
+    s.push_str(&format!(
+        "#{id} .statediagram-cluster rect{{fill:{ctbg};stroke:{sbr};stroke-width:{sw}px;}}",
+        ctbg = composite_title_bg, sbr = state_border, sw = stroke_width,
+    ));
+    // .cluster-label, .nodeLabel
+    s.push_str(&format!(
+        "#{id} .cluster-label,#{id} .nodeLabel{{color:{slc};}}",
+        slc = state_label_color,
+    ));
+    // .statediagram-cluster rect.outer
+    s.push_str(&format!(
+        "#{id} .statediagram-cluster rect.outer{{rx:5px;ry:5px;}}",
+    ));
+    // .statediagram-state .divider
+    s.push_str(&format!(
+        "#{id} .statediagram-state .divider{{stroke:{sbr};}}",
+        sbr = state_border,
+    ));
+    // .statediagram-state .title-state
+    s.push_str(&format!(
+        "#{id} .statediagram-state .title-state{{rx:5px;ry:5px;}}",
+    ));
+    // .statediagram-cluster.statediagram-cluster .inner
+    s.push_str(&format!(
+        "#{id} .statediagram-cluster.statediagram-cluster .inner{{fill:{cbg};}}",
+        cbg = composite_bg,
+    ));
+    // .statediagram-cluster.statediagram-cluster-alt .inner
+    s.push_str(&format!(
+        "#{id} .statediagram-cluster.statediagram-cluster-alt .inner{{fill:{abg};}}",
+        abg = alt_bg,
+    ));
+    // .statediagram-cluster .inner
+    s.push_str(&format!(
+        "#{id} .statediagram-cluster .inner{{rx:0;ry:0;}}",
+    ));
+    // .statediagram-state rect.basic
+    s.push_str(&format!(
+        "#{id} .statediagram-state rect.basic{{rx:5px;ry:5px;}}",
+    ));
+    // .statediagram-state rect.divider
+    s.push_str(&format!(
+        "#{id} .statediagram-state rect.divider{{stroke-dasharray:10,10;fill:{abg};}}",
+        abg = alt_bg,
+    ));
+    // .note-edge
+    s.push_str(&format!(
+        "#{id} .note-edge{{stroke-dasharray:5;}}",
+    ));
+    // .statediagram-note rect (twice — upstream emits it twice)
+    s.push_str(&format!(
+        "#{id} .statediagram-note rect{{fill:{nbg};stroke:{nbc};stroke-width:1px;rx:0;ry:0;}}",
+        nbg = note_bkg, nbc = note_border,
+    ));
+    s.push_str(&format!(
+        "#{id} .statediagram-note rect{{fill:{nbg};stroke:{nbc};stroke-width:1px;rx:0;ry:0;}}",
+        nbg = note_bkg, nbc = note_border,
+    ));
+    // .statediagram-note text
+    s.push_str(&format!(
+        "#{id} .statediagram-note text{{fill:{ntc};}}",
+        ntc = note_text,
+    ));
+    // .statediagram-note .nodeLabel
+    s.push_str(&format!(
+        "#{id} .statediagram-note .nodeLabel{{color:{ntc};}}",
+        ntc = note_text,
+    ));
+    // .statediagram .edgeLabel (upstream has `color: red; // ${options.noteTextColor};`)
+    s.push_str(&format!(
+        "#{id} .statediagram .edgeLabel{{color:red;}}",
+    ));
+    // [id$="-dependencyStart"], [id$="-dependencyEnd"]
+    s.push_str(&format!(
+        "#{id} [id$=\"-dependencyStart\"],#{id} [id$=\"-dependencyEnd\"]{{fill:{lc};stroke:{lc};stroke-width:{sw};}}",
+        lc = line_color, sw = stroke_width,
+    ));
+    // .statediagramTitleText
+    s.push_str(&format!(
+        "#{id} .statediagramTitleText{{text-anchor:middle;font-size:18px;fill:{tc2};}}",
+        tc2 = text_color,
+    ));
+    // [data-look="neo"].statediagram-cluster rect
+    s.push_str(&format!(
+        r#"#{id} [data-look="neo"].statediagram-cluster rect{{fill:{mb};stroke:{sbr};stroke-width:{sw};}}"#,
+        mb = main_bkg, sbr = state_border, sw = stroke_width,
+    ));
+    // [data-look="neo"].statediagram-cluster rect.outer
+    s.push_str(&format!(
+        r#"#{id} [data-look="neo"].statediagram-cluster rect.outer{{rx:{r}px;ry:{r}px;filter:{ds};}}"#,
+        r = radius, ds = neo_ds,
+    ));
+
     s
 }
 
