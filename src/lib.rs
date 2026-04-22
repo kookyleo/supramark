@@ -5,6 +5,9 @@
 //! implemented yet. See `FEATURES.md` for the support matrix and
 //! execution plan.
 
+pub mod font_data;
+pub mod font_metrics;
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]

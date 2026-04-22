@@ -25,6 +25,7 @@ import { JSDOM } from 'jsdom';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, appendFileSync } from 'node:fs';
 import { dirname, basename, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { textWidth, lineHeight, measureTextBlock } from './font_metrics.mjs';
 
 // Install process-level error handlers BEFORE any other imports that
 // could throw during initialisation (mermaid's module load path can
@@ -164,20 +165,181 @@ if (W.HTMLCanvasElement) {
   };
 }
 
-// Placeholder text-metric shim. Will be replaced in Phase 2 with a
-// DejaVu Sans baked table that matches the Rust side byte-for-byte.
-// Patched on both SVGElement and HTMLElement — some diagrams (block,
-// mindmap, treemap) reach for getBBox on HTML labels inside
-// <foreignObject>, not SVG text directly.
-const textBBox = function () {
-  const text = this.textContent ?? '';
-  const lines = text.split('\n');
-  const longest = lines.reduce((m, l) => Math.max(m, l.length), 0);
-  return { x: 0, y: 0, width: longest * 8, height: lines.length * 14 };
-};
-const textLen = function () {
-  return (this.textContent ?? '').length * 8;
-};
+// Text-metric shim backed by DejaVu Sans / DejaVu Sans Bold TTFs via
+// opentype.js. Both sides of the pipeline (this generator + the Rust
+// renderer) consume the same TTFs, so getBBox output here matches the
+// Rust font_metrics module byte-for-byte — the anchor that makes the
+// byte-exact reference tests work.
+//
+// Patched on SVGElement, HTMLElement, and Element (fallback) — block,
+// mindmap, and treemap reach for getBBox on HTML labels inside
+// <foreignObject>, not just SVG text.
+function resolveFont(el) {
+  // Walk up the tree looking for the closest font-family / font-size /
+  // font-weight declaration. Attributes first, then inline style.
+  let size = 14;
+  let family = 'sans-serif';
+  let bold = false;
+  let sizeSet = false,
+    familySet = false,
+    weightSet = false;
+  let node = el;
+  while (node && node.nodeType === 1) {
+    const g = (k) => (node.getAttribute ? node.getAttribute(k) : null);
+    const style = node.style ?? {};
+    if (!sizeSet) {
+      const s = g('font-size') ?? style.fontSize ?? null;
+      if (s) {
+        const m = /([0-9.]+)/.exec(String(s));
+        if (m) {
+          size = parseFloat(m[1]);
+          sizeSet = true;
+        }
+      }
+    }
+    if (!familySet) {
+      const f = g('font-family') ?? style.fontFamily ?? null;
+      if (f) {
+        family = String(f);
+        familySet = true;
+      }
+    }
+    if (!weightSet) {
+      const w = g('font-weight') ?? style.fontWeight ?? null;
+      if (w) {
+        const s = String(w).trim().toLowerCase();
+        bold = s === 'bold' || s === 'bolder' || (parseInt(s, 10) >= 600);
+        weightSet = true;
+      }
+    }
+    if (sizeSet && familySet && weightSet) break;
+    node = node.parentNode;
+  }
+  return { size, family, bold };
+}
+
+function attrNum(el, k, d = 0) {
+  const v = el?.getAttribute ? el.getAttribute(k) : null;
+  if (v == null || v === '') return d;
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : d;
+}
+
+// Non-visible SVG elements contribute zero to a parent's bbox, even
+// though they have textContent. Measuring their text as "layout width"
+// inflates <svg>.getBBox by tens of thousands of pixels because id
+// prefixes in <style>...</style> balloon the inner CSS source.
+const NON_VISIBLE_TAGS = new Set([
+  'style',
+  'defs',
+  'metadata',
+  'title',
+  'desc',
+  'script',
+  'marker',
+  'pattern',
+  'mask',
+  'clippath',
+  'symbol',
+  'lineargradient',
+  'radialgradient',
+  'filter',
+]);
+
+function intrinsicBox(el) {
+  // Per-tag bbox without descending. For <g>, returns null so the
+  // caller recurses into children.
+  const tag = (el.tagName ?? '').toLowerCase();
+  if (NON_VISIBLE_TAGS.has(tag)) {
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
+  if (tag === 'rect') {
+    return {
+      x: attrNum(el, 'x'),
+      y: attrNum(el, 'y'),
+      width: attrNum(el, 'width'),
+      height: attrNum(el, 'height'),
+    };
+  }
+  if (tag === 'circle') {
+    const r = attrNum(el, 'r');
+    return { x: attrNum(el, 'cx') - r, y: attrNum(el, 'cy') - r, width: r * 2, height: r * 2 };
+  }
+  if (tag === 'ellipse') {
+    const rx = attrNum(el, 'rx'), ry = attrNum(el, 'ry');
+    return { x: attrNum(el, 'cx') - rx, y: attrNum(el, 'cy') - ry, width: rx * 2, height: ry * 2 };
+  }
+  if (tag === 'line') {
+    const x1 = attrNum(el, 'x1'), y1 = attrNum(el, 'y1');
+    const x2 = attrNum(el, 'x2'), y2 = attrNum(el, 'y2');
+    return {
+      x: Math.min(x1, x2), y: Math.min(y1, y2),
+      width: Math.abs(x2 - x1), height: Math.abs(y2 - y1),
+    };
+  }
+  if (tag === 'foreignobject') {
+    // Use explicit width/height if set, else fall back to the HTML
+    // content's measurement.
+    const w = attrNum(el, 'width', -1), h = attrNum(el, 'height', -1);
+    if (w >= 0 && h >= 0) return { x: attrNum(el, 'x'), y: attrNum(el, 'y'), width: w, height: h };
+    const { size, family, bold } = resolveFont(el);
+    const { width, height } = measureTextBlock(el.textContent ?? '', family, size, bold);
+    return { x: 0, y: 0, width, height };
+  }
+  if (tag === 'text' || tag === 'tspan') {
+    const { size, family, bold } = resolveFont(el);
+    const { width, height } = measureTextBlock(el.textContent ?? '', family, size, bold);
+    return { x: 0, y: 0, width, height };
+  }
+  if (tag === 'g' || tag === 'svg') {
+    return null; // recurse
+  }
+  // HTML in foreignObject, or anything else measurable via textContent.
+  const { size, family, bold } = resolveFont(el);
+  const { width, height } = measureTextBlock(el.textContent ?? '', family, size, bold);
+  return { x: 0, y: 0, width, height };
+}
+
+function unionBox(boxes) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let found = false;
+  for (const b of boxes) {
+    if (!b) continue;
+    if (b.width === 0 && b.height === 0) continue;
+    found = true;
+    if (b.x < minX) minX = b.x;
+    if (b.y < minY) minY = b.y;
+    if (b.x + b.width > maxX) maxX = b.x + b.width;
+    if (b.y + b.height > maxY) maxY = b.y + b.height;
+  }
+  if (!found) return { x: 0, y: 0, width: 0, height: 0 };
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function elementBBox() {
+  const intrinsic = intrinsicBox(this);
+  if (intrinsic) return intrinsic;
+  // <g> / <svg>: union of descendant intrinsic boxes. Skip transforms
+  // for now (mermaid places geometry in local coords by default).
+  const stack = [this];
+  const boxes = [];
+  let depth = 0;
+  while (stack.length && depth++ < 5000) {
+    const n = stack.pop();
+    for (const c of n.children ?? []) {
+      const ib = intrinsicBox(c);
+      if (ib) boxes.push(ib);
+      else stack.push(c); // <g>/<svg> - descend
+    }
+  }
+  return unionBox(boxes);
+}
+function textLen() {
+  const { size, family, bold } = resolveFont(this);
+  return textWidth(this.textContent ?? '', family, size, bold);
+}
+const textBBox = elementBBox;
+
 W.SVGElement.prototype.getBBox = textBBox;
 W.SVGElement.prototype.getComputedTextLength = textLen;
 if (W.HTMLElement) W.HTMLElement.prototype.getBBox = textBBox;
@@ -351,7 +513,13 @@ if (argv[0] === '--batch') {
   const outIdx = argv.indexOf('-o');
   const outPath = outIdx !== -1 ? argv[outIdx + 1] : null;
   const src = readFileSync(inputPath, 'utf8');
-  const id = 'ref-' + basename(inputPath, extname(inputPath)).replace(/[^a-zA-Z0-9]+/g, '-');
+  // Use the same path-based id scheme as --batch so single-file and
+  // batch invocations produce byte-identical output for the same
+  // fixture. If the input is outside tests/, fall back to basename.
+  const abs = resolve(inputPath);
+  const id = abs.startsWith(TESTS_DIR + '/')
+    ? idForPath(abs)
+    : 'ref-' + basename(inputPath, extname(inputPath)).replace(/[^a-zA-Z0-9]+/g, '-');
   const svg = await renderOne(src, id);
   if (outPath) {
     mkdirSync(dirname(outPath), { recursive: true });
