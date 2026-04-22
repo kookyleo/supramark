@@ -578,16 +578,16 @@ fn foreign_object_node_label(width: f64, height: f64, text: &str, _eid: &str) ->
     // Re-measure at 16 px to match upstream's calculateTextWidth call. We
     // can't just use the 14-px width we already have.
     use crate::font_metrics::text_width;
+    use crate::render::foreign_object::{foreign_object_body, LabelOpts};
     let w16 = text_width(text, "sans-serif", 16.0, false, false);
     let hit_min_floor = w16 + 40.0 < 100.0;
-    let maxw = if hit_min_floor { 100 } else { 200 };
-    format!(
-        r#"<foreignObject width="{w}" height="{h}"><div style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: {mw}px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span class="nodeLabel markdown-node-label"><p>{t}</p></span></div></foreignObject>"#,
-        w = fmt_num(width),
-        h = fmt_num(height),
-        mw = maxw,
-        t = html_escape(text),
-    )
+    let maxw = if hit_min_floor { 100.0 } else { 200.0 };
+    let opts = LabelOpts {
+        extra_span_classes: "markdown-node-label",
+        max_width: maxw,
+        ..LabelOpts::default()
+    };
+    foreign_object_body(&html_escape(text), width, height, &opts)
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -694,39 +694,40 @@ fn base64_encode(data: &[u8]) -> String {
 // translate of (-lw/2, -lh/2).
 // ──────────────────────────────────────────────────────────────────────
 fn render_edge_label(e: &EdgeLayout) -> String {
-    let inner_span = if e.label.trim().is_empty() {
-        // Reference wraps empty / whitespace-only labels in a nowrap div
-        // *without* a `<p>` body — but with the literal label string
-        // preserved (for the `"   "` case). Reference shows a <p></p>
-        // when the role is empty. We mirror that simplest rule.
-        format!(
-            r#"<span class="edgeLabel ">{}</span>"#,
-            if e.label.is_empty() {
-                "".to_string()
-            } else {
-                format!("<p>{}</p>", html_escape(&e.label))
-            }
-        )
+    use crate::render::foreign_object::{render_edge_label as fo_edge, LabelOpts};
+    // Reference wraps empty / whitespace-only labels with no `<p>` body
+    // (or keeps the original whitespace intact for the `"   "` case).
+    // Non-empty labels always wrap in `<p>…</p>` post-markdown.
+    let (body, wrap_in_p) = if e.label.trim().is_empty() {
+        // Reproduce the prior exact branch: empty → empty; pure-
+        // whitespace → `<p>{literal}</p>` rendered inline.
+        if e.label.is_empty() {
+            (String::new(), false)
+        } else {
+            (format!("<p>{}</p>", html_escape(&e.label)), false)
+        }
     } else {
-        format!(
-            r#"<span class="edgeLabel "><p>{}</p></span>"#,
-            html_escape(&e.label)
-        )
+        (html_escape(&e.label), true)
     };
-    let fo = format!(
-        r#"<foreignObject width="{w}" height="{h}"><div style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml" class="labelBkg">{span}</div></foreignObject>"#,
-        w = fmt_num(e.label_width),
-        h = fmt_num(e.label_height),
-        span = inner_span,
-    );
-    format!(
-        r#"<g class="edgeLabel" transform="translate({lx}, {ly})"><g class="label" data-id="{eid}" transform="translate({itx}, {ity})">{fo}</g></g>"#,
-        lx = fmt_num(e.label_x),
-        ly = fmt_num(e.label_y),
-        eid = e.id,
-        itx = fmt_num(-e.label_width / 2.0),
-        ity = fmt_num(-e.label_height / 2.0),
-        fo = fo,
+    let opts = LabelOpts {
+        data_id: Some(&e.id),
+        group_style: None,
+        ..LabelOpts::default()
+    };
+    // The inner render_edge_label forces add_background=true +
+    // is_node=false and emits both the outer <g class="edgeLabel"> +
+    // inner <g class="label">.
+    fo_edge(
+        &body,
+        e.label_x,
+        e.label_y,
+        e.label_width,
+        e.label_height,
+        {
+            let mut o = opts;
+            o.wrap_in_p = wrap_in_p;
+            o
+        },
     )
 }
 
