@@ -67,7 +67,9 @@ pub struct RequirementLayout {
     pub direction: String,
 }
 
-const FONT_SIZE: f64 = 16.0;
+/// Upstream measures labels at 14 px (SVG root default via foreignObject
+/// getBoundingClientRect), not the theme fontSize (16 px).
+const FONT_SIZE: f64 = 14.0;
 const LINE_HEIGHT: f64 = FONT_SIZE * 1.5;
 /// Padding inside a requirement box (both x and y, upstream's
 /// `padding: 20` from `requirementBox.ts`).

@@ -40,7 +40,11 @@ pub struct FlowchartLayout {
 const NODE_PADDING_X: f64 = 8.0;
 const NODE_PADDING_Y: f64 = 8.0;
 const DEFAULT_FONT_FAMILY: &str = "trebuchet ms,verdana,arial,sans-serif";
-const DEFAULT_FONT_SIZE: f64 = 16.0;
+/// Upstream's `labelHelper` uses `div.getBoundingClientRect()` on the
+/// foreignObject HTML label, which inherits 14 px sans-serif from the
+/// SVG root — NOT the theme fontSize (16 px). Using 14 px here makes
+/// dagre assign the same node dimensions as upstream.
+const LABEL_FONT_SIZE: f64 = 14.0;
 
 /// Lay out a flowchart diagram. Uses dagre for the graph geometry.
 pub fn layout(d: &FlowchartDiagram, theme: &ThemeVariables) -> Result<FlowchartLayout> {
@@ -280,17 +284,17 @@ fn measure_vertex_box(v: &Vertex) -> (f64, f64) {
 /// Measure the overall width/height of the (possibly multi-line) label.
 fn measure_text(label: &str) -> (f64, f64) {
     if label.is_empty() {
-        return (0.0, DEFAULT_FONT_SIZE);
+        return (0.0, LABEL_FONT_SIZE);
     }
     let lines: Vec<&str> = label.split("<br/>").flat_map(|s| s.split('\n')).collect();
     let mut max_w = 0.0f64;
     for line in &lines {
-        let w = font_metrics::text_width(line, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, false, false);
+        let w = font_metrics::text_width(line, DEFAULT_FONT_FAMILY, LABEL_FONT_SIZE, false, false);
         if w > max_w {
             max_w = w;
         }
     }
-    let lh = font_metrics::line_height(DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, false, false);
+    let lh = font_metrics::line_height(DEFAULT_FONT_FAMILY, LABEL_FONT_SIZE, false, false);
     (max_w, lh * lines.len() as f64)
 }
 

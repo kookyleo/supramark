@@ -116,9 +116,9 @@ fn build_layout_data(d: &ClassDiagram, _theme: &ThemeVariables) -> LayoutData {
         note.shape = Some("note".into());
         note.css_classes = Some("note".into());
         note.parent_id = n.parent.clone();
-        // Rough text-width estimate — font_metrics expects a font
-        // spec; class uses the default 16px Trebuchet (same as pie).
-        let (w, h) = measure_multiline(&n.text, 16.0);
+        // Upstream's labelHelper measures at 14 px (SVG root default),
+        // not the theme fontSize (16 px).
+        let (w, h) = measure_multiline(&n.text, 14.0);
         note.width = Some((w + 20.0).max(60.0));
         note.height = Some((h + 20.0).max(30.0));
         data.nodes.push(note);
@@ -214,7 +214,9 @@ fn class_to_node(c: &ClassNode) -> Node {
 }
 
 fn estimate_classbox_dimensions(c: &ClassNode) -> (f64, f64) {
-    let font = 16.0;
+    // Upstream measures labels at 14 px (SVG root default via
+    // foreignObject getBoundingClientRect), not the theme fontSize.
+    let font = 14.0;
     let family = "trebuchet ms,verdana,arial,sans-serif";
     // Header row: label + optional generic + annotations.
     let mut max_w: f64 = font_metrics::text_width(&c.label, family, font, true, false);
