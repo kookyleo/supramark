@@ -139,19 +139,20 @@ fn viewbox(b: &Bounds, pad: f64) -> (f64, f64, f64, f64) {
 }
 
 fn emit_cluster(n: &Node) -> String {
-    let (x, y) = (n.x.unwrap_or(0.0), n.y.unwrap_or(0.0));
     let w = n.width.unwrap_or(0.0);
     let h = n.height.unwrap_or(0.0);
     let label = n.label.as_deref().unwrap_or("");
+    let css = n.css_classes.as_deref().unwrap_or("statediagram-cluster");
     format!(
         concat!(
-            r#"<g class="cluster statediagram-cluster" transform="translate({tx}, {ty})">"#,
-            r#"<rect class="outer" x="{rx}" y="{ry}" width="{w}" height="{h}" rx="5" ry="5"></rect>"#,
+            r#"<g class=" statediagram-state {css}" id="{id}" data-id="{nid}" data-look="classic">"#,
+            r#"<g><rect class="outer" x="{rx}" y="{ry}" width="{w}" height="{h}" data-look="classic"></rect></g>"#,
             r#"<g class="cluster-label"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml">{lbl}</div></foreignObject></g>"#,
             r#"</g>"#,
         ),
-        tx = fmt_num(x),
-        ty = fmt_num(y),
+        css = css,
+        id = xml_escape(&n.id),
+        nid = xml_escape(&n.id),
         rx = fmt_num(-w / 2.0),
         ry = fmt_num(-h / 2.0),
         w = fmt_num(w),
@@ -175,40 +176,224 @@ fn emit_edge_path(id: &str, e: &Edge) -> String {
         e.pattern.as_deref().unwrap_or("solid"),
         e.classes.as_deref().unwrap_or("transition"),
     );
+    // Base64-encoded JSON points array, matching upstream's
+    // `btoa(JSON.stringify(points))`.
+    // Attribute order: data-edge → data-et → data-id → data-points → data-look
+    let data_points_b64 = {
+        let mut json = String::from("[");
+        for (i, p) in pts.iter().enumerate() {
+            if i > 0 {
+                json.push(',');
+            }
+            json.push_str(&format!(
+                r#"{{"x":{x},"y":{y}}}"#,
+                x = shapes::types::fmt_num(p.x),
+                y = shapes::types::fmt_num(p.y),
+            ));
+        }
+        json.push(']');
+        unified_shell::base64_encode(json.as_bytes())
+    };
     format!(
-        concat!(
-            r#"<path d="{d}" id="{id}-{eid}" class="{cls}" style="fill:none;" "#,
-            r#"marker-end="url(#{id}_stateDiagram-barbEnd)"></path>"#,
-        ),
+        r##"<path d="{d}" id="{id}-{eid}" class="{cls}" style="fill:none;;;fill:none" data-edge="true" data-et="edge" data-id="{eid}" data-points="{b64}" data-look="classic" marker-end="url(#{id}_stateDiagram-barbEnd)"></path>"##,
         d = d,
         id = id,
         eid = e.id,
         cls = class,
+        b64 = data_points_b64,
     )
 }
 
 fn emit_edge_label(e: &Edge) -> String {
-    let lbl = e.label.as_deref().unwrap_or("");
-    if lbl.is_empty() {
-        return String::new();
-    }
+    use crate::render::foreign_object::{self, LabelOpts};
+    use crate::font_metrics::text_width;
+
+    let raw = e.label.as_deref().unwrap_or("");
+    let (body, wrap_in_p) = if raw.trim().is_empty() {
+        if raw.is_empty() {
+            (String::new(), false)
+        } else {
+            // Whitespace-only: preserve literal whitespace in <p>.
+            (format!("<p>{}</p>", xml_escape(raw)), false)
+        }
+    } else {
+        (xml_escape(raw), true)
+    };
+
+    // Measure label text for foreignObject dimensions.
+    let (lw, lh) = if raw.is_empty() {
+        (0.0, 16.296875) // default line-height at 14px sans-serif
+    } else {
+        let tw = text_width(raw.trim(), "sans-serif", 14.0, false, false);
+        (tw, 16.296875)
+    };
+
     let x = e.label_x.unwrap_or(0.0);
     let y = e.label_y.unwrap_or(0.0);
+    let eid = &e.id;
+
+    // Empty labels: outer <g class="edgeLabel"> with NO transform;
+    // inner <g class="label" data-id="…" transform="translate(0, -lh/2)">.
+    // Non-empty labels: outer <g class="edgeLabel" transform="translate(x,y)">;
+    // inner <g class="label" data-id="…" transform="translate(-lw/2, -lh/2)">.
+    let (outer_transform, inner_translate) = if body.is_empty() {
+        (
+            String::new(),
+            format!("translate(0, {})", fmt_num(-lh / 2.0)),
+        )
+    } else {
+        (
+            format!(r#" transform="translate({}, {})""#, fmt_num(x), fmt_num(y)),
+            format!("translate({}, {})", fmt_num(-lw / 2.0), fmt_num(-lh / 2.0)),
+        )
+    };
+
+    let opts = LabelOpts {
+        data_id: Some(eid),
+        group_style: None,
+        group_transform: Some(inner_translate),
+        add_background: true,
+        is_node: false,
+        wrap_in_p,
+        ..LabelOpts::default()
+    };
+
+    let inner = foreign_object::render_node_label(&body, lw, lh, &opts);
     format!(
-        concat!(
-            r#"<g class="edgeLabel" transform="translate({x}, {y})">"#,
-            r#"<foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg"><span class="edgeLabel">{lbl}</span></div></foreignObject>"#,
-            r#"</g>"#,
-        ),
-        x = fmt_num(x),
-        y = fmt_num(y),
-        lbl = xml_escape(lbl),
+        r#"<g class="edgeLabel"{outer_transform}>{inner}</g>"#,
+        outer_transform = outer_transform,
+        inner = inner,
     )
 }
 
-fn emit_node(_id: &str, n: &Node, theme: &ThemeVariables) -> Option<String> {
+fn emit_node(id: &str, n: &Node, theme: &ThemeVariables) -> Option<String> {
     let shape = n.shape.as_deref().unwrap_or("state");
-    shapes::draw(shape, n, theme).ok()
+    match shape {
+        "stateStart" | "state_start" | "start" => emit_state_start(id, n, theme),
+        "stateEnd" | "state_end" | "end" => emit_state_end(id, n, theme),
+        "forkJoin" | "fork_join" | "fork" | "join" => emit_fork_join(id, n, theme),
+        "state" => emit_state_node(id, n, theme),
+        _ => shapes::draw(shape, n, theme).ok(),
+    }
+}
+
+fn emit_state_start(id: &str, n: &Node, _theme: &ThemeVariables) -> Option<String> {
+    let w = n.width.unwrap_or(14.0).max(14.0);
+    let r = w / 2.0;
+    let nid = n.dom_id.clone().unwrap_or_else(|| n.id.clone());
+    let tx = n.x.unwrap_or(0.0);
+    let ty = n.y.unwrap_or(0.0);
+    Some(format!(
+        r#"<g class="node default" id="{id}-{nid}" data-look="classic" transform="translate({tx}, {ty})"><circle class="state-start" r="{r}" width="{w}" height="{w}"></circle></g>"#,
+        id = id,
+        nid = xml_escape(&nid),
+        tx = fmt_num(tx),
+        ty = fmt_num(ty),
+        r = fmt_num(r),
+        w = fmt_num(w),
+    ))
+}
+
+fn emit_state_end(id: &str, n: &Node, _theme: &ThemeVariables) -> Option<String> {
+    let w = n.width.unwrap_or(14.0).max(14.0);
+    let r = w / 2.0;
+    let nid = n.dom_id.clone().unwrap_or_else(|| n.id.clone());
+    let tx = n.x.unwrap_or(0.0);
+    let ty = n.y.unwrap_or(0.0);
+    // Simplified state-end: outer ring + inner filled circle.
+    // Full upstream uses rough.js-generated cubic bezier paths.
+    Some(format!(
+        r#"<g class="node default" id="{id}-{nid}" data-look="classic" transform="translate({tx}, {ty})"><circle class="state-end" r="{r}" width="{w}" height="{w}"></circle></g>"#,
+        id = id,
+        nid = xml_escape(&nid),
+        tx = fmt_num(tx),
+        ty = fmt_num(ty),
+        r = fmt_num(r),
+        w = fmt_num(w),
+    ))
+}
+
+fn emit_fork_join(id: &str, n: &Node, theme: &ThemeVariables) -> Option<String> {
+    let dir = n.dir.as_deref();
+    let (w, h) = if matches!(dir, Some("LR")) {
+        (n.width.unwrap_or(10.0).max(10.0), n.height.unwrap_or(70.0).max(70.0))
+    } else {
+        (n.width.unwrap_or(70.0).max(70.0), n.height.unwrap_or(10.0).max(10.0))
+    };
+    let x = -w / 2.0;
+    let y = -h / 2.0;
+    let classes = shapes::types::get_node_classes(n.look.as_deref(), n.css_classes.as_deref(), None);
+    let nid = n.dom_id.clone().unwrap_or_else(|| n.id.clone());
+    let tx = n.x.unwrap_or(0.0);
+    let ty = n.y.unwrap_or(0.0);
+    let line = theme.line_color.as_deref().unwrap_or("black");
+    Some(format!(
+        r#"<g class="{classes}" id="{id}-{nid}" data-look="classic" transform="translate({tx}, {ty})"><rect class="fork-join" x="{x}" y="{y}" width="{w}" height="{h}" style="fill:{line};stroke:{line}"></rect></g>"#,
+        classes = classes,
+        id = id,
+        nid = xml_escape(&nid),
+        tx = fmt_num(tx),
+        ty = fmt_num(ty),
+        x = fmt_num(x),
+        y = fmt_num(y),
+        w = fmt_num(w),
+        h = fmt_num(h),
+        line = line,
+    ))
+}
+
+/// Emit a normal state node (rounded rect + label).
+/// Matches upstream's `drawRect` with `rx=5, ry=5` + `labelHelper`.
+fn emit_state_node(id: &str, n: &Node, _theme: &ThemeVariables) -> Option<String> {
+    use crate::render::foreign_object::{measure_html_label, LabelOpts};
+
+    let w = n.width.unwrap_or(0.0);
+    let h = n.height.unwrap_or(0.0);
+    let r = n.rx.unwrap_or(5.0);
+    let classes = shapes::types::get_node_classes(n.look.as_deref(), n.css_classes.as_deref(), None);
+    let nid = n.dom_id.clone().unwrap_or_else(|| n.id.clone());
+    let tx = n.x.unwrap_or(0.0);
+    let ty = n.y.unwrap_or(0.0);
+    let label = n.label.clone().unwrap_or_default();
+    let is_markdown = n.label_type.as_deref() == Some("markdown");
+    let label_style = n.label_style.as_deref().unwrap_or("");
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        r#"<g class="{classes}" id="{id}-{nid}" data-look="classic" transform="translate({tx}, {ty})">"#,
+        classes = classes,
+        id = id,
+        nid = xml_escape(&nid),
+        tx = fmt_num(tx),
+        ty = fmt_num(ty),
+    ));
+    out.push_str(&format!(
+        r#"<rect class="basic label-container" style="" rx="{r}" ry="{r}" x="{x}" y="{y}" width="{w}" height="{h}"></rect>"#,
+        r = fmt_num(r),
+        x = fmt_num(-w / 2.0),
+        y = fmt_num(-h / 2.0),
+        w = fmt_num(w),
+        h = fmt_num(h),
+    ));
+    if !label.is_empty() {
+        let escaped = xml_escape(&label);
+        let (lw, lh) = measure_html_label(
+            &escaped,
+            &crate::render::foreign_object::HtmlLabelFont::default(),
+            200.0,
+            true,
+        );
+        let opts = LabelOpts {
+            extra_span_classes: if is_markdown { "markdown-node-label" } else { "" },
+            group_style: if label_style.is_empty() { Some("") } else { Some(label_style) },
+            ..LabelOpts::default()
+        };
+        out.push_str(&crate::render::foreign_object::render_node_label(
+            &escaped, lw, lh, &opts,
+        ));
+    }
+    out.push_str("</g>");
+    Some(out)
 }
 
 fn xml_escape(s: &str) -> String {
@@ -327,9 +512,10 @@ fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
         "#{id} .edgeLabel .label rect{{fill:{lbg};opacity:0.5;}}",
         lbg = label_bg,
     ));
-    // .edgeLabel
+    // .edgeLabel — upstream merges background-color and text-align into one rule
+    // (stylis merges duplicate selectors).
     s.push_str(&format!(
-        "#{id} .edgeLabel{{background-color:{elbg};}}",
+        "#{id} .edgeLabel{{background-color:{elbg};text-align:center;}}",
         elbg = edge_label_bg,
     ));
     // .edgeLabel p
@@ -341,10 +527,6 @@ fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
     s.push_str(&format!(
         "#{id} .edgeLabel rect{{opacity:0.5;background-color:{elbg};fill:{elbg};}}",
         elbg = edge_label_bg,
-    ));
-    // .edgeLabel text-align
-    s.push_str(&format!(
-        "#{id} .edgeLabel{{text-align:center;}}",
     ));
     // .edgeLabel .label text
     s.push_str(&format!(

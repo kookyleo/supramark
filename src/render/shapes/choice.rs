@@ -19,11 +19,16 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
     let id = node.dom_id.clone().unwrap_or_else(|| node.id.clone());
     let tx = node.x.unwrap_or(0.0);
     let ty = node.y.unwrap_or(0.0);
+    let data_look = match node.look.as_deref() {
+        Some(look) if !look.is_empty() => format!(r#" data-look="{}""#, look),
+        _ => String::new(),
+    };
 
     Ok(format!(
-        r#"<g class="{classes}" id="{id}" transform="translate({tx}, {ty})"><path class="basic label-container" d="{d}"/></g>"#,
+        r#"<g class="{classes}" id="{id}"{data_look} transform="translate({tx}, {ty})"><path class="basic label-container" d="{d}"></path></g>"#,
         classes = classes,
         id = xml_escape(&id),
+        data_look = data_look,
         tx = fmt_num(tx),
         ty = fmt_num(ty),
         d = d,

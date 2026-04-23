@@ -18,11 +18,17 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
     let ty = node.y.unwrap_or(0.0);
     let label = node.label.clone().unwrap_or_default();
 
+    let data_look = match node.look.as_deref() {
+        Some(look) if !look.is_empty() => format!(r#" data-look="{}""#, look),
+        _ => String::new(),
+    };
+
     let mut out = String::new();
     out.push_str(&format!(
-        r#"<g class="{classes}" id="{id}" transform="translate({tx}, {ty})">"#,
+        r#"<g class="{classes}" id="{id}"{data_look} transform="translate({tx}, {ty})">"#,
         classes = classes,
         id = xml_escape(&id),
+        data_look = data_look,
         tx = fmt_num(tx),
         ty = fmt_num(ty),
     ));

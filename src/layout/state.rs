@@ -49,13 +49,18 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
     data.markers.push("barbEnd".into());
 
     // Emit nodes.
+    let mut node_counter: usize = 0;
     for state in &d.states {
         let mut n = LNode::default();
         n.id = state.id.clone();
         n.parent_id = state.parent.clone();
-        n.dom_id = Some(state.id.clone());
+        // Upstream dom_id format: "state-{itemId}-{counter}"
+        n.dom_id = Some(format!("state-{}-{}", state.id, node_counter));
+        node_counter += 1;
         n.label = state.label.clone().or_else(|| Some(state.id.clone()));
         n.description = state.description.clone();
+        n.look = Some("classic".into());
+        n.label_type = Some("markdown".into());
         match state.kind {
             StateKind::StartEnd => {
                 // Shape picked by the renderer based on edge role; default
@@ -131,8 +136,13 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
                 n.ry = Some(5.0);
             }
         }
-        if n.css_classes.is_none() {
-            n.css_classes = Some("statediagram-state".into());
+        // Upstream: `cssClasses = ' ' + CSS_DIAGRAM_STATE` which produces a
+        // leading space before "statediagram-state". When combined with
+        // `getNodeClasses` output `"node" + " " + cssClasses + " " + extra`
+        // this yields `"node  statediagram-state "` (double space).
+        // State-start/end use class "node default" set directly by the shape.
+        if n.css_classes.is_none() && !matches!(state.kind, StateKind::StartEnd) {
+            n.css_classes = Some(" statediagram-state".into());
         }
         data.nodes.push(n);
     }
@@ -162,8 +172,12 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
         let nid = format!("note{}", ni);
         let mut n = LNode::default();
         n.id = nid.clone();
+        n.dom_id = Some(format!("state-{}----note-{}", note.target, node_counter));
+        node_counter += 1;
         n.shape = Some("note".into());
         n.css_classes = Some("statediagram-note".into());
+        n.label_type = Some("markdown".into());
+        n.look = Some("classic".into());
         n.label = Some(note.text.clone());
         let (w, h) = measure_label_box(&note.text, DEFAULT_FONT_SIZE);
         n.width = Some(w);

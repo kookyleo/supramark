@@ -26,16 +26,23 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
     let tx = node.x.unwrap_or(0.0);
     let ty = node.y.unwrap_or(0.0);
 
+    // When `node.look` is set (e.g. "classic"), emit `data-look` attribute.
+    let data_look = match node.look.as_deref() {
+        Some(look) if !look.is_empty() => format!(r#" data-look="{}""#, look),
+        _ => String::new(),
+    };
+
     let mut out = String::new();
     out.push_str(&format!(
-        r#"<g class="{classes}" id="{id}" transform="translate({tx}, {ty})">"#,
+        r#"<g class="{classes}" id="{id}"{data_look} transform="translate({tx}, {ty})">"#,
         classes = classes,
         id = super::types::xml_escape(&id),
+        data_look = data_look,
         tx = fmt_num(tx),
         ty = fmt_num(ty),
     ));
     out.push_str(&format!(
-        r#"<rect class="basic label-container" style="" rx="0" ry="0" x="{x}" y="{y}" width="{w}" height="{h}"/>"#,
+        r#"<rect class="basic label-container" style="" rx="0" ry="0" x="{x}" y="{y}" width="{w}" height="{h}"></rect>"#,
         x = fmt_num(x),
         y = fmt_num(y),
         w = fmt_num(w),
@@ -71,7 +78,7 @@ mod tests {
         let theme = ThemeVariables::default();
         let got = draw(&n, &theme).unwrap();
         assert!(got.starts_with(
-            r#"<g class="node undefined " id="n1" transform="translate(60, 30)"><rect class="basic label-container" style="" rx="0" ry="0" x="-50" y="-25" width="100" height="50"/>"#
+            r#"<g class="node undefined " id="n1" transform="translate(60, 30)"><rect class="basic label-container" style="" rx="0" ry="0" x="-50" y="-25" width="100" height="50"></rect>"#
         ));
         assert!(
             got.contains(r#"<foreignObject "#),

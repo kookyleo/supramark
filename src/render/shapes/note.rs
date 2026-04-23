@@ -24,16 +24,22 @@ pub fn draw(node: &Node, theme: &ThemeVariables) -> Result<String> {
     let stroke = theme.note_border_color.as_deref().unwrap_or("");
     let style = format!("fill:{};stroke:{}", fill, stroke);
 
+    let data_look = match node.look.as_deref() {
+        Some(look) if !look.is_empty() => format!(r#" data-look="{}""#, look),
+        _ => String::new(),
+    };
+
     let mut out = String::new();
     out.push_str(&format!(
-        r#"<g class="{classes}" id="{id}" transform="translate({tx}, {ty})">"#,
+        r#"<g class="{classes}" id="{id}"{data_look} transform="translate({tx}, {ty})">"#,
         classes = classes,
         id = xml_escape(&id),
+        data_look = data_look,
         tx = fmt_num(tx),
         ty = fmt_num(ty),
     ));
     out.push_str(&format!(
-        r#"<rect class="basic label-container outer-path" style="{style}" x="{x}" y="{y}" width="{w}" height="{h}"/>"#,
+        r#"<rect class="basic label-container outer-path" style="{style}" x="{x}" y="{y}" width="{w}" height="{h}"></rect>"#,
         style = style,
         x = fmt_num(x),
         y = fmt_num(y),
