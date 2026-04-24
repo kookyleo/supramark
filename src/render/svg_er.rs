@@ -583,6 +583,9 @@ fn collect_entity_styles(e: &EntityLayout, classes: &std::collections::BTreeMap<
     }
     let mut rect_parts: Vec<String> = Vec::new();
     let mut text_parts: Vec<String> = Vec::new();
+    // Compact form (no space after colon) used in label/span style attrs,
+    // matching upstream's raw `labelStyle` string from the parser.
+    let mut text_parts_compact: Vec<String> = Vec::new();
     for style in &all_styles {
         let style = style.trim();
         if style.is_empty() { continue; }
@@ -591,10 +594,17 @@ fn collect_entity_styles(e: &EntityLayout, classes: &std::collections::BTreeMap<
             rect_parts.push(format!("{} !important", style));
         } else {
             text_parts.push(format!("{} !important", style));
+            // Compact form: remove whitespace after the colon.
+            let compact = if let Some((prop, val)) = style.split_once(':') {
+                format!("{}:{} !important", prop.trim(), val.trim())
+            } else {
+                format!("{} !important", style)
+            };
+            text_parts_compact.push(compact);
         }
     }
     let rect_style = rect_parts.join(";");
-    let label_style = text_parts.join(";");
+    let label_style = text_parts_compact.join(";");
     let span_style = label_style.clone();
     let div_style_prefix = text_parts.iter().map(|p| {
         let p_no_imp = p.strip_suffix(" !important").unwrap_or(p);

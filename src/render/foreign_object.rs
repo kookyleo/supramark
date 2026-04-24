@@ -255,9 +255,11 @@ pub fn foreign_object_body(text: &str, width: f64, height: f64, opts: &LabelOpts
     } else {
         format!("{} {}", span_base, opts.extra_span_classes)
     };
-    out.push_str(&format!(r#"<span class="{}""#, span_classes));
+    // Upstream labelHelper emits style before class when a label style is present.
     if let Some(s) = opts.label_style {
-        out.push_str(&format!(r#" style="{}""#, s));
+        out.push_str(&format!(r#"<span style="{}" class="{}""#, s, span_classes));
+    } else {
+        out.push_str(&format!(r#"<span class="{}""#, span_classes));
     }
     out.push('>');
     // Body — `<p>text</p>` for non-empty, bare empty string otherwise.
