@@ -783,7 +783,10 @@ fn render_edge_label(e: &EdgeLayout) -> String {
             (format!("<p>{}</p>", html_escape(&e.label)), false)
         }
     } else {
-        (html_escape(&e.label), true)
+        // Upstream mermaid's markdown processing converts `<br />` to `<br/>`
+        // and passes them through unescaped in the foreignObject body.
+        // We must not html_escape those break tags.
+        (escape_label_keeping_br(&e.label), true)
     };
     let opts = LabelOpts {
         data_id: Some(&e.id),
@@ -1120,6 +1123,22 @@ fn html_escape(s: &str) -> String {
         }
     }
     out
+}
+
+/// HTML-escape a relationship role label, but preserve `<br ...>` break tags
+/// (normalising them to `<br/>`) as upstream mermaid markdown processing does.
+fn escape_label_keeping_br(s: &str) -> String {
+    use crate::layout::er::split_br;
+    let parts = split_br(s);
+    if parts.len() == 1 {
+        // No break tags — plain escape.
+        return html_escape(s);
+    }
+    parts
+        .iter()
+        .map(|p| html_escape(p))
+        .collect::<Vec<_>>()
+        .join("<br/>")
 }
 
 // ──────────────────────────────────────────────────────────────────────

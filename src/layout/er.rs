@@ -146,13 +146,48 @@ pub struct ErLayout {
     pub classes: std::collections::BTreeMap<String, crate::model::er::EntityClass>,
 }
 
-/// Measure a single line at sans-serif 14 px.
+/// Measure a label at sans-serif 14 px.
+/// When the text contains `<br />` or `<br/>` HTML line breaks (as used in
+/// relationship role labels), split on them and sum each line's width —
+/// matching upstream `calculateTextWidth` which accumulates per-line widths
+/// across the jsdom foreignObject bbox measurement.
 fn measure_width(text: &str) -> f64 {
     if text.is_empty() {
-        0.0
-    } else {
-        text_width(text, LABEL_FONT_FAMILY, LABEL_FONT_SIZE, false, false)
+        return 0.0;
     }
+    // Split on HTML break tags (<br/>, <br />, <br/> variants).
+    let raw_lines = split_br(text);
+    raw_lines
+        .iter()
+        .map(|line| {
+            if line.is_empty() {
+                0.0f64
+            } else {
+                text_width(line, LABEL_FONT_FAMILY, LABEL_FONT_SIZE, false, false)
+            }
+        })
+        .sum()
+}
+
+/// Split a string on `<br...>` HTML break tags, returning the segments.
+pub fn split_br(text: &str) -> Vec<&str> {
+    let mut parts: Vec<&str> = Vec::new();
+    let mut rest = text;
+    loop {
+        if let Some(pos) = rest.find("<br") {
+            let after = &rest[pos + 3..];
+            if let Some(end_off) = after.find('>') {
+                parts.push(&rest[..pos]);
+                rest = &after[end_off + 1..];
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    parts.push(rest);
+    parts
 }
 
 fn measure_label_height() -> f64 {
