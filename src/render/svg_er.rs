@@ -726,15 +726,27 @@ fn render_edge_path(diag_id: &str, e: &EdgeLayout) -> String {
     let start_marker = card_to_marker(&e.card_b);
     let end_marker = card_to_marker(&e.card_a);
 
+    // Upstream omits marker-start entirely when the cardinality is MD_PARENT.
+    let marker_start_attr = if e.card_b == "MD_PARENT" {
+        String::new()
+    } else {
+        format!(r#" marker-start="url(#{did}_er-{sm}Start)""#, did = diag_id, sm = start_marker)
+    };
+    let marker_end_attr = if e.card_a == "MD_PARENT" {
+        String::new()
+    } else {
+        format!(r#" marker-end="url(#{did}_er-{em}End)""#, did = diag_id, em = end_marker)
+    };
+
     format!(
-        r##"<path d="{d}" id="{did}-{eid}" class="{cls}" style="undefined;;;undefined" data-edge="true" data-et="edge" data-id="{eid}" data-points="{b64}" data-look="classic" marker-start="url(#{did}_er-{sm}Start)" marker-end="url(#{did}_er-{em}End)"></path>"##,
+        r##"<path d="{d}" id="{did}-{eid}" class="{cls}" style="undefined;;;undefined" data-edge="true" data-et="edge" data-id="{eid}" data-points="{b64}" data-look="classic"{ms}{me}></path>"##,
         d = d,
         did = diag_id,
         eid = e.id,
         cls = class,
         b64 = data_points_b64,
-        sm = start_marker,
-        em = end_marker,
+        ms = marker_start_attr,
+        me = marker_end_attr,
     )
 }
 
@@ -1461,6 +1473,21 @@ mod probe_tests {
     #[ignore]
     fn er03_diff_probe() {
         diff_probe("03");
+    }
+    #[test]
+    #[ignore]
+    fn er30_diff_probe() {
+        diff_probe("30");
+    }
+    #[test]
+    #[ignore]
+    fn er66_diff_probe() {
+        diff_probe("66");
+    }
+    #[test]
+    #[ignore]
+    fn er71_diff_probe() {
+        diff_probe("71");
     }
 
     #[test]
