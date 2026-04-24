@@ -222,21 +222,46 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
         data.edges.push(e);
     }
 
-    // Dagre-rs currently panics on some compound (nested composite
-    // state) graphs — see `tests/ext_fixtures/cypress/state/{20,21,..}`.
-    // Wrap the call in `catch_unwind` so the caller sees a clean
-    // `MermaidError::Render` rather than an abort. Once dagre-rs is
-    // patched this guard can go.
+    // Dagre-rs panics on compound graphs where a composite (cluster) node
+    // appears directly as an edge endpoint, or cross-cluster edges cross
+    // different subtrees.  Try compound layout first; on failure fall back
+    // to a flat layout where parent relationships are dropped and cluster
+    // bounds are computed post-layout from child node positions.
     let data_boxed = &data;
     let theme_boxed = theme;
-    let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let compound_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         unified_render::layout(data_boxed, "dagre", theme_boxed)
-    })) {
-        Ok(r) => r?,
+    }));
+
+    let result = match compound_result {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => return Err(e),
         Err(_) => {
-            return Err(crate::error::MermaidError::Render(
-                "dagre panic during state layout (compound graph edge case)".into(),
-            ));
+            log::warn!(
+                "state layout: dagre compound-mode panic — retrying in flat mode"
+            );
+            // Flat-mode: strip all parent_id fields so dagre sees a simple
+            // directed graph.  After layout we synthesise composite-node
+            // positions from their children's bounding boxes.
+            let mut flat_data = data.clone();
+            for n in flat_data.nodes.iter_mut() {
+                n.parent_id = None;
+            }
+            let flat_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                unified_render::layout(&flat_data, "dagre", theme_boxed)
+            }));
+            let mut lr = match flat_result {
+                Ok(Ok(r)) => r,
+                Ok(Err(e)) => return Err(e),
+                Err(_) => {
+                    return Err(crate::error::MermaidError::Render(
+                        "dagre panic in both compound and flat state layout".into(),
+                    ));
+                }
+            };
+            // Recompute cluster node positions from children's bounds.
+            synthesise_cluster_bounds(&mut lr.nodes, &data, DEFAULT_NODE_SPACING / 2.0);
+            lr
         }
     };
 
@@ -269,6 +294,83 @@ fn measure_lines_box(lines: &[&str], font_size: f64) -> (f64, f64) {
     let total_w = max_w + 2.0 * DEFAULT_LABEL_PAD_X;
     let total_h = h + 2.0 * DEFAULT_LABEL_PAD_Y;
     (total_w.max(40.0), total_h.max(20.0))
+}
+
+/// After a flat-mode dagre layout (where parent_id was stripped), compute
+/// the position and size of each composite (is_group) node by taking the
+/// bounding box of all its direct children plus `pad` padding on each side.
+/// The composite node's centre is placed at the centre of that bounding box.
+///
+/// `original_data` carries the original `parent_id` relationships.
+fn synthesise_cluster_bounds(
+    nodes: &mut Vec<LNode>,
+    original_data: &crate::layout::unified::types::LayoutData,
+    pad: f64,
+) {
+    // Build a map id → index for quick lookup (using owned String keys to
+    // avoid holding a reference into `nodes` while we later mutate it).
+    let id_to_idx: std::collections::HashMap<String, usize> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (n.id.clone(), i))
+        .collect();
+
+    // For each composite node, collect its direct children from original data.
+    let composites: Vec<String> = original_data
+        .nodes
+        .iter()
+        .filter(|n| n.is_group)
+        .map(|n| n.id.clone())
+        .collect();
+
+    for cluster_id in &composites {
+        // Children according to original data.
+        let children_ids: Vec<&str> = original_data
+            .nodes
+            .iter()
+            .filter(|n| n.parent_id.as_deref() == Some(cluster_id.as_str()))
+            .map(|n| n.id.as_str())
+            .collect();
+
+        let mut min_x = f64::INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        let mut found_any = false;
+
+        for cid in &children_ids {
+            if let Some(&idx) = id_to_idx.get(*cid) {
+                let cn = &nodes[idx];
+                if let (Some(cx), Some(cy)) = (cn.x, cn.y) {
+                    let w = cn.width.unwrap_or(0.0);
+                    let h = cn.height.unwrap_or(0.0);
+                    min_x = min_x.min(cx - w / 2.0);
+                    min_y = min_y.min(cy - h / 2.0);
+                    max_x = max_x.max(cx + w / 2.0);
+                    max_y = max_y.max(cy + h / 2.0);
+                    found_any = true;
+                }
+            }
+        }
+
+        if !found_any {
+            continue;
+        }
+
+        // Add padding around children.
+        let bx = min_x - pad;
+        let by = min_y - pad;
+        let bw = (max_x - min_x) + 2.0 * pad;
+        let bh = (max_y - min_y) + 2.0 * pad;
+
+        if let Some(&idx) = id_to_idx.get(cluster_id.as_str()) {
+            let n = &mut nodes[idx];
+            n.x = Some(bx + bw / 2.0);
+            n.y = Some(by + bh / 2.0);
+            n.width = Some(bw);
+            n.height = Some(bh);
+        }
+    }
 }
 
 /// Small marker on `LNode` kept local here — stashes a flag in `extra`
