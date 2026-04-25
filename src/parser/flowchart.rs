@@ -1160,12 +1160,72 @@ fn scan_arrow(s: &str) -> Option<(&str, &str)> {
         } else {
             i = after_first_body;
         }
+    } else if i < bytes.len()
+        && !matches!(bytes[i], b'>' | b'x' | b'o' | b'|' | b'\n' | b'\r')
+    {
+        // No-space embedded label (`--lb1-->`, `==lb2==>`, `-.lb.->`,
+        // `--lb -->` etc.). Mirror upstream mermaid's jison START_LINK
+        // rule which accepts a label that may either be flush against
+        // the body run or include internal spaces, so long as it is
+        // terminated by another body run.
+        let body_ch_eff = if is_dotted { b'.' } else { body_ch };
+        if let Some(end) = find_inline_arrow_terminator(&bytes[i..], body_ch_eff) {
+            i += end;
+        }
     }
     // Optional arrow-end: `>`, `x`, `o`.
     if i < bytes.len() && matches!(bytes[i], b'>' | b'x' | b'o') {
         i += 1;
     }
     Some((&s[..i], &s[i..]))
+}
+
+/// Locate the end of an inline label + trailing body-run inside a no-space
+/// arrow such as `--lb-->`, `==lb2==>`, or `--lb -->`.
+///
+/// `bytes` starts AT the first label character (already past the leading
+/// body run). `body_ch_eff` is the body character (`-`, `=`, or `.`).
+///
+/// The label may contain internal whitespace; the terminator is the FIRST
+/// body-run that is followed by `>`/`x`/`o` (or whitespace at end-of-arrow
+/// for the no-arrow `--label--` form).  Stops at `|` and newline characters.
+///
+/// Returns the byte offset of the trailing body run's END (i.e. where the
+/// arrow-end char `>`/`x`/`o` would sit, or end-of-body for no-arrow forms).
+/// Returns None when no terminator is found.
+fn find_inline_arrow_terminator(bytes: &[u8], body_ch_eff: u8) -> Option<usize> {
+    let is_body = |b: u8| b == body_ch_eff || (body_ch_eff == b'-' && b == b'.');
+    // Walk forwards. For each non-body, non-`|`, non-newline position, see
+    // if it sits inside a label run. Track the FIRST body-run that is
+    // followed by an arrow-end terminator.
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b == b'|' || b == b'\n' || b == b'\r' {
+            return None;
+        }
+        if is_body(b) {
+            // Start of a body run.
+            let run_start = i;
+            while i < bytes.len() && is_body(bytes[i]) {
+                i += 1;
+            }
+            let run_len = i - run_start;
+            // Arrow-end form: body run ≥ 2 chars + `>`/`x`/`o`.
+            if run_len >= 2 && i < bytes.len() && matches!(bytes[i], b'>' | b'x' | b'o') {
+                return Some(i);
+            }
+            // No-arrow form: body run ≥ 2 chars at end-of-input or before
+            // whitespace that ends the link span.
+            if run_len >= 2 && (i == bytes.len() || bytes[i] == b' ' || bytes[i] == b'\t') {
+                return Some(i);
+            }
+            // Otherwise this body run was part of the label — continue.
+        } else {
+            i += 1;
+        }
+    }
+    None
 }
 
 fn find_next_arrow_segment(s: &str, body_ch: u8) -> Option<usize> {
@@ -1262,17 +1322,22 @@ fn classify_arrow(arrow: &str) -> Option<(EdgeStroke, usize, ArrowType, ArrowTyp
         _ => ArrowType::None,
     };
 
-    // Detect embedded label: a space somewhere inside span_rest.
-    let (body_chars, dot_chars, embedded_label) = if let Some(sp_idx) = span_rest.find(' ') {
+    // Detect embedded label: a space somewhere inside span_rest, OR a
+    // non-body / non-space character that breaks the leading body run
+    // (the `--lb1-->` no-space form).
+    let body_predicate = |c: char| match stroke {
+        EdgeStroke::Thick => c == '=',
+        EdgeStroke::Dotted => c == '-' || c == '.',
+        EdgeStroke::Normal => c == '-',
+        _ => false,
+    };
+    let break_idx = span_rest
+        .char_indices()
+        .find(|(_, c)| !body_predicate(*c))
+        .map(|(i, _)| i);
+    let (body_chars, dot_chars, embedded_label) = if let Some(brk) = break_idx {
         // Everything between the first and last body-run.
-        let after = &span_rest[sp_idx..];
-        // Find where the trailing body-run starts in `after`.
-        let body_predicate = |c: char| match stroke {
-            EdgeStroke::Thick => c == '=',
-            EdgeStroke::Dotted => c == '-' || c == '.',
-            EdgeStroke::Normal => c == '-',
-            _ => false,
-        };
+        let after = &span_rest[brk..];
         let mut run_start = after.len();
         // Walk backwards to find start of trailing body run.
         let chars: Vec<(usize, char)> = after.char_indices().collect();
@@ -1297,12 +1362,6 @@ fn classify_arrow(arrow: &str) -> Option<(EdgeStroke, usize, ArrowType, ArrowTyp
         };
         (body_len, dots, label)
     } else {
-        let body_predicate = |c: char| match stroke {
-            EdgeStroke::Thick => c == '=',
-            EdgeStroke::Dotted => c == '-' || c == '.',
-            EdgeStroke::Normal => c == '-',
-            _ => false,
-        };
         let bc = span_rest.chars().filter(|c| body_predicate(*c)).count();
         let dc = span_rest.chars().filter(|c| *c == '.').count();
         (bc, dc, None)
