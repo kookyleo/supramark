@@ -440,7 +440,103 @@ fn render_class_text_row_indexed(
     )
 }
 
+/// Render a free-standing note (`note "…"` / `note for X "…"`).
+///
+/// Mirrors upstream `rendering-elements/shapes/note.ts`:
+/// * outer `<g class="node undefined ">` (cssClasses on note Node is unset).
+/// * `basic label-container outer-path` with rough.js-rendered rectangle —
+///   solid fill `noteBkgColor` + stroke `noteBorderColor`. Both
+///   sub-paths carry `style="fill:#fff5ad !important;stroke:#aaaa33 !important"`
+///   from the cssStyles list upstream sets in `classDb.getData`.
+/// * `<g class="label noteLabel" style="text-align:left !important;
+///   white-space:nowrap !important">` with a single foreignObject;
+///   `\n` in the source is rendered as `<br/>` inside the `<p>`.
+fn render_note_node(id: &str, n: &LayoutNode, theme: &ThemeVariables) -> String {
+    let label = n.label.as_deref().unwrap_or("");
+    let cx = n.x.unwrap_or(0.0);
+    let cy = n.y.unwrap_or(0.0);
+    let drawn_w = n.width.unwrap_or(60.0);
+    let drawn_h = n.height.unwrap_or(30.0);
+    let dom_id = n.dom_id.as_deref().unwrap_or(&n.id);
+
+    // bbox.width = drawn_w - 2*padding ; bbox.height = single line height.
+    // Padding is 6 (config.class.padding ?? 6) — see classDb.getData.
+    let padding = 6.0_f64;
+    let bbox_w = drawn_w - 2.0 * padding;
+    let line_h = 16.296875_f64;
+    let bbox_h = line_h;
+
+    let x0 = -drawn_w / 2.0;
+    let y0 = -drawn_h / 2.0;
+
+    let bkg = theme.note_bkg_color.as_deref().unwrap_or("#fff5ad");
+    let border = theme.note_border_color.as_deref().unwrap_or("#aaaa33");
+    // Upstream's cssStyles list for a note ends up joined to the per-path
+    // `style` attribute. The order is: text-align/white-space (which the
+    // path ignores) + fill + stroke. The path-level style emits only
+    // `fill:<bkg> !important;stroke:<border> !important`.
+    let path_style = format!(
+        "fill:{bkg} !important;stroke:{border} !important",
+        bkg = bkg,
+        border = border
+    );
+
+    let mut out = String::with_capacity(1024);
+    out.push_str(&format!(
+        r#"<g class="node undefined " id="{sid}-{did}" data-look="classic" transform="translate({tx}, {ty})">"#,
+        sid = id,
+        did = dom_id,
+        tx = fmt_num(cx),
+        ty = fmt_num(cy),
+    ));
+
+    // Solid-fill rectangle (path A) + outline (path B) — same rough.js
+    // pattern as classBox.
+    out.push_str(r#"<g class="basic label-container outer-path">"#);
+    out.push_str(&format!(
+        r##"<path d="M{x0} {y0} L{x1} {y0} L{x1} {y1} L{x0} {y1}" stroke="none" stroke-width="0" fill="{fill}" style="{st}"></path>"##,
+        x0 = fmt_num(x0),
+        x1 = fmt_num(-x0),
+        y0 = fmt_num(y0),
+        y1 = fmt_num(-y0),
+        fill = bkg,
+        st = path_style,
+    ));
+    out.push_str(&format!(
+        r##"<path d="{d}" stroke="{stroke}" stroke-width="1.3" fill="none" stroke-dasharray="0 0" style="{st}"></path>"##,
+        d = rough_rect_outline_path(x0, y0, drawn_w, drawn_h),
+        stroke = border,
+        st = path_style,
+    ));
+    out.push_str("</g>");
+
+    // Label group: <g class="label noteLabel" ...> with a single
+    // foreignObject. The text-align:left style on the wrapper persists
+    // through to the inner span; the <p> itself replaces \n with <br/>.
+    let label_tx = -bbox_w / 2.0;
+    let label_ty = -bbox_h / 2.0;
+    let body = label.replace('\n', "<br/>");
+    let max_w_attr = 200.0_f64; // Upstream `addHtmlSpan` defaults to 200 for notes.
+    out.push_str(&format!(
+        r#"<g class="label noteLabel" style="text-align:left !important;white-space:nowrap !important" transform="translate({tx}, {ty})"><rect></rect><foreignObject width="{w}" height="{h}"><div style="text-align: center; white-space: nowrap; display: table-cell; line-height: 1.5; max-width: {mw}px;" xmlns="http://www.w3.org/1999/xhtml"><span style="text-align:left !important;white-space:nowrap !important" class="nodeLabel markdown-node-label"><p>{txt}</p></span></div></foreignObject></g>"#,
+        tx = fmt_num(label_tx),
+        ty = fmt_num(label_ty),
+        w = fmt_num(bbox_w),
+        h = fmt_num(bbox_h),
+        mw = fmt_num(max_w_attr),
+        txt = body,
+    ));
+
+    out.push_str("</g>");
+    out
+}
+
 fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables, d: &ClassDiagram) -> String {
+    // Note nodes follow the upstream `note.ts` shape, not classBox —
+    // dispatch before any classBox-specific calculations.
+    if n.shape.as_deref() == Some("note") {
+        return render_note_node(id, n, theme);
+    }
     let _ = theme;
     // Pull the matching parsed ClassNode for member/method/annotation
     // text — needed when the classBox renders non-empty group rows.

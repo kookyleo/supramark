@@ -114,13 +114,26 @@ fn build_layout_data(d: &ClassDiagram, _theme: &ThemeVariables) -> LayoutData {
         note.id = n.id.clone();
         note.label = Some(n.text.clone());
         note.shape = Some("note".into());
-        note.css_classes = Some("note".into());
+        // Upstream `classDb.getData` does NOT set a `cssClasses` on the
+        // note Node, so `getNodeClasses` falls back to "undefined"
+        // (`<g class="node undefined ">`).
+        note.css_classes = None;
         note.parent_id = n.parent.clone();
-        // Upstream's labelHelper measures at 14 px (SVG root default),
-        // not the theme fontSize (16 px).
-        let (w, h) = measure_multiline(&n.text, 14.0);
-        note.width = Some((w + 20.0).max(60.0));
-        note.height = Some((h + 20.0).max(30.0));
+        // Upstream `note.ts`: `totalWidth = bbox.width + 2 * padding` with
+        // `padding = config.class.padding ?? 6`. The bbox.width comes from
+        // `div.getBoundingClientRect()` — the testing harness shim
+        // (`tests/support/generate_ref.mjs`) measures `el.textContent`
+        // for HTML elements, and `<br/>` contributes empty textContent.
+        // So a multi-line note like "Foo\nBar" is measured as a single
+        // joined string "FooBar". bbox.height collapses to a single
+        // 16.296875 line. Padding = 6 ⇒ +12 on each axis.
+        let line_h = 16.296875_f64;
+        let note_padding = 6.0_f64;
+        let joined: String = n.text.split('\n').collect();
+        let family = "trebuchet ms,verdana,arial,sans-serif";
+        let w = font_metrics::text_width(&joined, family, 14.0, false, false);
+        note.width = Some(w + 2.0 * note_padding);
+        note.height = Some(line_h + 2.0 * note_padding);
         data.nodes.push(note);
         if !n.class_id.is_empty() {
             // Upstream `classDb.getData` emits a dotted relation from the
@@ -135,6 +148,15 @@ fn build_layout_data(d: &ClassDiagram, _theme: &ThemeVariables) -> LayoutData {
             e.thickness = Some("normal".into());
             e.pattern = Some("dotted".into());
             e.style = Some(vec!["fill: none".into()]);
+            // Upstream `insertEdgeLabel` always sets `edge.width = bbox.width`
+            // and `edge.height = bbox.height` from the foreignObject body,
+            // even when the label text is empty — the resulting fO collapses
+            // to (0, line_h) which still nudges dagre's rank packing.
+            // Without this, the note→class spline collapses by one
+            // line-height (~16 px), shifting downstream y-coordinates.
+            e.extra.insert("label_width".into(), "0".into());
+            e.extra
+                .insert("label_height".into(), "16.296875".into());
             // Upstream sets arrowTypeStart/End to 'none' (string), which
             // renders as no marker reference. Leave both as None here.
             data.edges.push(e);

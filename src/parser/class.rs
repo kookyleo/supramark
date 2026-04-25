@@ -108,16 +108,52 @@ fn logical_lines(body: &str) -> Vec<LogicalLine> {
     let mut cur = String::new();
     let mut cur_start = 0usize;
     let mut depth: i32 = 0;
+    let mut in_quote = false;
     for (idx, raw) in body.lines().enumerate() {
         let line_no = idx + 1;
-        let stripped = strip_line_comment(raw);
-        if depth == 0 && cur.is_empty() {
+        // Comments inside a quoted string ("…%% …") are not comments — only
+        // strip when we're not currently in a multi-line string.
+        let stripped = if in_quote {
+            raw
+        } else {
+            strip_line_comment(raw)
+        };
+        if depth == 0 && !in_quote && cur.is_empty() {
             cur_start = line_no;
         }
+        if in_quote {
+            // Continuation of a multi-line "…\n…" string. Keep raw newline
+            // in the buffer so downstream parsers see the original text.
+            cur.push('\n');
+            cur.push_str(stripped);
+            in_quote = quote_state_after(stripped, in_quote);
+            // A multi-line string can also contain `{`/`}` (rare); only
+            // flush when the quote closes and braces balance.
+            if !in_quote {
+                let deltas = brace_delta(&cur);
+                if depth + deltas <= 0 {
+                    out.push(LogicalLine {
+                        text: std::mem::take(&mut cur),
+                        line_no: cur_start,
+                    });
+                    depth = 0;
+                } else {
+                    depth += deltas;
+                }
+            }
+            continue;
+        }
         let deltas = brace_delta(stripped);
+        // Detect whether *this* line opens a string that doesn't close
+        // before EOL — if so, latch into multi-line-string mode.
+        let opens_quote = quote_state_after(stripped, false);
         if depth > 0 {
             cur.push('\n');
             cur.push_str(stripped);
+            in_quote = opens_quote;
+            if in_quote {
+                continue;
+            }
             depth += deltas;
             if depth <= 0 {
                 out.push(LogicalLine {
@@ -129,6 +165,12 @@ fn logical_lines(body: &str) -> Vec<LogicalLine> {
         } else if deltas > 0 {
             cur.push_str(stripped);
             depth = deltas;
+            in_quote = opens_quote;
+        } else if opens_quote {
+            // Single statement opens an unclosed string — stitch following
+            // lines until the closing quote.
+            cur.push_str(stripped);
+            in_quote = true;
         } else {
             let t = stripped.trim();
             if !t.is_empty() {
@@ -146,6 +188,21 @@ fn logical_lines(body: &str) -> Vec<LogicalLine> {
         });
     }
     out
+}
+
+/// Track whether we're inside a `"…"` string after consuming `line`,
+/// given the entry state. Mirrors `brace_delta`'s treatment of backticks
+/// (a backtick suspends `"` toggling).
+fn quote_state_after(line: &str, mut in_quote: bool) -> bool {
+    let mut in_bq = false;
+    for &b in line.as_bytes() {
+        match b {
+            b'`' if !in_quote => in_bq = !in_bq,
+            b'"' if !in_bq => in_quote = !in_quote,
+            _ => {}
+        }
+    }
+    in_quote
 }
 
 /// Strip a trailing `%% comment` from a raw line. Respects `"..."`.
