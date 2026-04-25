@@ -135,7 +135,54 @@ pub fn render(
     out.push_str(&class_markers_defs(id, kind, theme));
 
     // ── 5. <g class="root"> ──────────────────────────────────────
+    //
+    // When the diagram contains exactly one namespace cluster, upstream's
+    // renderer wraps the actual content inside a nested `<g class="root"
+    // transform="translate(-pad, 0)">` placed inside the outer
+    // `<g class="nodes">`, while the outer `clusters/edgePaths/edgeLabels`
+    // groups are emitted empty. Free (non-namespaced) classes sit
+    // inside the outer `<g class="nodes">` after the nested-root closes.
+    // For zero or multiple sibling namespaces the renderer emits a flat
+    // single-root structure instead.
+    let cluster_count = l.unified.nodes.iter().filter(|n| n.is_group).count();
+    let single_cluster = cluster_count == 1;
     out.push_str(r#"<g class="root">"#);
+
+    if single_cluster {
+        // Outer empty groups
+        out.push_str(r#"<g class="clusters"></g>"#);
+        out.push_str(r#"<g class="edgePaths"></g>"#);
+        out.push_str(r#"<g class="edgeLabels"></g>"#);
+        // Outer nodes wraps a nested root with a (-pad, 0) translate
+        out.push_str(r#"<g class="nodes">"#);
+        out.push_str(&format!(
+            r#"<g class="root" transform="translate({}, 0)">"#,
+            fmt_num(-pad)
+        ));
+    }
+
+    // Determine which leaf nodes are free (no parent cluster); these
+    // get hoisted to the outer `<g class="nodes">` when wrapping.
+    // Without an explicit parent map we approximate by comparing
+    // each leaf's center against the single cluster's bbox.
+    let (cluster_min_x, cluster_max_x, cluster_min_y, cluster_max_y) = if single_cluster {
+        let c = l.unified.nodes.iter().find(|n| n.is_group).unwrap();
+        let cx = c.x.unwrap_or(0.0);
+        let cy = c.y.unwrap_or(0.0);
+        let cw = c.width.unwrap_or(0.0);
+        let ch = c.height.unwrap_or(0.0);
+        (cx - cw / 2.0, cx + cw / 2.0, cy - ch / 2.0, cy + ch / 2.0)
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    };
+    let is_inside_cluster = |n: &LayoutNode| -> bool {
+        if !single_cluster {
+            return false;
+        }
+        let nx = n.x.unwrap_or(0.0);
+        let ny = n.y.unwrap_or(0.0);
+        nx >= cluster_min_x && nx <= cluster_max_x && ny >= cluster_min_y && ny <= cluster_max_y
+    };
 
     // Clusters — class diagrams may have namespace clusters.
     out.push_str(r#"<g class="clusters">"#);
@@ -165,12 +212,26 @@ pub fn render(
     }
     out.push_str("</g>");
 
-    // Nodes
+    // Nodes — when wrapping, only emit nodes that live inside the cluster
     out.push_str(r#"<g class="nodes">"#);
     for n in l.unified.nodes.iter().filter(|n| !n.is_group) {
+        if single_cluster && !is_inside_cluster(n) {
+            continue;
+        }
         out.push_str(&render_node(id, n, theme, d));
     }
     out.push_str("</g>");
+
+    if single_cluster {
+        out.push_str("</g>"); // </g class="root" inner>
+        // Free nodes (outside the cluster bbox) sit inside the outer nodes group
+        for n in l.unified.nodes.iter().filter(|n| !n.is_group) {
+            if !is_inside_cluster(n) {
+                out.push_str(&render_node(id, n, theme, d));
+            }
+        }
+        out.push_str("</g>"); // </g class="nodes" outer>
+    }
 
     out.push_str("</g>"); // </g class="root">
     out.push_str("</g>"); // </g top-level seed>
