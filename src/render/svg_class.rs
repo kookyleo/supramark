@@ -60,7 +60,36 @@ pub fn render(
     // quirk here.
     let pad = 8.0_f64;
     let svg_bbox = compute_svg_bbox_local(l);
-    let (bx, by, bw, bh) = svg_bbox;
+    let (mut bx, mut by, mut bw, mut bh) = svg_bbox;
+    // Pre-title bounds — used for the title's `x` anchor. Mermaid sets
+    // the title `x` to the centre of the pre-title bbox so the title
+    // hugs the diagram, not the title itself.
+    let pre_title_min_x = bx;
+    let pre_title_max_x = bx + bw;
+    // Title text contributes (0, 0, title_w, title_h) to the jsdom
+    // getBBox shim. Resolved font for the trailing
+    // `<text class="classDiagramTitleText">` falls back to the default
+    // sans-serif @14 because the SVG element itself has no explicit
+    // font-size attribute (the 16px declaration lives inside `<style>`,
+    // which the shim does not parse).
+    if let Some(title) = d.meta.title.as_deref() {
+        if !title.trim().is_empty() {
+            let tw = crate::font_metrics::text_width(title, "sans-serif", 14.0, false, false);
+            let th = crate::font_metrics::line_height("sans-serif", 14.0, false, false);
+            if tw > 0.0 || th > 0.0 {
+                let max_x = bx + bw;
+                let max_y = by + bh;
+                let nbx = bx.min(0.0);
+                let nby = by.min(0.0);
+                let nmx = max_x.max(tw);
+                let nmy = max_y.max(th);
+                bx = nbx;
+                by = nby;
+                bw = nmx - nbx;
+                bh = nmy - nby;
+            }
+        }
+    }
     let vx = bx - pad;
     let vy = by - pad;
     let vw = bw + pad * 2.0;
@@ -142,7 +171,9 @@ pub fn render(
     // Optional title text — emitted *after* the drop-shadow defs.
     if let Some(title) = d.meta.title.as_deref() {
         if !title.trim().is_empty() {
-            let title_x = bx + bw / 2.0;
+            // Title `x` anchors to the centre of the **pre-title**
+            // bbox; the title's own width does not pull the anchor.
+            let title_x = pre_title_min_x + (pre_title_max_x - pre_title_min_x) / 2.0;
             let title_y = -25.0_f64;
             out.push_str(&format!(
                 r#"<text text-anchor="middle" x="{}" y="{}" class="classDiagramTitleText">{}</text>"#,
