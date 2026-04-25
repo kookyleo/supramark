@@ -42,7 +42,19 @@ use crate::theme::ThemeVariables;
 ///   because the outer label `<g>` has a centring transform that is ignored.
 ///
 /// `viewBox = "${union.x - p} ${union.y - p} ${union.w + 2p} ${union.h + 2p}"`
-fn compute_viewbox(l: &FlowchartLayout, padding: f64) -> (f64, f64, f64, f64) {
+///
+/// Returns `(vb_x, vb_y, vb_w, vb_h, content_center_x)`.
+///
+/// `content_center_x` is the horizontal center of the bbox BEFORE the diagram
+/// title text was folded in. Upstream `utils.insertTitle` saves this center as
+/// the `x` attribute of the `<text class="flowchartTitleText">` element it
+/// appends — the title is then measured by jsdom's getBBox shim and pushes the
+/// outer bbox horizontally.
+fn compute_viewbox(
+    l: &FlowchartLayout,
+    padding: f64,
+    title: Option<&str>,
+) -> (f64, f64, f64, f64, f64) {
     use crate::render::foreign_object::{
         measure_html_label, measure_html_markup_label, HtmlLabelFont,
     };
@@ -277,7 +289,37 @@ fn compute_viewbox(l: &FlowchartLayout, padding: f64) -> (f64, f64, f64, f64) {
     }
 
     if !min_x.is_finite() {
-        return (0.0, 0.0, 1.0, 1.0);
+        return (0.0, 0.0, 1.0, 1.0, 0.0);
+    }
+
+    // Center of the content-only bounding box — recorded BEFORE the title
+    // text element widens it. Mirrors upstream `utils.insertTitle` which
+    // captures `bounds.x + bounds.width/2` for the title's `x` attribute.
+    let content_center_x = min_x + (max_x - min_x) / 2.0;
+
+    // Diagram title: upstream appends `<text class="flowchartTitleText">…</text>`
+    // as a sibling of the seed `<g>` AFTER the inner content but BEFORE
+    // setupViewPortForSVG measures the bbox. Under the jsdom getBBox shim a
+    // `<text>` element contributes `{x:0, y:0, width:tw, height:lh}` regardless
+    // of its own `x`/`y` attributes (transforms and text-anchor are ignored),
+    // so the title pushes `max_x` out to `tw` and the bbox grows accordingly.
+    //
+    // The CSS rule `.flowchartTitleText{font-size:18px;}` is applied at the
+    // class level — without an inline `font-family`, the shim falls back to
+    // jsdom's default sans-serif. Match that here for byte-exact width.
+    if let Some(t) = title {
+        if !t.is_empty() {
+            // Even though `.flowchartTitleText{font-size:18px}` is in the
+            // diagram CSS, the jsdom getBBox shim does NOT resolve class-level
+            // CSS rules — it falls back to the default sans-serif 14 px metric.
+            // Mirror upstream by measuring at 14 px.
+            let tw = crate::font_metrics::text_width(t, "sans-serif", 14.0, false, false);
+            let lh = 16.296875_f64;
+            min_x = min_x.min(0.0);
+            max_x = max_x.max(tw);
+            min_y = min_y.min(0.0);
+            max_y = max_y.max(lh);
+        }
     }
 
     let content_w = max_x - min_x;
@@ -287,7 +329,7 @@ fn compute_viewbox(l: &FlowchartLayout, padding: f64) -> (f64, f64, f64, f64) {
     let vb_w = (content_w + 2.0 * padding).max(1.0);
     let vb_h = (content_h + 2.0 * padding).max(1.0);
 
-    (vb_x, vb_y, vb_w, vb_h)
+    (vb_x, vb_y, vb_w, vb_h, content_center_x)
 }
 
 /// Render a flowchart diagram as SVG.
@@ -446,7 +488,8 @@ pub fn render(
     // Upstream uses `svg.getBBox()` which returns the actual rendered
     // bounds including shape geometry, edge curves, and label
     // positions. We compute from layout nodes and edges.
-    let (vb_x, vb_y, vb_w, vb_h) = compute_viewbox(l, padding);
+    let (vb_x, vb_y, vb_w, vb_h, content_center_x) =
+        compute_viewbox(l, padding, d.meta.title.as_deref());
 
     // ── Assemble final SVG ─────────────────────────────────────────
     let acc_title = d.meta.acc_title.as_deref();
@@ -491,10 +534,12 @@ pub fn render(
     if let Some(title) = d.meta.title.as_deref() {
         if !title.is_empty() {
             let title_top_margin = 25.0_f64;
-            let cx = vb_x + vb_w / 2.0;
+            // Use the pre-title content center, matching upstream's
+            // `utils.insertTitle` which captures `bounds.x + bounds.width/2`
+            // BEFORE adding the title text to the SVG.
             out.push_str(&format!(
                 r#"<text text-anchor="middle" x="{cx}" y="-{tm}" class="flowchartTitleText">{t}</text>"#,
-                cx = cx,
+                cx = fmt_num(content_center_x),
                 tm = title_top_margin,
                 t = xml_escape(title),
             ));
@@ -1217,8 +1262,12 @@ fn render_edge_path(
     //   edge.classes   = "edge-thickness-normal edge-pattern-solid flowchart-link" (always,
     //                    unless invisible).
     // Leading space is intentional (upstream emits `" " + strokeClasses + edge.classes`).
+    // Upstream emits the stroke classes only for invisible edges; the
+    // trailing ` edge-thickness-normal edge-pattern-solid flowchart-link`
+    // suffix is appended only when the edge is actually rendered as a
+    // flowchart link.
     let class_attr = if thickness == "invisible" {
-        String::new()
+        format!(" edge-thickness-{thickness} edge-pattern-{pattern}")
     } else {
         format!(
             " edge-thickness-{thickness} edge-pattern-{pattern} edge-thickness-normal edge-pattern-solid flowchart-link"
