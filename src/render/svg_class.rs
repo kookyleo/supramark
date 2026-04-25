@@ -363,15 +363,39 @@ fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables, d: &ClassDiagra
         Some(t) if !t.is_empty() => format!(r#" title="{}""#, html_escape(t)),
         _ => String::new(),
     };
-    out.push_str(&format!(
-        r#"<g class="{cls}" id="{sid}-{did}" data-look="classic"{title} transform="translate({tx}, {ty})">"#,
-        cls = class_attr,
-        sid = id,
-        did = dom_id,
-        title = title_attr,
-        tx = fmt_num(cx),
-        ty = fmt_num(cy),
-    ));
+    // Upstream `nodes.ts` wraps the inner `<g class="node ...">` in an
+    // `<a href="..." target="..." data-look="..." transform="...">` when
+    // `link` is set; the transform / data-look move to the anchor and
+    // the inner `<g>` keeps only class / id / title.
+    let has_link = n.link.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
+    if has_link {
+        let href = n.link.as_deref().unwrap_or("");
+        let target = n.link_target.as_deref().unwrap_or("_blank");
+        out.push_str(&format!(
+            r#"<a href="{href}" target="{target}" data-look="classic" transform="translate({tx}, {ty})">"#,
+            href = html_escape(href),
+            target = html_escape(target),
+            tx = fmt_num(cx),
+            ty = fmt_num(cy),
+        ));
+        out.push_str(&format!(
+            r#"<g class="{cls}" id="{sid}-{did}"{title}>"#,
+            cls = class_attr,
+            sid = id,
+            did = dom_id,
+            title = title_attr,
+        ));
+    } else {
+        out.push_str(&format!(
+            r#"<g class="{cls}" id="{sid}-{did}" data-look="classic"{title} transform="translate({tx}, {ty})">"#,
+            cls = class_attr,
+            sid = id,
+            did = dom_id,
+            title = title_attr,
+            tx = fmt_num(cx),
+            ty = fmt_num(cy),
+        ));
+    }
 
     // basic label-container outer-path: rough.js rectangle (two paths).
     let fill_attr = style_overrides
@@ -704,6 +728,9 @@ fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables, d: &ClassDiagra
     ));
 
     out.push_str("</g>");
+    if has_link {
+        out.push_str("</a>");
+    }
     out
 }
 
