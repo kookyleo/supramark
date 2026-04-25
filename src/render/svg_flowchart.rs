@@ -47,6 +47,92 @@ use crate::theme::ThemeVariables;
 ///
 /// `content_center_x` is the horizontal center of the bbox BEFORE the diagram
 /// title text was folded in. Upstream `utils.insertTitle` saves this center as
+/// Order a sequence of node-id strings by JavaScript's `Object.keys`
+/// iteration order: integer-index keys (canonical decimal, < 2^32 - 1, no
+/// leading zeros) come first in numeric ascending order, then non-integer
+/// keys in their original insertion order. Returns indices into the input
+/// sequence so callers can re-iterate the original slice in this order.
+///
+/// Mirrors upstream dagre's `graph.nodes()` which is backed by
+/// `Object.keys(this._nodes)` — diagrams whose IDs are pure decimals end
+/// up sorted numerically by V8's well-known Object key ordering.
+fn js_object_key_order<'a, I: Iterator<Item = &'a str>>(iter: I) -> Vec<usize> {
+    let ids: Vec<&str> = iter.collect();
+    let mut int_keys: Vec<(u32, usize)> = Vec::new();
+    let mut str_keys: Vec<usize> = Vec::new();
+    for (idx, s) in ids.iter().enumerate() {
+        if let Some(n) = parse_array_index(s) {
+            int_keys.push((n, idx));
+        } else {
+            str_keys.push(idx);
+        }
+    }
+    int_keys.sort_by_key(|(n, _)| *n);
+    let mut out: Vec<usize> = Vec::with_capacity(ids.len());
+    for (_, idx) in int_keys {
+        out.push(idx);
+    }
+    out.extend(str_keys);
+    out
+}
+
+/// Test whether `s` is a "canonical numeric index" per ECMAScript:
+/// the decimal representation of an integer in `[0, 2^32 - 2]` with no
+/// leading zeros and no sign / fractional / exponent parts.
+fn parse_array_index(s: &str) -> Option<u32> {
+    if s.is_empty() {
+        return None;
+    }
+    if s == "0" {
+        return Some(0);
+    }
+    if s.starts_with('0') {
+        return None;
+    }
+    if !s.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let n: u64 = s.parse().ok()?;
+    if n >= u32::MAX as u64 {
+        return None;
+    }
+    Some(n as u32)
+}
+
+/// Detect `font-weight: bold` (or numeric ≥700, or `bolder`) in a list of
+/// CSS declarations resolved from a node's classDef + inline styles.
+/// Used to apply bold weight when measuring a node's label width — so the
+/// computed viewBox tracks the actual rendered foreignObject width.
+fn node_styles_have_bold(styles: &[String]) -> bool {
+    for s in styles {
+        let trimmed = s.trim().trim_end_matches(';');
+        let Some(colon) = trimmed.find(':') else {
+            continue;
+        };
+        let key = trimmed[..colon].trim();
+        if !key.eq_ignore_ascii_case("font-weight") {
+            continue;
+        }
+        let value = trimmed[colon + 1..].trim();
+        let val_no_important = value
+            .trim_end_matches("!important")
+            .trim()
+            .trim_end_matches('!')
+            .trim();
+        if val_no_important.eq_ignore_ascii_case("bold")
+            || val_no_important.eq_ignore_ascii_case("bolder")
+        {
+            return true;
+        }
+        if let Ok(n) = val_no_important.parse::<u32>() {
+            if n >= 700 {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// the `x` attribute of the `<text class="flowchartTitleText">` element it
 /// appends — the title is then measured by jsdom's getBBox shim and pushes the
 /// outer bbox horizontally.
@@ -171,7 +257,22 @@ fn compute_viewbox(
                 crate::render::foreign_object::string_label_to_html(label_text)
             };
             let processed = crate::render::foreign_object::replace_fa_icons(&label_escaped);
-            let (lw, lh) = measure_html_markup_label(&processed, &font, 200.0, true);
+            // Honour `font-weight:bold` from the resolved node styles so the
+            // measured width matches the bold-styled `<div>`'s
+            // `getBoundingClientRect()` width.
+            let node_bold = n
+                .css_styles
+                .as_deref()
+                .map(node_styles_have_bold)
+                .unwrap_or(false);
+            let label_font = if node_bold {
+                let mut f = font.clone();
+                f.bold = Some(true);
+                f
+            } else {
+                font.clone()
+            };
+            let (lw, lh) = measure_html_markup_label(&processed, &label_font, 200.0, true);
             expand(
                 &mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, 0.0, lw, lh,
             );
@@ -446,7 +547,17 @@ pub fn render(
     }
 
     // Render non-isolated-cluster child nodes at the outer level.
-    for n in &l.nodes {
+    //
+    // Iteration order mirrors upstream's `graph.nodes()` traversal which is
+    // backed by `Object.keys(this._nodes)`. JS object key iteration order is
+    // standardised: integer-index keys (32-bit unsigned, no leading zeros)
+    // come first in numeric ascending order, then string keys in insertion
+    // order. Diagrams whose vertex IDs are pure decimals (e.g. fixtures
+    // 203 / 70 / demos 10/11/51) thus emit nodes sorted numerically rather
+    // than by declaration order.
+    let outer_node_indices: Vec<usize> = js_object_key_order(l.nodes.iter().map(|n| n.id.as_str()));
+    for &idx in &outer_node_indices {
+        let n = &l.nodes[idx];
         if n.is_group {
             continue;
         }

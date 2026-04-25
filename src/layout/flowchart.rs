@@ -285,7 +285,12 @@ fn build_layout_data(d: &FlowchartDiagram) -> LayoutData {
             continue;
         }
         let shape_id = canon_shape(v.shape.as_deref().unwrap_or("rect"));
-        let (w, h) = measure_vertex_box(v);
+        // Resolve styles first so that `font-weight:bold` is reflected in
+        // the label text-width measurement (matches upstream's
+        // `getBoundingClientRect()` on the rendered foreignObject div).
+        let merged_styles = collect_styles(v, &class_map);
+        let is_bold = styles_have_bold(&merged_styles);
+        let (w, h) = measure_vertex_box(v, is_bold);
         let label_text = display_label(v);
         let mut node = unified::Node::default();
         node.id = v.id.clone();
@@ -312,7 +317,6 @@ fn build_layout_data(d: &FlowchartDiagram) -> LayoutData {
         };
         node.css_classes = Some(classes);
         // Inline styles.
-        let merged_styles = collect_styles(v, &class_map);
         if !merged_styles.is_empty() {
             node.css_styles = Some(merged_styles);
         }
@@ -536,7 +540,11 @@ fn strip_markdown_for_measure(label: &str) -> String {
 /// These padding values must match what the upstream shape renderers
 /// compute at draw time, so that dagre assigns the correct node
 /// dimensions.
-fn measure_vertex_box(v: &Vertex) -> (f64, f64) {
+///
+/// `is_bold` is set when the vertex's resolved styles include
+/// `font-weight:bold` — text segments then measure at bold weight to
+/// match upstream's `getBoundingClientRect()` on the foreignObject div.
+fn measure_vertex_box(v: &Vertex, is_bold: bool) -> (f64, f64) {
     let label = display_label(v);
     // For markdown labels, the `**bold**` syntax is rendered as HTML and
     // textContent strips the markers — measure the plain-text equivalent.
@@ -550,7 +558,7 @@ fn measure_vertex_box(v: &Vertex) -> (f64, f64) {
     } else {
         label.clone()
     };
-    let (tw, th) = measure_text(&measure_label);
+    let (tw, th) = measure_text(&measure_label, is_bold);
     // Upstream shape helpers compute total size from the label bbox
     // plus per-shape padding. The `node.padding` config default is 15.
     //
@@ -688,7 +696,11 @@ fn strip_html_for_measure(s: &str) -> Vec<(String, bool)> {
 ///
 /// Width is the width of the concatenated plain text (with bold spans
 /// measured at bold weight). Height is always one `line_height`.
-fn measure_text(label: &str) -> (f64, f64) {
+///
+/// `force_bold` is set when the vertex's resolved styles (classDef +
+/// inline style) include `font-weight:bold` — in which case ALL text
+/// segments measure at bold width regardless of inner `<strong>` tags.
+fn measure_text(label: &str, force_bold: bool) -> (f64, f64) {
     if label.is_empty() {
         return (0.0, LABEL_FONT_SIZE);
     }
@@ -704,7 +716,13 @@ fn measure_text(label: &str) -> (f64, f64) {
     let total_w: f64 = segments
         .iter()
         .map(|(text, bold)| {
-            font_metrics::text_width(text, DEFAULT_FONT_FAMILY, LABEL_FONT_SIZE, *bold, false)
+            font_metrics::text_width(
+                text,
+                DEFAULT_FONT_FAMILY,
+                LABEL_FONT_SIZE,
+                *bold || force_bold,
+                false,
+            )
         })
         .sum();
     (total_w, lh)
@@ -712,7 +730,7 @@ fn measure_text(label: &str) -> (f64, f64) {
 
 fn measure_subgraph_title_box(title: Option<&Label>) -> (f64, f64) {
     let Some(label) = title else {
-        let (w, h) = measure_text("");
+        let (w, h) = measure_text("", false);
         return (w + 16.0, h + 16.0);
     };
     // Markdown labels render through `markdownToHtml`, which expands
@@ -725,7 +743,7 @@ fn measure_subgraph_title_box(title: Option<&Label>) -> (f64, f64) {
         }
         _ => label.text.clone(),
     };
-    let (w, h) = measure_text(&measure_input);
+    let (w, h) = measure_text(&measure_input, false);
     (w + 16.0, h + 16.0)
 }
 
@@ -822,6 +840,42 @@ fn stroke_descriptor(s: EdgeStroke) -> (&'static str, &'static str) {
         EdgeStroke::Dotted => ("normal", "dotted"),
         EdgeStroke::Invisible => ("invisible", "solid"),
     }
+}
+
+/// Detect whether a resolved style list contains `font-weight:bold` or a
+/// numeric font-weight ≥ 700. Used by the layout to widen text
+/// measurement when a vertex's classDef / inline style applies bold —
+/// matching upstream's `getBoundingClientRect()` on the bold-styled
+/// foreignObject div.
+fn styles_have_bold(styles: &[String]) -> bool {
+    for s in styles {
+        let trimmed = s.trim().trim_end_matches(';');
+        let Some(colon) = trimmed.find(':') else {
+            continue;
+        };
+        let key = trimmed[..colon].trim();
+        if !key.eq_ignore_ascii_case("font-weight") {
+            continue;
+        }
+        let value = trimmed[colon + 1..].trim();
+        // Trim trailing `!important` for keyword/numeric checks.
+        let val_no_important = value
+            .trim_end_matches("!important")
+            .trim()
+            .trim_end_matches('!')
+            .trim();
+        if val_no_important.eq_ignore_ascii_case("bold")
+            || val_no_important.eq_ignore_ascii_case("bolder")
+        {
+            return true;
+        }
+        if let Ok(n) = val_no_important.parse::<u32>() {
+            if n >= 700 {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Compose styles from classDef + inline styles. Returns `Vec<String>`
