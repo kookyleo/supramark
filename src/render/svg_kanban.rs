@@ -151,9 +151,7 @@ fn render_ticket_label(
     il: &crate::layout::kanban::ItemLayout,
 ) {
     let link = match (&d.ticket_base_url, &item.ticket) {
-        (Some(url), Some(ticket)) if !url.is_empty() => {
-            Some(url.replace("#TICKET#", ticket))
-        }
+        (Some(url), Some(ticket)) if !url.is_empty() => Some(url.replace("#TICKET#", ticket)),
         _ => None,
     };
 
@@ -281,7 +279,11 @@ fn build_style_block(id: &str, theme: &ThemeVariables) -> String {
         "#{id} .edge-animation-fast{{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}}",
         id = id,
     ));
-    s.push_str(&format!("#{id} .error-icon{{fill:{c};}}", id = id, c = error_bkg));
+    s.push_str(&format!(
+        "#{id} .error-icon{{fill:{c};}}",
+        id = id,
+        c = error_bkg
+    ));
     s.push_str(&format!(
         "#{id} .error-text{{fill:{c};stroke:{c};}}",
         id = id,
@@ -513,10 +515,7 @@ fn section_block(id: &str, theme: &ThemeVariables, i: i32) -> String {
         "#{id} .disabled,#{id} .disabled circle,#{id} .disabled text{{fill:lightgray;}}",
         id = id,
     ));
-    out.push_str(&format!(
-        "#{id} .disabled text{{fill:#efefef;}}",
-        id = id,
-    ));
+    out.push_str(&format!("#{id} .disabled text{{fill:#efefef;}}", id = id,));
     out.push_str(&format!(
         "#{id} .node rect,#{id} .node circle,#{id} .node ellipse,#{id} .node polygon,#{id} .node path{{fill:{bg};stroke:{nb};stroke-width:1px;}}",
         id = id,
@@ -718,11 +717,7 @@ mod tests {
             fn $name() {
                 check_fixture(
                     concat!("tests/ext_fixtures/cypress/kanban/", $num, ".mmd"),
-                    concat!(
-                        "tests/reference/ext_fixtures/cypress/kanban/",
-                        $num,
-                        ".svg"
-                    ),
+                    concat!("tests/reference/ext_fixtures/cypress/kanban/", $num, ".svg"),
                     concat!("ref-ext-fixtures-cypress-kanban-", $num),
                 );
             }

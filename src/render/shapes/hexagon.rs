@@ -12,7 +12,11 @@ use crate::theme::ThemeVariables;
 pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
     let w = node.width.unwrap_or(0.0);
     let h = node.height.unwrap_or(0.0);
-    let f: f64 = if matches!(node.look.as_deref(), Some("neo")) { 3.5 } else { 4.0 };
+    let f: f64 = if matches!(node.look.as_deref(), Some("neo")) {
+        3.5
+    } else {
+        4.0
+    };
     let m = h / f;
     let pts = [
         (m - w / 2.0, -h / 2.0),

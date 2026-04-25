@@ -35,8 +35,7 @@ fn assert_byte_exact(rel: &str) {
     svg.push(format!("{}.svg", rel));
 
     let source = fs::read_to_string(&mmd).unwrap_or_else(|e| panic!("reading {:?}: {}", mmd, e));
-    let expected =
-        fs::read_to_string(&svg).unwrap_or_else(|e| panic!("reading {:?}: {}", svg, e));
+    let expected = fs::read_to_string(&svg).unwrap_or_else(|e| panic!("reading {:?}: {}", svg, e));
     let id = id_for(rel);
     let got = convert_with_id(&source, &id).unwrap_or_else(|e| panic!("convert {}: {}", rel, e));
 
@@ -66,8 +65,7 @@ fn assert_byte_exact(rel: &str) {
 #[test]
 #[ignore]
 fn sweep_all_state_fixtures() {
-    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/ext_fixtures/cypress/state");
+    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/ext_fixtures/cypress/state");
     let mut pass = 0;
     let mut fail = 0;
     let mut entries: Vec<_> = fs::read_dir(&base)
@@ -197,15 +195,15 @@ fn cypress_15() {
 #[ignore]
 fn debug_cy11_output() {
     let source = fs::read_to_string(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/ext_fixtures/cypress/state/11.mmd")
-    ).unwrap();
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/ext_fixtures/cypress/state/11.mmd"),
+    )
+    .unwrap();
     let id = id_for("ext_fixtures/cypress/state/11");
     let got = mermaid_little::convert_with_id(&source, &id).unwrap();
     // Print the cluster and node sections
     let cluster_start = got.find("<g class=\"clusters\">");
     let nodes_end = got.find("</g></g></g></svg>").unwrap_or(got.len());
     if let Some(start) = cluster_start {
-        println!("SVG CONTENT:\n{}", &got[start..nodes_end.min(start+3000)]);
+        println!("SVG CONTENT:\n{}", &got[start..nodes_end.min(start + 3000)]);
     }
 }

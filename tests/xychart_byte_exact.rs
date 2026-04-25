@@ -49,7 +49,11 @@ macro_rules! cypress {
         fn $id() {
             assert_fixture(
                 concat!("tests/ext_fixtures/cypress/xychart/", $num, ".mmd"),
-                concat!("tests/reference/ext_fixtures/cypress/xychart/", $num, ".svg"),
+                concat!(
+                    "tests/reference/ext_fixtures/cypress/xychart/",
+                    $num,
+                    ".svg"
+                ),
                 concat!("ref-ext-fixtures-cypress-xychart-", $num),
             );
         }

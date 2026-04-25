@@ -40,11 +40,7 @@ fn normalize_note_html(text: &str) -> String {
     let chars: Vec<char> = with_br.chars().collect();
     let mut i = 0;
     while i < chars.len() {
-        if chars[i] == '<'
-            && i + 2 < chars.len()
-            && chars[i + 1] == 'b'
-            && chars[i + 2] == 'r'
-        {
+        if chars[i] == '<' && i + 2 < chars.len() && chars[i + 1] == 'b' && chars[i + 2] == 'r' {
             // Found `<br` — skip ahead to the closing `>`
             let start = i;
             let mut j = i + 3;
@@ -70,14 +66,14 @@ fn normalize_note_html(text: &str) -> String {
 
 /// Deterministic control-point fractions from rough.js LCG (seed=1).
 const P: [f64; 8] = [
-    0.20000449558719993,   // side1 stroke1
-    0.22135189184919002,   // side1 stroke2
-    0.21750230630859735,   // side2 stroke1
-    0.26839575478807093,   // side2 stroke2
-    0.21567247649654747,   // side3 stroke1
-    0.37591258296743035,   // side3 stroke2
-    0.28680931767448786,   // side4 stroke1
-    0.36376626798883083,   // side4 stroke2
+    0.20000449558719993, // side1 stroke1
+    0.22135189184919002, // side1 stroke2
+    0.21750230630859735, // side2 stroke1
+    0.26839575478807093, // side2 stroke2
+    0.21567247649654747, // side3 stroke1
+    0.37591258296743035, // side3 stroke2
+    0.28680931767448786, // side4 stroke1
+    0.36376626798883083, // side4 stroke2
 ];
 
 /// Build the rough.js stroke path for a rectangle with given half-width (hw)
@@ -191,10 +187,14 @@ pub fn draw(node: &Node, theme: &ThemeVariables) -> Result<String> {
     // Fill path: straight-line rectangle (roughness=0 solid fill = plain polygon).
     let fill_path = format!(
         "M{x1} {y1} L{x2} {y2} L{x3} {y3} L{x4} {y4}",
-        x1 = fmt_num(-hw), y1 = fmt_num(-hh),
-        x2 = fmt_num(hw),  y2 = fmt_num(-hh),
-        x3 = fmt_num(hw),  y3 = fmt_num(hh),
-        x4 = fmt_num(-hw), y4 = fmt_num(hh),
+        x1 = fmt_num(-hw),
+        y1 = fmt_num(-hh),
+        x2 = fmt_num(hw),
+        y2 = fmt_num(-hh),
+        x3 = fmt_num(hw),
+        y3 = fmt_num(hh),
+        x4 = fmt_num(-hw),
+        y4 = fmt_num(hh),
     );
 
     // Stroke path: rough.js bezier rectangle.
@@ -251,7 +251,10 @@ pub fn draw(node: &Node, theme: &ThemeVariables) -> Result<String> {
         ));
         out.push_str("<rect></rect>");
         out.push_str(&crate::render::foreign_object::foreign_object_body(
-            &html_label, fw, fh, &opts,
+            &html_label,
+            fw,
+            fh,
+            &opts,
         ));
         out.push_str("</g>");
     }

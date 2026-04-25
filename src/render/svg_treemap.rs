@@ -181,10 +181,7 @@ fn render_sections(
         let section_name = if is_root {
             ""
         } else {
-            d.nodes
-                .get(n.id)
-                .map(|x| x.name.as_str())
-                .unwrap_or("")
+            d.nodes.get(n.id).map(|x| x.name.as_str()).unwrap_or("")
         };
         let fill = color_scale(theme, section_name);
         let stroke = color_scale_peer(theme, section_name);
@@ -551,7 +548,9 @@ fn compute_leaf_text(
         format!(
             "text-anchor: middle; dominant-baseline: hanging; font-size: {fs}px; {ex};",
             fs = fmt_int(value_fs),
-            ex = label_extra_spaced.trim_end_matches(';').trim_start_matches(';'),
+            ex = label_extra_spaced
+                .trim_end_matches(';')
+                .trim_start_matches(';'),
         )
     } else {
         format!(
@@ -1334,4 +1333,3 @@ fn html_escape(s: &str) -> String {
     }
     out
 }
-

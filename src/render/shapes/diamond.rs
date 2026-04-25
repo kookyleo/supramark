@@ -39,12 +39,7 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
     let half = s / 2.0;
 
     // Upstream question.ts points array.
-    let pts = [
-        (half, 0.0),
-        (s, -half),
-        (half, -s),
-        (0.0, -half),
-    ];
+    let pts = [(half, 0.0), (s, -half), (half, -s), (0.0, -half)];
     let pts_attr = pts
         .iter()
         .map(|(x, y)| format!("{},{}", fmt_num(*x), fmt_num(*y)))

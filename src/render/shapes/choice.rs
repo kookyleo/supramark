@@ -10,8 +10,14 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
     let pts = [
         Point { x: 0.0, y: s / 2.0 },
         Point { x: s / 2.0, y: 0.0 },
-        Point { x: 0.0, y: -s / 2.0 },
-        Point { x: -s / 2.0, y: 0.0 },
+        Point {
+            x: 0.0,
+            y: -s / 2.0,
+        },
+        Point {
+            x: -s / 2.0,
+            y: 0.0,
+        },
     ];
     let d = create_path_from_points(&pts);
 

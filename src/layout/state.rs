@@ -13,8 +13,8 @@
 
 use crate::error::Result;
 use crate::font_metrics::{line_height as font_line_height, text_width};
-use crate::layout::unified::types::{Edge as LEdge, LayoutData, LayoutResult, Node as LNode};
 use crate::layout::unified::render as unified_render;
+use crate::layout::unified::types::{Edge as LEdge, LayoutData, LayoutResult, Node as LNode};
 use crate::model::state::{NotePosition, ParseItem, StateDiagram, StateKind};
 use crate::theme::ThemeVariables;
 
@@ -40,9 +40,15 @@ fn strip_html_tags(s: &str) -> String {
     let mut in_tag = false;
     for ch in s.chars() {
         match ch {
-            '<' => { in_tag = true; }
-            '>' => { in_tag = false; }
-            _ if !in_tag => { out.push(ch); }
+            '<' => {
+                in_tag = true;
+            }
+            '>' => {
+                in_tag = false;
+            }
+            _ if !in_tag => {
+                out.push(ch);
+            }
             _ => {}
         }
     }
@@ -65,7 +71,11 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
     let direction = d.direction.clone().unwrap_or_else(|| "TB".into());
 
     let mut data = LayoutData::default();
-    data.diagram_type = Some(if d.is_v2 { "stateDiagram".into() } else { "stateDiagram".into() });
+    data.diagram_type = Some(if d.is_v2 {
+        "stateDiagram".into()
+    } else {
+        "stateDiagram".into()
+    });
     data.direction = Some(direction.clone());
     data.node_spacing = Some(DEFAULT_NODE_SPACING);
     data.rank_spacing = Some(DEFAULT_RANK_SPACING);
@@ -103,9 +113,9 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
                     .iter()
                     .find(|cd| cd.name == ca.class_name)
                     .map_or(false, |cd| {
-                        cd.styles
-                            .split(',')
-                            .any(|p| p.trim().trim_end_matches(';').replace(" ", "") == "font-weight:bold")
+                        cd.styles.split(',').any(|p| {
+                            p.trim().trim_end_matches(';').replace(" ", "") == "font-weight:bold"
+                        })
                     })
             });
         match state.kind {
@@ -174,10 +184,8 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
             }
             StateKind::Note => {
                 n.shape = Some("note".into());
-                let (w, h) = measure_label_box(
-                    state.label.as_deref().unwrap_or(""),
-                    DEFAULT_FONT_SIZE,
-                );
+                let (w, h) =
+                    measure_label_box(state.label.as_deref().unwrap_or(""), DEFAULT_FONT_SIZE);
                 n.width = Some(w);
                 n.height = Some(h);
             }
@@ -202,14 +210,18 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
                     n.shape = Some("rectWithTitle".into());
                     let desc_lines = state.description.as_ref().unwrap();
                     let lh = font_line_height("sans-serif", DEFAULT_FONT_SIZE, node_is_bold, false);
-                    let title_w = text_width(label, "sans-serif", DEFAULT_FONT_SIZE, node_is_bold, false);
+                    let title_w =
+                        text_width(label, "sans-serif", DEFAULT_FONT_SIZE, node_is_bold, false);
                     let mut max_w = title_w;
                     for dl in desc_lines {
-                        let dw = text_width(dl, "sans-serif", DEFAULT_FONT_SIZE, node_is_bold, false);
-                        if dw > max_w { max_w = dw; }
+                        let dw =
+                            text_width(dl, "sans-serif", DEFAULT_FONT_SIZE, node_is_bold, false);
+                        if dw > max_w {
+                            max_w = dw;
+                        }
                     }
                     let node_w = max_w + DEFAULT_LABEL_PAD_X; // + one padding (upstream: bbox.width + node.padding)
-                    let node_h = lh + DEFAULT_LABEL_PAD_X;    // + one padding (upstream: bbox.height + node.padding)
+                    let node_h = lh + DEFAULT_LABEL_PAD_X; // + one padding (upstream: bbox.height + node.padding)
                     n.width = Some(node_w);
                     n.height = Some(node_h);
                     n.label_padding_x = Some(DEFAULT_LABEL_PAD_X);
@@ -256,7 +268,11 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
             if !applied.is_empty() {
                 let mut compiled: Vec<String> = Vec::new();
                 for class_name in &applied {
-                    if let Some(def) = d.class_defs.iter().find(|cd| &cd.name.as_str() == class_name) {
+                    if let Some(def) = d
+                        .class_defs
+                        .iter()
+                        .find(|cd| &cd.name.as_str() == class_name)
+                    {
                         // Split comma-separated class styles into individual properties.
                         for prop in def.styles.split(',') {
                             let p = prop.trim().trim_end_matches(';').trim().to_string();
@@ -338,10 +354,14 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
                         // state2, noteGroup2, note2, ...).
                         let (target_css_classes, target_parent, target_idx) = {
                             let idx = data.nodes.iter().position(|n| n.id == *target);
-                            let css = data.nodes.iter()
+                            let css = data
+                                .nodes
+                                .iter()
                                 .find(|n| n.id == *target)
                                 .and_then(|n| n.css_classes.clone());
-                            let par = data.nodes.iter()
+                            let par = data
+                                .nodes
+                                .iter()
                                 .find(|n| n.id == *target)
                                 .and_then(|n| n.parent_id.clone());
                             (css, par, idx)
@@ -559,7 +579,8 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
     // the render order of nodes in the upstream SVG.  We sort `data.nodes`
     // using an equivalent key so that our output matches the upstream order.
     {
-        let orig_indices: std::collections::HashMap<String, usize> = data.nodes
+        let orig_indices: std::collections::HashMap<String, usize> = data
+            .nodes
             .iter()
             .enumerate()
             .map(|(i, n)| (n.id.clone(), i))
@@ -567,8 +588,16 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
         data.nodes.sort_by(|a, b| {
             let ia = orig_indices.get(&a.id).copied().unwrap_or(0);
             let ib = orig_indices.get(&b.id).copied().unwrap_or(0);
-            let key_a = if let Ok(v) = a.id.parse::<u64>() { (0u8, v, 0usize) } else { (1, 0, ia) };
-            let key_b = if let Ok(v) = b.id.parse::<u64>() { (0u8, v, 0usize) } else { (1, 0, ib) };
+            let key_a = if let Ok(v) = a.id.parse::<u64>() {
+                (0u8, v, 0usize)
+            } else {
+                (1, 0, ia)
+            };
+            let key_b = if let Ok(v) = b.id.parse::<u64>() {
+                (0u8, v, 0usize)
+            } else {
+                (1, 0, ib)
+            };
             key_a.cmp(&key_b)
         });
     }
@@ -588,9 +617,7 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
         Ok(Ok(r)) => r,
         Ok(Err(e)) => return Err(e),
         Err(_) => {
-            log::warn!(
-                "state layout: dagre compound-mode panic — retrying in flat mode"
-            );
+            log::warn!("state layout: dagre compound-mode panic — retrying in flat mode");
             // Flat-mode: strip all parent_id fields so dagre sees a simple
             // directed graph.  After layout we synthesise composite-node
             // positions from their children's bounding boxes.
@@ -660,9 +687,14 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
 /// (set to 14×14 for stateEnd). But upstream calls updateNodeBounds() which
 /// updates node.width to the getBBox of the rendered rough circle (~14.0177),
 /// so the actual intersection radius is slightly larger than 7.
-fn fix_state_end_edge_endpoints(result: &mut crate::layout::unified::types::LayoutResult, effective_r: f64) {
+fn fix_state_end_edge_endpoints(
+    result: &mut crate::layout::unified::types::LayoutResult,
+    effective_r: f64,
+) {
     // Build a map from node id → (cx, cy) for stateEnd nodes.
-    let end_nodes: Vec<(String, f64, f64)> = result.nodes.iter()
+    let end_nodes: Vec<(String, f64, f64)> = result
+        .nodes
+        .iter()
         .filter(|n| matches!(n.shape.as_deref(), Some("stateEnd" | "state_end" | "end")))
         .map(|n| (n.id.clone(), n.x.unwrap_or(0.0), n.y.unwrap_or(0.0)))
         .collect();
@@ -721,36 +753,36 @@ fn decode_label_entities(s: &str) -> String {
             }
             if found_semi {
                 let decoded = match name.as_str() {
-                    "amp"    => "&",
-                    "lt"     => "<",
-                    "gt"     => ">",
-                    "quot"   => "\"",
-                    "apos"   => "'",
-                    "colon"  => ":",
-                    "semi"   => ";",
+                    "amp" => "&",
+                    "lt" => "<",
+                    "gt" => ">",
+                    "quot" => "\"",
+                    "apos" => "'",
+                    "colon" => ":",
+                    "semi" => ";",
                     "period" => ".",
-                    "comma"  => ",",
-                    "excl"   => "!",
-                    "quest"  => "?",
-                    "lpar"   => "(",
-                    "rpar"   => ")",
+                    "comma" => ",",
+                    "excl" => "!",
+                    "quest" => "?",
+                    "lpar" => "(",
+                    "rpar" => ")",
                     "lsqb" | "lbrack" => "[",
                     "rsqb" | "rbrack" => "]",
                     "lbrace" | "lcub" => "{",
                     "rbrace" | "rcub" => "}",
-                    "num"    => "#",
+                    "num" => "#",
                     "dollar" => "$",
-                    "sol"    => "/",
-                    "bsol"   => "\\",
+                    "sol" => "/",
+                    "bsol" => "\\",
                     "verbar" | "vert" => "|",
-                    "at"     => "@",
+                    "at" => "@",
                     "equals" => "=",
-                    "plus"   => "+",
+                    "plus" => "+",
                     "minus" | "hyphen" => "-",
-                    "ast" | "midast"  => "*",
-                    "Hat"    => "^",
-                    "tilde"  => "~",
-                    "space"  => " ",
+                    "ast" | "midast" => "*",
+                    "Hat" => "^",
+                    "tilde" => "~",
+                    "space" => " ",
                     _ => {
                         // Numeric or unknown: output as-is
                         out.push('#');
@@ -935,7 +967,11 @@ mod tests {
         let d = parse(src).unwrap();
         let theme = get_theme("default");
         let l = layout(&d, &theme).unwrap();
-        assert!(l.result.nodes.iter().any(|n| n.id == "Parent" && n.is_group));
+        assert!(l
+            .result
+            .nodes
+            .iter()
+            .any(|n| n.id == "Parent" && n.is_group));
     }
 
     /// dom_id counter: only STMT_RELATION increments graphItemCount.
@@ -952,10 +988,19 @@ mod tests {
         for n in &l.result.nodes {
             eprintln!("node id={:?} w={:?} h={:?}", n.id, n.width, n.height);
         }
-        let llid = l.result.nodes.iter().find(|n| n.id == "longlonglongid").unwrap();
+        let llid = l
+            .result
+            .nodes
+            .iter()
+            .find(|n| n.id == "longlonglongid")
+            .unwrap();
         // "A" label: ~9.577 px wide + 2*8 padding = ~25.577 px total (no min-40 clamping)
         let w = llid.width.unwrap_or(0.0);
-        assert!(w < 30.0, "longlonglongid width={} should be ~25.577 (no min-40)", w);
+        assert!(
+            w < 30.0,
+            "longlonglongid width={} should be ~25.577 (no min-40)",
+            w
+        );
     }
 
     #[test]
@@ -965,14 +1010,25 @@ mod tests {
         let theme = get_theme("default");
         let l = layout(&d, &theme).unwrap();
         let long1 = l.result.nodes.iter().find(|n| n.id == "long1").unwrap();
-        let llid = l.result.nodes.iter().find(|n| n.id == "longlonglongid").unwrap();
+        let llid = l
+            .result
+            .nodes
+            .iter()
+            .find(|n| n.id == "longlonglongid")
+            .unwrap();
         eprintln!("long1 dom_id={:?}", long1.dom_id);
         eprintln!("longlonglongid dom_id={:?}", llid.dom_id);
         // upstream: state decl does not bump counter, both nodes get -0
-        assert_eq!(long1.dom_id.as_deref(), Some("state-long1-0"),
-            "state decl must not bump counter; long1 should be -0");
-        assert_eq!(llid.dom_id.as_deref(), Some("state-longlonglongid-0"),
-            "state decl must not bump counter; longlonglongid should be -0");
+        assert_eq!(
+            long1.dom_id.as_deref(),
+            Some("state-long1-0"),
+            "state decl must not bump counter; long1 should be -0"
+        );
+        assert_eq!(
+            llid.dom_id.as_deref(),
+            Some("state-longlonglongid-0"),
+            "state decl must not bump counter; longlonglongid should be -0"
+        );
     }
 
     /// fixture 07: [*] --> S1; state "Some long name" as S1
@@ -984,13 +1040,20 @@ mod tests {
         let d = parse(src).unwrap();
         let theme = get_theme("default");
         let l = layout(&d, &theme).unwrap();
-        let start = l.result.nodes.iter().find(|n| n.id.ends_with("_start")).unwrap();
+        let start = l
+            .result
+            .nodes
+            .iter()
+            .find(|n| n.id.ends_with("_start"))
+            .unwrap();
         let s1 = l.result.nodes.iter().find(|n| n.id == "S1").unwrap();
         eprintln!("root_start dom_id={:?}", start.dom_id);
         eprintln!("S1 dom_id={:?}", s1.dom_id);
-        assert_eq!(start.dom_id.as_deref(), Some(format!("state-{}-0", start.id).as_str()));
+        assert_eq!(
+            start.dom_id.as_deref(),
+            Some(format!("state-{}-0", start.id).as_str())
+        );
         assert_eq!(s1.dom_id.as_deref(), Some("state-S1-1"),
             "S1 final dom_id should be -1 (relation sets -0, counter++, StateDecl overwrites to -1)");
     }
 }
-

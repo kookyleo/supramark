@@ -12,9 +12,15 @@ use crate::theme::ThemeVariables;
 pub fn draw(node: &Node, theme: &ThemeVariables) -> Result<String> {
     let dir = node.dir.as_deref();
     let (w, h) = if matches!(dir, Some("LR")) {
-        (node.width.unwrap_or(10.0).max(10.0), node.height.unwrap_or(70.0).max(70.0))
+        (
+            node.width.unwrap_or(10.0).max(10.0),
+            node.height.unwrap_or(70.0).max(70.0),
+        )
     } else {
-        (node.width.unwrap_or(70.0).max(70.0), node.height.unwrap_or(10.0).max(10.0))
+        (
+            node.width.unwrap_or(70.0).max(70.0),
+            node.height.unwrap_or(10.0).max(10.0),
+        )
     };
     let x = -w / 2.0;
     let y = -h / 2.0;

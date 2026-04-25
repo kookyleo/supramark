@@ -181,7 +181,9 @@ fn round3(v: f64) -> f64 {
 /// Bezier paths uses the convex hull (control point bbox), not the geometric
 /// tight bbox. So we scan ALL path coordinate values (endpoints + control
 /// points) after 3-decimal rounding, matching the browser's approach.
-fn basis_spline_tight_bbox(points: &[crate::layout::unified::types::Point]) -> (f64, f64, f64, f64) {
+fn basis_spline_tight_bbox(
+    points: &[crate::layout::unified::types::Point],
+) -> (f64, f64, f64, f64) {
     if points.is_empty() {
         return (0.0, 0.0, 0.0, 0.0);
     }
@@ -195,10 +197,18 @@ fn basis_spline_tight_bbox(points: &[crate::layout::unified::types::Point]) -> (
         ($px:expr, $py:expr) => {{
             let rx = round3($px);
             let ry = round3($py);
-            if rx < x_min { x_min = rx; }
-            if rx > x_max { x_max = rx; }
-            if ry < y_min { y_min = ry; }
-            if ry > y_max { y_max = ry; }
+            if rx < x_min {
+                x_min = rx;
+            }
+            if rx > x_max {
+                x_max = rx;
+            }
+            if ry < y_min {
+                y_min = ry;
+            }
+            if ry > y_max {
+                y_max = ry;
+            }
         }};
     }
 
@@ -236,17 +246,23 @@ fn basis_spline_tight_bbox(points: &[crate::layout::unified::types::Point]) -> (
                 let lpy = (5.0 * y0 + y1) / 6.0;
                 add_coord!(lpx, lpy);
                 scan_cubic!(
-                    (2.0*x0+x1)/3.0, (2.0*y0+y1)/3.0,
-                    (x0+2.0*x1)/3.0, (y0+2.0*y1)/3.0,
-                    (x0+4.0*x1+x)/6.0, (y0+4.0*y1+y)/6.0
+                    (2.0 * x0 + x1) / 3.0,
+                    (2.0 * y0 + y1) / 3.0,
+                    (x0 + 2.0 * x1) / 3.0,
+                    (y0 + 2.0 * y1) / 3.0,
+                    (x0 + 4.0 * x1 + x) / 6.0,
+                    (y0 + 4.0 * y1 + y) / 6.0
                 );
                 state = 3;
             }
             _ => {
                 scan_cubic!(
-                    (2.0*x0+x1)/3.0, (2.0*y0+y1)/3.0,
-                    (x0+2.0*x1)/3.0, (y0+2.0*y1)/3.0,
-                    (x0+4.0*x1+x)/6.0, (y0+4.0*y1+y)/6.0
+                    (2.0 * x0 + x1) / 3.0,
+                    (2.0 * y0 + y1) / 3.0,
+                    (x0 + 2.0 * x1) / 3.0,
+                    (y0 + 2.0 * y1) / 3.0,
+                    (x0 + 4.0 * x1 + x) / 6.0,
+                    (y0 + 4.0 * y1 + y) / 6.0
                 );
             }
         }
@@ -261,9 +277,12 @@ fn basis_spline_tight_bbox(points: &[crate::layout::unified::types::Point]) -> (
         3 => {
             // Tail cubic (emit_basis_cubic with last point repeated).
             scan_cubic!(
-                (2.0*x0+x1)/3.0, (2.0*y0+y1)/3.0,
-                (x0+2.0*x1)/3.0, (y0+2.0*y1)/3.0,
-                (x0+4.0*x1+x1)/6.0, (y0+4.0*y1+y1)/6.0
+                (2.0 * x0 + x1) / 3.0,
+                (2.0 * y0 + y1) / 3.0,
+                (x0 + 2.0 * x1) / 3.0,
+                (y0 + 2.0 * y1) / 3.0,
+                (x0 + 4.0 * x1 + x1) / 6.0,
+                (y0 + 4.0 * y1 + y1) / 6.0
             );
             // Final L to last point.
             add_coord!(x1, y1);
@@ -307,7 +326,12 @@ fn compute_viewbox(l: &StateLayout, pad: f64, title: Option<&str>) -> (f64, f64,
     // NoteGroup clusters: rendered as <g class="note-cluster"> with absolute
     // coordinate rect (no transform). Include their absolute bounds in the
     // viewbox computation.
-    for n in l.result.nodes.iter().filter(|n| n.is_group && n.shape.as_deref() == Some("noteGroup")) {
+    for n in l
+        .result
+        .nodes
+        .iter()
+        .filter(|n| n.is_group && n.shape.as_deref() == Some("noteGroup"))
+    {
         if let (Some(cx), Some(cy), Some(w), Some(h)) = (n.x, n.y, n.width, n.height) {
             let x_left = cx - w / 2.0;
             let x_right = cx + w / 2.0;
@@ -327,9 +351,16 @@ fn compute_viewbox(l: &StateLayout, pad: f64, title: Option<&str>) -> (f64, f64,
         let shape = n.shape.as_deref().unwrap_or("state");
         let (nx_min, nx_max, ny_min, ny_max) = if matches!(
             shape,
-            "stateStart" | "state_start" | "start"
-            | "stateEnd" | "state_end" | "end"
-            | "forkJoin" | "fork_join" | "fork" | "join"
+            "stateStart"
+                | "state_start"
+                | "start"
+                | "stateEnd"
+                | "state_end"
+                | "end"
+                | "forkJoin"
+                | "fork_join"
+                | "fork"
+                | "join"
         ) {
             // Circle or rectangle at local origin.
             // Use n.width/2 as the half-extent so that stateEnd (width =
@@ -423,7 +454,7 @@ fn compute_viewbox(l: &StateLayout, pad: f64, title: Option<&str>) -> (f64, f64,
                     use crate::font_metrics::text_width as ftw;
                     let lw = ftw(decoded.trim(), "sans-serif", 14.0, false, false);
                     let lh = 16.296875_f64; // one line height
-                    // foreignObject LOCAL bbox (ignoring parent transforms): [0,lw]×[0,lh].
+                                            // foreignObject LOCAL bbox (ignoring parent transforms): [0,lw]×[0,lh].
                     g_x_min = g_x_min.min(0.0);
                     g_x_max = g_x_max.max(lw);
                     g_y_min = g_y_min.min(0.0);
@@ -435,7 +466,13 @@ fn compute_viewbox(l: &StateLayout, pad: f64, title: Option<&str>) -> (f64, f64,
 
     // Fall back when the layout has no renderable content at all.
     if !g_x_min.is_finite() {
-        return (-(7.0 + pad), -(7.0 + pad), 14.0 + 2.0 * pad, 14.0 + 2.0 * pad, 0.0);
+        return (
+            -(7.0 + pad),
+            -(7.0 + pad),
+            14.0 + 2.0 * pad,
+            14.0 + 2.0 * pad,
+            0.0,
+        );
     }
 
     // Record center of the content-only bounding box — this is the x
@@ -549,7 +586,9 @@ fn emit_edge_path(id: &str, e: &Edge) -> String {
         unified_shell::base64_encode(json.as_bytes())
     };
     // Note edges have no arrowhead (arrowhead=None, class contains "note-edge").
-    let is_note_edge = e.classes.as_deref()
+    let is_note_edge = e
+        .classes
+        .as_deref()
         .map_or(false, |c| c.contains("note-edge"));
     if is_note_edge {
         format!(
@@ -573,8 +612,8 @@ fn emit_edge_path(id: &str, e: &Edge) -> String {
 }
 
 fn emit_edge_label(e: &Edge) -> String {
-    use crate::render::foreign_object::{self, LabelOpts};
     use crate::font_metrics::text_width;
+    use crate::render::foreign_object::{self, LabelOpts};
 
     let raw = e.label.as_deref().unwrap_or("");
     // Decode mermaid #name; entities before rendering (upstream decodeEntities).
@@ -593,10 +632,7 @@ fn emit_edge_label(e: &Edge) -> String {
             (format!("<p>{}</p>", xml_escape(&decoded)), false)
         }
     } else {
-        let parts: Vec<String> = decoded
-            .split('\n')
-            .map(|seg| xml_escape(seg))
-            .collect();
+        let parts: Vec<String> = decoded.split('\n').map(|seg| xml_escape(seg)).collect();
         (parts.join("<br/>"), true)
     };
 
@@ -741,13 +777,20 @@ fn emit_state_end(id: &str, n: &Node, theme: &ThemeVariables) -> Option<String> 
 fn emit_fork_join(id: &str, n: &Node, theme: &ThemeVariables) -> Option<String> {
     let dir = n.dir.as_deref();
     let (w, h) = if matches!(dir, Some("LR")) {
-        (n.width.unwrap_or(10.0).max(10.0), n.height.unwrap_or(70.0).max(70.0))
+        (
+            n.width.unwrap_or(10.0).max(10.0),
+            n.height.unwrap_or(70.0).max(70.0),
+        )
     } else {
-        (n.width.unwrap_or(70.0).max(70.0), n.height.unwrap_or(10.0).max(10.0))
+        (
+            n.width.unwrap_or(70.0).max(70.0),
+            n.height.unwrap_or(10.0).max(10.0),
+        )
     };
     let x = -w / 2.0;
     let y = -h / 2.0;
-    let classes = shapes::types::get_node_classes(n.look.as_deref(), n.css_classes.as_deref(), None);
+    let classes =
+        shapes::types::get_node_classes(n.look.as_deref(), n.css_classes.as_deref(), None);
     let nid = n.dom_id.clone().unwrap_or_else(|| n.id.clone());
     let tx = n.x.unwrap_or(0.0);
     let ty = n.y.unwrap_or(0.0);
@@ -775,7 +818,8 @@ fn emit_state_node(id: &str, n: &Node, _theme: &ThemeVariables) -> Option<String
     let w = n.width.unwrap_or(0.0);
     let h = n.height.unwrap_or(0.0);
     let r = n.rx.unwrap_or(5.0);
-    let classes = shapes::types::get_node_classes(n.look.as_deref(), n.css_classes.as_deref(), None);
+    let classes =
+        shapes::types::get_node_classes(n.look.as_deref(), n.css_classes.as_deref(), None);
     let nid = n.dom_id.clone().unwrap_or_else(|| n.id.clone());
     let tx = n.x.unwrap_or(0.0);
     let ty = n.y.unwrap_or(0.0);
@@ -787,10 +831,8 @@ fn emit_state_node(id: &str, n: &Node, _theme: &ThemeVariables) -> Option<String
     // cssStyles overrides cssCompiledStyles for the same key.
     // We build a merged comma-separated string: compiled first, inline last
     // (later entries override earlier ones in styles2_string).
-    let merged_style = merge_node_styles(
-        n.css_compiled_styles.as_deref(),
-        n.label_style.as_deref(),
-    );
+    let merged_style =
+        merge_node_styles(n.css_compiled_styles.as_deref(), n.label_style.as_deref());
     let label_style = merged_style.as_str();
 
     // Split merged style into node/label parts with !important.
@@ -843,9 +885,17 @@ fn emit_state_node(id: &str, n: &Node, _theme: &ThemeVariables) -> Option<String
         } else {
             Some(&div_prefix)
         };
-        let group_style_val: &str = if label_styles_str.is_empty() { "" } else { &label_styles_str };
+        let group_style_val: &str = if label_styles_str.is_empty() {
+            ""
+        } else {
+            &label_styles_str
+        };
         let opts = LabelOpts {
-            extra_span_classes: if is_markdown { "markdown-node-label" } else { "" },
+            extra_span_classes: if is_markdown {
+                "markdown-node-label"
+            } else {
+                ""
+            },
             group_style: Some(group_style_val),
             label_style: label_styles_ref,
             div_style_prefix: div_prefix_ref,
@@ -875,18 +925,16 @@ fn emit_rect_with_title(id: &str, n: &Node, _theme: &ThemeVariables) -> Option<S
     let h = n.height.unwrap_or(0.0);
     let padding = n.label_padding_x.unwrap_or(8.0);
     let lh = h - padding; // = line_height (=16.296875)
-    // Upstream rectWithTitle uses `"node " + node2.classes` (no trailing space),
-    // not the `get_node_classes` helper (which appends a trailing space).
+                          // Upstream rectWithTitle uses `"node " + node2.classes` (no trailing space),
+                          // not the `get_node_classes` helper (which appends a trailing space).
     let css_cls = n.css_classes.as_deref().unwrap_or("undefined");
     let classes = format!("node {}", css_cls);
     let nid = n.dom_id.clone().unwrap_or_else(|| n.id.clone());
     let tx = n.x.unwrap_or(0.0);
     let ty = n.y.unwrap_or(0.0);
 
-    let merged_style = merge_node_styles(
-        n.css_compiled_styles.as_deref(),
-        n.label_style.as_deref(),
-    );
+    let merged_style =
+        merge_node_styles(n.css_compiled_styles.as_deref(), n.label_style.as_deref());
     let label_style = merged_style.as_str();
     let (node_styles, label_styles_str, _div_prefix) = if label_style.is_empty() {
         (String::new(), String::new(), String::new())
@@ -899,7 +947,9 @@ fn emit_rect_with_title(id: &str, n: &Node, _theme: &ThemeVariables) -> Option<S
 
     // Title = first label line. Description = n.description.
     let title = n.label.as_deref().unwrap_or("");
-    let desc_lines: Vec<&str> = n.description.as_deref()
+    let desc_lines: Vec<&str> = n
+        .description
+        .as_deref()
         .map(|d| d.iter().map(|s| s.as_str()).collect())
         .unwrap_or_default();
 
@@ -908,7 +958,9 @@ fn emit_rect_with_title(id: &str, n: &Node, _theme: &ThemeVariables) -> Option<S
     let mut desc_max_w = 0.0f64;
     for dl in &desc_lines {
         let dw = ft_w(dl, FONT_FAMILY, FONT_SIZE, label_is_bold, false);
-        if dw > desc_max_w { desc_max_w = dw; }
+        if dw > desc_max_w {
+            desc_max_w = dw;
+        }
     }
     // Label group bbox.width = max(title_w, desc_max_w) (jsdom ignores transforms).
     let bbox_w = title_w.max(desc_max_w);
@@ -1070,43 +1122,43 @@ fn decode_mermaid_entities(s: &str) -> String {
                 } else {
                     // Named entity: map common ones used in mermaid labels.
                     let decoded = match name {
-                        "amp"    => "&",
-                        "lt"     => "<",
-                        "gt"     => ">",
-                        "quot"   => "\"",
-                        "apos"   => "'",
-                        "colon"  => ":",
-                        "semi"   => ";",
+                        "amp" => "&",
+                        "lt" => "<",
+                        "gt" => ">",
+                        "quot" => "\"",
+                        "apos" => "'",
+                        "colon" => ":",
+                        "semi" => ";",
                         "period" => ".",
-                        "comma"  => ",",
-                        "excl"   => "!",
-                        "quest"  => "?",
-                        "lpar"   => "(",
-                        "rpar"   => ")",
+                        "comma" => ",",
+                        "excl" => "!",
+                        "quest" => "?",
+                        "lpar" => "(",
+                        "rpar" => ")",
                         "lsqb" | "lbrack" => "[",
                         "rsqb" | "rbrack" => "]",
                         "lbrace" | "lcub" => "{",
                         "rbrace" | "rcub" => "}",
-                        "num"    => "#",
+                        "num" => "#",
                         "dollar" => "$",
-                        "sol"    => "/",
-                        "bsol"   => "\\",
+                        "sol" => "/",
+                        "bsol" => "\\",
                         "verbar" | "vert" => "|",
-                        "at"     => "@",
+                        "at" => "@",
                         "equals" => "=",
-                        "plus"   => "+",
+                        "plus" => "+",
                         "minus" | "hyphen" => "-",
-                        "ast" | "midast"  => "*",
-                        "Hat"    => "^",
-                        "tilde"  => "~",
-                        "grave"  => "`",
+                        "ast" | "midast" => "*",
+                        "Hat" => "^",
+                        "tilde" => "~",
+                        "grave" => "`",
                         "lowbar" | "underbar" => "_",
-                        "space"  => " ",
-                        "nbsp"   => "\u{00A0}",
-                        "ndash"  => "\u{2013}",
-                        "mdash"  => "\u{2014}",
-                        "laquo"  => "\u{00AB}",
-                        "raquo"  => "\u{00BB}",
+                        "space" => " ",
+                        "nbsp" => "\u{00A0}",
+                        "ndash" => "\u{2013}",
+                        "mdash" => "\u{2014}",
+                        "laquo" => "\u{00AB}",
+                        "raquo" => "\u{00BB}",
                         _ => {
                             // Unknown: keep as-is
                             result.push('#');
@@ -1228,7 +1280,11 @@ fn styles2_string(raw_css: &str) -> (String, String, String) {
         }
     }
 
-    (node_parts.join(";"), label_parts.join(";"), div_parts.join(""))
+    (
+        node_parts.join(";"),
+        label_parts.join(";"),
+        div_parts.join(""),
+    )
 }
 
 /// Mirrors upstream `isLabelStyle` in `handDrawnShapeStyles.ts`.
@@ -1287,9 +1343,13 @@ fn class_def_css(id: &str, d: &StateDiagram) -> String {
         // Split comma-separated styles from classDef value.
         // e.g. "fill:#fff,color: blue" → ["fill:#fff", "color: blue"]
         let raw = def.styles.trim().trim_end_matches(';');
-        let props: Vec<&str> = raw.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+        let props: Vec<&str> = raw
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
 
-        let mut styles: Vec<String> = Vec::new();    // all properties
+        let mut styles: Vec<String> = Vec::new(); // all properties
         let mut text_styles: Vec<String> = Vec::new(); // label/color properties only
 
         for prop in &props {
@@ -1333,11 +1393,7 @@ fn class_def_css(id: &str, d: &StateDiagram) -> String {
         if !text_styles.is_empty() {
             // tspan rule — text/color properties with !important.
             // Space before "tspan" in selector.
-            out.push_str(&format!(
-                "#{id} .{cls} tspan{{",
-                id = id,
-                cls = def.name,
-            ));
+            out.push_str(&format!("#{id} .{cls} tspan{{", id = id, cls = def.name,));
             for s in &text_styles {
                 out.push_str(s);
                 out.push_str("!important;");
@@ -1363,20 +1419,45 @@ fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
     let special_state_color = theme.special_state_color.as_deref().unwrap_or("#333333");
     let inner_end_bg = theme.inner_end_background.as_deref().unwrap_or("#333333");
     let background = theme.background.as_deref().unwrap_or("white");
-    let composite_bg = theme.composite_background.as_deref().or(theme.background.as_deref()).unwrap_or("white");
-    let composite_title_bg = theme.composite_title_background.as_deref().unwrap_or("#ECECFF");
-    let state_bkg = theme.state_bkg.as_deref().or(theme.main_bkg.as_deref()).unwrap_or("#ECECFF");
-    let state_border = theme.state_border.as_deref().or(theme.node_border.as_deref()).unwrap_or("#9370DB");
+    let composite_bg = theme
+        .composite_background
+        .as_deref()
+        .or(theme.background.as_deref())
+        .unwrap_or("white");
+    let composite_title_bg = theme
+        .composite_title_background
+        .as_deref()
+        .unwrap_or("#ECECFF");
+    let state_bkg = theme
+        .state_bkg
+        .as_deref()
+        .or(theme.main_bkg.as_deref())
+        .unwrap_or("#ECECFF");
+    let state_border = theme
+        .state_border
+        .as_deref()
+        .or(theme.node_border.as_deref())
+        .unwrap_or("#9370DB");
     let alt_bg = theme.alt_background.as_deref().unwrap_or("#efefef");
     let note_bkg = theme.note_bkg_color.as_deref().unwrap_or("#fff5ad");
     let note_border = theme.note_border_color.as_deref().unwrap_or("#aaaa33");
     let note_text = theme.note_text_color.as_deref().unwrap_or("#333");
     let label_bg = theme.label_background_color.as_deref().unwrap_or("#ECECFF");
-    let edge_label_bg = theme.edge_label_background.as_deref().unwrap_or("rgba(232,232,232, 0.8)");
-    let transition_label_color = theme.transition_label_color.as_deref().or(theme.tertiary_text_color.as_deref()).unwrap_or("#333");
+    let edge_label_bg = theme
+        .edge_label_background
+        .as_deref()
+        .unwrap_or("rgba(232,232,232, 0.8)");
+    let transition_label_color = theme
+        .transition_label_color
+        .as_deref()
+        .or(theme.tertiary_text_color.as_deref())
+        .unwrap_or("#333");
     let radius = theme.radius.unwrap_or(5);
     // drop-shadow for neo look
-    let drop_shadow = theme.drop_shadow.as_deref().unwrap_or("drop-shadow(1px 2px 2px rgba(185, 185, 185, 1))");
+    let drop_shadow = theme
+        .drop_shadow
+        .as_deref()
+        .unwrap_or("drop-shadow(1px 2px 2px rgba(185, 185, 185, 1))");
     let neo_ds = drop_shadow.replace("url(#drop-shadow)", &format!("url({}-drop-shadow)", id));
 
     let mut s = String::with_capacity(3000);
@@ -1404,17 +1485,20 @@ fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
     // g.stateGroup rect
     s.push_str(&format!(
         "#{id} g.stateGroup rect{{fill:{mb};stroke:{nb};}}",
-        mb = main_bkg, nb = node_border,
+        mb = main_bkg,
+        nb = node_border,
     ));
     // g.stateGroup line
     s.push_str(&format!(
         "#{id} g.stateGroup line{{stroke:{lc};stroke-width:{sw};}}",
-        lc = line_color, sw = stroke_width,
+        lc = line_color,
+        sw = stroke_width,
     ));
     // .transition
     s.push_str(&format!(
         "#{id} .transition{{stroke:{tc};stroke-width:{sw};fill:none;}}",
-        tc = transition_color, sw = stroke_width,
+        tc = transition_color,
+        sw = stroke_width,
     ));
     // .stateGroup .composit (upstream typo preserved)
     s.push_str(&format!(
@@ -1428,7 +1512,8 @@ fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
     // .state-note
     s.push_str(&format!(
         "#{id} .state-note{{stroke:{nbc};fill:{nbg};}}",
-        nbc = note_border, nbg = note_bkg,
+        nbc = note_border,
+        nbg = note_bkg,
     ));
     // .state-note text
     s.push_str(&format!(
@@ -1489,7 +1574,8 @@ fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
     // .node circle.state-end
     s.push_str(&format!(
         "#{id} .node circle.state-end{{fill:{ieb};stroke:{bg};stroke-width:1.5;}}",
-        ieb = inner_end_bg, bg = background,
+        ieb = inner_end_bg,
+        bg = background,
     ));
     // .end-state-inner
     s.push_str(&format!(
@@ -1499,12 +1585,16 @@ fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
     // .node rect
     s.push_str(&format!(
         "#{id} .node rect{{fill:{sb};stroke:{sbr};stroke-width:{sw}px;}}",
-        sb = state_bkg, sbr = state_border, sw = stroke_width,
+        sb = state_bkg,
+        sbr = state_border,
+        sw = stroke_width,
     ));
     // .node polygon
     s.push_str(&format!(
         "#{id} .node polygon{{fill:{mb};stroke:{sbr};stroke-width:{sw}px;}}",
-        mb = main_bkg, sbr = state_border, sw = stroke_width,
+        mb = main_bkg,
+        sbr = state_border,
+        sw = stroke_width,
     ));
     // [id$="-barbEnd"]
     s.push_str(&format!(
@@ -1514,7 +1604,9 @@ fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
     // .statediagram-cluster rect
     s.push_str(&format!(
         "#{id} .statediagram-cluster rect{{fill:{ctbg};stroke:{sbr};stroke-width:{sw}px;}}",
-        ctbg = composite_title_bg, sbr = state_border, sw = stroke_width,
+        ctbg = composite_title_bg,
+        sbr = state_border,
+        sw = stroke_width,
     ));
     // .cluster-label, .nodeLabel
     s.push_str(&format!(
@@ -1545,9 +1637,7 @@ fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
         abg = alt_bg,
     ));
     // .statediagram-cluster .inner
-    s.push_str(&format!(
-        "#{id} .statediagram-cluster .inner{{rx:0;ry:0;}}",
-    ));
+    s.push_str(&format!("#{id} .statediagram-cluster .inner{{rx:0;ry:0;}}",));
     // .statediagram-state rect.basic
     s.push_str(&format!(
         "#{id} .statediagram-state rect.basic{{rx:5px;ry:5px;}}",
@@ -1558,17 +1648,17 @@ fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
         abg = alt_bg,
     ));
     // .note-edge
-    s.push_str(&format!(
-        "#{id} .note-edge{{stroke-dasharray:5;}}",
-    ));
+    s.push_str(&format!("#{id} .note-edge{{stroke-dasharray:5;}}",));
     // .statediagram-note rect (twice — upstream emits it twice)
     s.push_str(&format!(
         "#{id} .statediagram-note rect{{fill:{nbg};stroke:{nbc};stroke-width:1px;rx:0;ry:0;}}",
-        nbg = note_bkg, nbc = note_border,
+        nbg = note_bkg,
+        nbc = note_border,
     ));
     s.push_str(&format!(
         "#{id} .statediagram-note rect{{fill:{nbg};stroke:{nbc};stroke-width:1px;rx:0;ry:0;}}",
-        nbg = note_bkg, nbc = note_border,
+        nbg = note_bkg,
+        nbc = note_border,
     ));
     // .statediagram-note text
     s.push_str(&format!(
@@ -1581,9 +1671,7 @@ fn state_specific_css(id: &str, theme: &ThemeVariables) -> String {
         ntc = note_text,
     ));
     // .statediagram .edgeLabel (upstream has `color: red; // ${options.noteTextColor};`)
-    s.push_str(&format!(
-        "#{id} .statediagram .edgeLabel{{color:red;}}",
-    ));
+    s.push_str(&format!("#{id} .statediagram .edgeLabel{{color:red;}}",));
     // [id$="-dependencyStart"], [id$="-dependencyEnd"]
     s.push_str(&format!(
         "#{id} [id$=\"-dependencyStart\"],#{id} [id$=\"-dependencyEnd\"]{{fill:{lc};stroke:{lc};stroke-width:{sw};}}",
@@ -1623,7 +1711,9 @@ mod tests {
     fn dump_state_multi_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let dir = base.join("tests/ext_fixtures/cypress/state");
-        let Ok(entries) = std::fs::read_dir(&dir) else { return };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return;
+        };
         let mut mmds: Vec<String> = entries
             .flatten()
             .filter_map(|e| {
@@ -1673,8 +1763,15 @@ mod tests {
             let rb = b.3 as f64 / b.1.min(b.2) as f64;
             rb.partial_cmp(&ra).unwrap_or(std::cmp::Ordering::Equal)
         });
-        let exact: Vec<_> = results.iter().filter(|r| r.3 == r.1 && r.1 == r.2).collect();
-        eprintln!("=== dump_state_multi_diff: {} fixtures, {} exact ===", results.len(), exact.len());
+        let exact: Vec<_> = results
+            .iter()
+            .filter(|r| r.3 == r.1 && r.1 == r.2)
+            .collect();
+        eprintln!(
+            "=== dump_state_multi_diff: {} fixtures, {} exact ===",
+            results.len(),
+            exact.len()
+        );
         for r in exact {
             eprintln!("  EXACT: {}", r.0);
         }
@@ -1687,16 +1784,31 @@ mod tests {
                 // Write top mismatches for examination.
                 let _ = std::fs::write(format!("/tmp/rust_state_{}.svg", stem), {
                     let mmd_path = base.join(format!("tests/{}.mmd", r.0));
-                    let Ok(mmd) = std::fs::read_to_string(&mmd_path) else { continue };
+                    let Ok(mmd) = std::fs::read_to_string(&mmd_path) else {
+                        continue;
+                    };
                     let Ok(d) = parse(&mmd) else { continue };
                     let theme = get_theme("default");
-                    let Ok(l) = crate::layout::state::layout(&d, &theme) else { continue };
-                    let Ok(got) = render(&d, &l, &theme, &format!("ref-{}", r.0.replace(['/', '_'], "-"))) else { continue };
+                    let Ok(l) = crate::layout::state::layout(&d, &theme) else {
+                        continue;
+                    };
+                    let Ok(got) = render(
+                        &d,
+                        &l,
+                        &theme,
+                        &format!("ref-{}", r.0.replace(['/', '_'], "-")),
+                    ) else {
+                        continue;
+                    };
                     got
                 });
                 let exp_path = base.join(format!("tests/reference/{}.svg", r.0));
-                let Ok(exp) = std::fs::read_to_string(&exp_path) else { continue };
-                let Ok(got_bytes) = std::fs::read(format!("/tmp/rust_state_{}.svg", stem)) else { continue };
+                let Ok(exp) = std::fs::read_to_string(&exp_path) else {
+                    continue;
+                };
+                let Ok(got_bytes) = std::fs::read(format!("/tmp/rust_state_{}.svg", stem)) else {
+                    continue;
+                };
                 let got = String::from_utf8_lossy(&got_bytes);
                 eprintln!(
                     "  got[{}..{}] = {:?}",
@@ -1785,25 +1897,41 @@ mod tests {
         let mut all: Vec<(String, usize, usize, usize)> = vec![];
         for sub in ["cypress", "demos"] {
             let dir = base.join(format!("tests/ext_fixtures/{}/state", sub));
-            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
             let mut files: Vec<_> = entries.flatten().collect();
             files.sort_by_key(|e| e.file_name());
             for entry in files {
                 let p = entry.path();
-                if p.extension().and_then(|s| s.to_str()) != Some("mmd") { continue; }
+                if p.extension().and_then(|s| s.to_str()) != Some("mmd") {
+                    continue;
+                }
                 let stem = p.file_stem().unwrap().to_str().unwrap().to_string();
                 let rel = format!("ext_fixtures/{}/state/{}", sub, stem);
-                let Ok(mmd) = fs::read_to_string(&p) else { continue };
+                let Ok(mmd) = fs::read_to_string(&p) else {
+                    continue;
+                };
                 let ref_path = base.join(format!("tests/reference/{}.svg", rel));
-                let Ok(exp) = fs::read_to_string(&ref_path) else { continue };
+                let Ok(exp) = fs::read_to_string(&ref_path) else {
+                    continue;
+                };
                 let id = fixture_id(&rel);
                 let Ok(d) = parse(&mmd) else { continue };
                 let theme = get_theme("default");
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    crate::layout::state::layout(&d, &theme).and_then(|l| render(&d, &l, &theme, &id))
+                    crate::layout::state::layout(&d, &theme)
+                        .and_then(|l| render(&d, &l, &theme, &id))
                 }));
-                let got = match result { Ok(Ok(s)) => s, _ => continue };
-                let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
+                let got = match result {
+                    Ok(Ok(s)) => s,
+                    _ => continue,
+                };
+                let prefix = got
+                    .bytes()
+                    .zip(exp.bytes())
+                    .take_while(|(a, b)| a == b)
+                    .count();
                 all.push((rel, got.len(), exp.len(), prefix));
             }
         }
@@ -1814,7 +1942,11 @@ mod tests {
         });
         eprintln!("=== sweep_all_fixtures_detail: {} rendered ===", all.len());
         let exact: Vec<_> = all.iter().filter(|r| r.3 == r.1 && r.1 == r.2).collect();
-        eprintln!("EXACT ({}): {:?}", exact.len(), exact.iter().map(|r| &r.0).collect::<Vec<_>>());
+        eprintln!(
+            "EXACT ({}): {:?}",
+            exact.len(),
+            exact.iter().map(|r| &r.0).collect::<Vec<_>>()
+        );
         eprintln!("Top 20 non-exact:");
         for r in all.iter().filter(|r| r.3 != r.1 || r.1 != r.2).take(20) {
             let stem = r.0.split('/').last().unwrap_or("");
@@ -1823,25 +1955,94 @@ mod tests {
     }
 
     #[test]
+    fn gen_fixture_32_diff() {
+        let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/32.mmd")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/32.svg"))
+                .unwrap();
+        let id = "ref-ext-fixtures-cypress-state-32";
+        let d = parse(&mmd).unwrap();
+        let theme = get_theme("default");
+        let l = crate::layout::state::layout(&d, &theme).unwrap();
+        for n in &l.result.nodes {
+            eprintln!(
+                "node id={:?} w={:?} h={:?} x={:?} y={:?} label={:?} shape={:?} css={:?}",
+                n.id, n.width, n.height, n.x, n.y, n.label, n.shape, n.css_classes
+            );
+        }
+        let got = render(&d, &l, &theme, id).unwrap();
+        let _ = fs::write("/tmp/fresh_state_32.svg", &got);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "32: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
+        if got != exp {
+            let p = prefix;
+            let ctx = 60;
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &got[p.saturating_sub(ctx)..(p + 300).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &exp[p.saturating_sub(ctx)..(p + 300).min(exp.len())]
+            );
+        }
+    }
+
+    #[test]
     fn gen_fixture_29_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/29.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/29.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/29.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-29";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         for n in &l.result.nodes {
-            eprintln!("node id={:?} w={:?} h={:?} x={:?} y={:?} label={:?} shape={:?}",
-                      n.id, n.width, n.height, n.x, n.y, n.label, n.shape);
+            eprintln!(
+                "node id={:?} w={:?} h={:?} x={:?} y={:?} label={:?} shape={:?}",
+                n.id, n.width, n.height, n.x, n.y, n.label, n.shape
+            );
         }
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_29.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("29: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "29: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
-            eprintln!("got[p-10:p+150]: {:?}", &got[prefix.saturating_sub(10)..(prefix+150).min(got.len())]);
-            eprintln!("ref[p-10:p+150]: {:?}", &exp[prefix.saturating_sub(10)..(prefix+150).min(exp.len())]);
+            eprintln!(
+                "got[p-10:p+150]: {:?}",
+                &got[prefix.saturating_sub(10)..(prefix + 150).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-10:p+150]: {:?}",
+                &exp[prefix.saturating_sub(10)..(prefix + 150).min(exp.len())]
+            );
         }
     }
 
@@ -1849,19 +2050,39 @@ mod tests {
     fn gen_fixture_04_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/04.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/04.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/04.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-04";
         let Ok(d) = parse(&mmd) else { return };
         let theme = get_theme("default");
-        let Ok(l) = crate::layout::state::layout(&d, &theme) else { return };
+        let Ok(l) = crate::layout::state::layout(&d, &theme) else {
+            return;
+        };
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_04.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("04: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "04: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
-            eprintln!("got[p-10:p+150]: {:?}", &got[p.saturating_sub(10)..(p+150).min(got.len())]);
-            eprintln!("ref[p-10:p+150]: {:?}", &exp[p.saturating_sub(10)..(p+150).min(exp.len())]);
+            eprintln!(
+                "got[p-10:p+150]: {:?}",
+                &got[p.saturating_sub(10)..(p + 150).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-10:p+150]: {:?}",
+                &exp[p.saturating_sub(10)..(p + 150).min(exp.len())]
+            );
         }
     }
 
@@ -1869,18 +2090,36 @@ mod tests {
     fn gen_fixture_09_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/09.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/09.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/09.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-09";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_09.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("09: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "09: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
-            eprintln!("got[p-20:p+120]: {:?}", &got[prefix.saturating_sub(20)..(prefix+120).min(got.len())]);
-            eprintln!("ref[p-20:p+120]: {:?}", &exp[prefix.saturating_sub(20)..(prefix+120).min(exp.len())]);
+            eprintln!(
+                "got[p-20:p+120]: {:?}",
+                &got[prefix.saturating_sub(20)..(prefix + 120).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-20:p+120]: {:?}",
+                &exp[prefix.saturating_sub(20)..(prefix + 120).min(exp.len())]
+            );
         }
     }
 
@@ -1888,20 +2127,42 @@ mod tests {
     fn gen_fixture_41_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/41.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/41.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/41.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-41";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_41.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("41: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "41: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 60;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 300, &got[p.saturating_sub(ctx)..(p+300).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 300, &exp[p.saturating_sub(ctx)..(p+300).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &got[p.saturating_sub(ctx)..(p + 300).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &exp[p.saturating_sub(ctx)..(p + 300).min(exp.len())]
+            );
         }
     }
 
@@ -1922,7 +2183,9 @@ mod tests {
     fn gen_fixture_06_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/06.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/06.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/06.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-06";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
@@ -1932,17 +2195,40 @@ mod tests {
             eprintln!("edge id={:?} points={:?}", e.id, e.points);
         }
         for n in &l.result.nodes {
-            eprintln!("node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}", n.id, n.x, n.y, n.width, n.height, n.shape);
+            eprintln!(
+                "node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}",
+                n.id, n.x, n.y, n.width, n.height, n.shape
+            );
         }
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_06.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("06: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "06: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 30;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 300, &got[p.saturating_sub(ctx)..(p+300).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 300, &exp[p.saturating_sub(ctx)..(p+300).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &got[p.saturating_sub(ctx)..(p + 300).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &exp[p.saturating_sub(ctx)..(p + 300).min(exp.len())]
+            );
         }
     }
 
@@ -1950,7 +2236,9 @@ mod tests {
     fn gen_fixture_03_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/03.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/03.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/03.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-03";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
@@ -1961,13 +2249,33 @@ mod tests {
         }
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_03.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("03: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "03: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 30;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 300, &got[p.saturating_sub(ctx)..(p+300).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 300, &exp[p.saturating_sub(ctx)..(p+300).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &got[p.saturating_sub(ctx)..(p + 300).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &exp[p.saturating_sub(ctx)..(p + 300).min(exp.len())]
+            );
         }
     }
 
@@ -1975,24 +2283,48 @@ mod tests {
     fn gen_fixture_30_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/30.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/30.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/30.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-30";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         for n in &l.result.nodes {
-            eprintln!("node id={:?} w={:?} h={:?} x={:?} y={:?} label={:?} shape={:?} css_classes={:?}",
-                      n.id, n.width, n.height, n.x, n.y, n.label, n.shape, n.css_classes);
+            eprintln!(
+                "node id={:?} w={:?} h={:?} x={:?} y={:?} label={:?} shape={:?} css_classes={:?}",
+                n.id, n.width, n.height, n.x, n.y, n.label, n.shape, n.css_classes
+            );
         }
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_30.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("30: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "30: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 30;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 300, &got[p.saturating_sub(ctx)..(p+300).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 300, &exp[p.saturating_sub(ctx)..(p+300).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &got[p.saturating_sub(ctx)..(p + 300).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &exp[p.saturating_sub(ctx)..(p + 300).min(exp.len())]
+            );
         }
     }
 
@@ -2109,7 +2441,10 @@ mod tests {
         // Print all non-exact fixtures with prefix info
         for (rel, rendered, exact, prefix) in &groups {
             if !*exact {
-                eprintln!("[state] FAIL prefix={} rendered={} : {}", prefix, rendered, rel);
+                eprintln!(
+                    "[state] FAIL prefix={} rendered={} : {}",
+                    prefix, rendered, rel
+                );
             }
         }
     }
@@ -2118,20 +2453,42 @@ mod tests {
     fn gen_fixture_70_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/70.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/70.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/70.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-70";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_70.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("70: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "70: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 60;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2139,20 +2496,42 @@ mod tests {
     fn gen_fixture_39_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/39.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/39.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/39.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-39";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_39.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("39: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "39: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 60;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 300, &got[p.saturating_sub(ctx)..(p+300).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 300, &exp[p.saturating_sub(ctx)..(p+300).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &got[p.saturating_sub(ctx)..(p + 300).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &exp[p.saturating_sub(ctx)..(p + 300).min(exp.len())]
+            );
         }
     }
 
@@ -2160,20 +2539,42 @@ mod tests {
     fn gen_fixture_38_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/38.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/38.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/38.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-38";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_38.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("38: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "38: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 120;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 200, &got[p.saturating_sub(ctx)..(p+200).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 200, &exp[p.saturating_sub(ctx)..(p+200).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                200,
+                &got[p.saturating_sub(ctx)..(p + 200).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                200,
+                &exp[p.saturating_sub(ctx)..(p + 200).min(exp.len())]
+            );
         }
     }
 
@@ -2181,20 +2582,42 @@ mod tests {
     fn gen_fixture_06b_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/06.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/06.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/06.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-06";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_06b.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("06: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "06: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 120;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2202,20 +2625,42 @@ mod tests {
     fn gen_fixture_37_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/37.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/37.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/37.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-37";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_37.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("37: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "37: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 120;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 600, &got[p.saturating_sub(ctx)..(p+600).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 600, &exp[p.saturating_sub(ctx)..(p+600).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                600,
+                &got[p.saturating_sub(ctx)..(p + 600).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                600,
+                &exp[p.saturating_sub(ctx)..(p + 600).min(exp.len())]
+            );
         }
     }
 
@@ -2224,20 +2669,42 @@ mod tests {
         // fixture 04 in cypress directory
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/04.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/04.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/04.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-04";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_04c.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("04c: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "04c: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 60;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2245,20 +2712,42 @@ mod tests {
     fn gen_fixture_16_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/16.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/16.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/16.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-16";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_16.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("16: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "16: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 120;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2266,20 +2755,41 @@ mod tests {
     fn gen_fixture_demos06_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/demos/state/06.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/06.svg")).unwrap();
+        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/06.svg"))
+            .unwrap();
         let id = "ref-ext-fixtures-demos-state-06";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_demos06.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("demos06: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "demos06: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 120;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2287,20 +2797,42 @@ mod tests {
     fn gen_fixture_17_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/17.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/17.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/17.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-17";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_17.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("17: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "17: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 120;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2308,21 +2840,47 @@ mod tests {
     fn gen_fixture_demos03_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/demos/state/03.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/03.svg")).unwrap();
+        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/03.svg"))
+            .unwrap();
         let id = "ref-ext-fixtures-demos-state-03";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
-        for n in &l.result.nodes { eprintln!("node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}", n.id, n.x, n.y, n.width, n.height, n.shape); }
+        for n in &l.result.nodes {
+            eprintln!(
+                "node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}",
+                n.id, n.x, n.y, n.width, n.height, n.shape
+            );
+        }
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_demos03.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("demos03: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "demos03: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 40;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 300, &got[p.saturating_sub(ctx)..(p+300).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 300, &exp[p.saturating_sub(ctx)..(p+300).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &got[p.saturating_sub(ctx)..(p + 300).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &exp[p.saturating_sub(ctx)..(p + 300).min(exp.len())]
+            );
         }
     }
 
@@ -2330,20 +2888,41 @@ mod tests {
     fn gen_fixture_demos04_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/demos/state/04.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/04.svg")).unwrap();
+        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/04.svg"))
+            .unwrap();
         let id = "ref-ext-fixtures-demos-state-04";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_demos04.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("demos04: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "demos04: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 40;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 300, &got[p.saturating_sub(ctx)..(p+300).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 300, &exp[p.saturating_sub(ctx)..(p+300).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &got[p.saturating_sub(ctx)..(p + 300).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &exp[p.saturating_sub(ctx)..(p + 300).min(exp.len())]
+            );
         }
     }
 
@@ -2354,7 +2933,10 @@ mod tests {
         // resolveFont finds default: sans-serif 14px (no font-size on SVG inline style)
         let w14 = text_width(title_text, "sans-serif", 14.0, false, false);
         let w16 = text_width(title_text, "sans-serif", 16.0, false, false);
-        eprintln!("'Very simple diagram' sans 14px: {} (target: 145.5400390625)", w14);
+        eprintln!(
+            "'Very simple diagram' sans 14px: {} (target: 145.5400390625)",
+            w14
+        );
         eprintln!("'Very simple diagram' sans 16px: {}", w16);
     }
 
@@ -2362,21 +2944,47 @@ mod tests {
     fn gen_fixture_demos05_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/demos/state/05.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/05.svg")).unwrap();
+        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/05.svg"))
+            .unwrap();
         let id = "ref-ext-fixtures-demos-state-05";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
-        for n in &l.result.nodes { eprintln!("node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}", n.id, n.x, n.y, n.width, n.height, n.shape); }
+        for n in &l.result.nodes {
+            eprintln!(
+                "node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}",
+                n.id, n.x, n.y, n.width, n.height, n.shape
+            );
+        }
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_demos05.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("demos05: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "demos05: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 60;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2384,22 +2992,51 @@ mod tests {
     fn gen_fixture_demos01_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/demos/state/01.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/01.svg")).unwrap();
+        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/01.svg"))
+            .unwrap();
         let id = "ref-ext-fixtures-demos-state-01";
         let d = parse(&mmd).unwrap();
-        eprintln!("acc_title={:?} acc_descr={:?}", d.meta.acc_title, d.meta.acc_descr);
+        eprintln!(
+            "acc_title={:?} acc_descr={:?}",
+            d.meta.acc_title, d.meta.acc_descr
+        );
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
-        for n in &l.result.nodes { eprintln!("node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}", n.id, n.x, n.y, n.width, n.height, n.shape); }
+        for n in &l.result.nodes {
+            eprintln!(
+                "node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}",
+                n.id, n.x, n.y, n.width, n.height, n.shape
+            );
+        }
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_demos01.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("demos01: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "demos01: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 40;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2407,20 +3044,41 @@ mod tests {
     fn gen_fixture_demos02_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/demos/state/02.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/02.svg")).unwrap();
+        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/demos/state/02.svg"))
+            .unwrap();
         let id = "ref-ext-fixtures-demos-state-02";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_demos02.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("demos02: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "demos02: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 40;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2428,21 +3086,48 @@ mod tests {
     fn gen_fixture_cypress08_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/08.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/08.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/08.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-08";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
-        for n in &l.result.nodes { eprintln!("node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}", n.id, n.x, n.y, n.width, n.height, n.shape); }
+        for n in &l.result.nodes {
+            eprintln!(
+                "node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}",
+                n.id, n.x, n.y, n.width, n.height, n.shape
+            );
+        }
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_cy08.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("cy08: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "cy08: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 40;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2450,22 +3135,54 @@ mod tests {
     fn gen_fixture_cypress10_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/10.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/10.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/10.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-10";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
-        for e in &l.result.edges { eprintln!("edge id={:?} label={:?} label_x={:?} label_y={:?}", e.id, e.label, e.label_x, e.label_y); }
-        for n in &l.result.nodes { eprintln!("node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}", n.id, n.x, n.y, n.width, n.height, n.shape); }
+        for e in &l.result.edges {
+            eprintln!(
+                "edge id={:?} label={:?} label_x={:?} label_y={:?}",
+                e.id, e.label, e.label_x, e.label_y
+            );
+        }
+        for n in &l.result.nodes {
+            eprintln!(
+                "node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}",
+                n.id, n.x, n.y, n.width, n.height, n.shape
+            );
+        }
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_cy10.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("cy10: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "cy10: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 40;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2473,21 +3190,48 @@ mod tests {
     fn gen_fixture_cypress43_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/43.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/43.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/43.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-43";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
-        for n in &l.result.nodes { eprintln!("node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}", n.id, n.x, n.y, n.width, n.height, n.shape); }
+        for n in &l.result.nodes {
+            eprintln!(
+                "node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}",
+                n.id, n.x, n.y, n.width, n.height, n.shape
+            );
+        }
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_cy43.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("cy43: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "cy43: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 40;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 400, &got[p.saturating_sub(ctx)..(p+400).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 400, &exp[p.saturating_sub(ctx)..(p+400).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &got[p.saturating_sub(ctx)..(p + 400).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                400,
+                &exp[p.saturating_sub(ctx)..(p + 400).min(exp.len())]
+            );
         }
     }
 
@@ -2495,21 +3239,48 @@ mod tests {
     fn gen_fixture_cypress03_diff() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let mmd = fs::read_to_string(base.join("tests/ext_fixtures/cypress/state/03.mmd")).unwrap();
-        let exp = fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/03.svg")).unwrap();
+        let exp =
+            fs::read_to_string(base.join("tests/reference/ext_fixtures/cypress/state/03.svg"))
+                .unwrap();
         let id = "ref-ext-fixtures-cypress-state-03";
         let d = parse(&mmd).unwrap();
         let theme = get_theme("default");
         let l = crate::layout::state::layout(&d, &theme).unwrap();
-        for n in &l.result.nodes { eprintln!("node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}", n.id, n.x, n.y, n.width, n.height, n.shape); }
+        for n in &l.result.nodes {
+            eprintln!(
+                "node id={:?} x={:?} y={:?} w={:?} h={:?} shape={:?}",
+                n.id, n.x, n.y, n.width, n.height, n.shape
+            );
+        }
         let got = render(&d, &l, &theme, id).unwrap();
         let _ = fs::write("/tmp/fresh_state_cy03.svg", &got);
-        let prefix = got.bytes().zip(exp.bytes()).take_while(|(a, b)| a == b).count();
-        eprintln!("cy03: got={} exp={} prefix={} exact={}", got.len(), exp.len(), prefix, got == exp);
+        let prefix = got
+            .bytes()
+            .zip(exp.bytes())
+            .take_while(|(a, b)| a == b)
+            .count();
+        eprintln!(
+            "cy03: got={} exp={} prefix={} exact={}",
+            got.len(),
+            exp.len(),
+            prefix,
+            got == exp
+        );
         if got != exp {
             let p = prefix;
             let ctx = 40;
-            eprintln!("got[p-{}:p+{}]: {:?}", ctx, 300, &got[p.saturating_sub(ctx)..(p+300).min(got.len())]);
-            eprintln!("ref[p-{}:p+{}]: {:?}", ctx, 300, &exp[p.saturating_sub(ctx)..(p+300).min(exp.len())]);
+            eprintln!(
+                "got[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &got[p.saturating_sub(ctx)..(p + 300).min(got.len())]
+            );
+            eprintln!(
+                "ref[p-{}:p+{}]: {:?}",
+                ctx,
+                300,
+                &exp[p.saturating_sub(ctx)..(p + 300).min(exp.len())]
+            );
         }
     }
 
@@ -2520,17 +3291,31 @@ mod tests {
         let mut groups: Vec<(String, bool, bool, usize, usize, usize)> = vec![];
         for sub in ["cypress", "demos"] {
             let dir = base.join(format!("tests/ext_fixtures/{}/state", sub));
-            let Ok(entries) = fs::read_dir(&dir) else { continue; };
+            let Ok(entries) = fs::read_dir(&dir) else {
+                continue;
+            };
             let mut files: Vec<_> = entries.flatten().collect();
             files.sort_by_key(|e| e.file_name());
             for entry in files {
                 let p = entry.path();
-                if p.extension().and_then(|s| s.to_str()) != Some("mmd") { continue; }
-                let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+                if p.extension().and_then(|s| s.to_str()) != Some("mmd") {
+                    continue;
+                }
+                let stem = p
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .to_string();
                 let rel = format!("ext_fixtures/{}/state/{}", sub, stem);
-                let mmd = match fs::read_to_string(&p) { Ok(s) => s, Err(_) => continue };
+                let mmd = match fs::read_to_string(&p) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
                 let ref_svg = base.join(format!("tests/reference/{}.svg", rel));
-                let expected = match fs::read_to_string(&ref_svg) { Ok(s) => s, Err(_) => continue };
+                let expected = match fs::read_to_string(&ref_svg) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
                 let id = fixture_id(&rel);
                 let theme = get_theme("default");
                 let mmd_c = mmd.clone();
@@ -2538,14 +3323,28 @@ mod tests {
                 let theme_c = theme.clone();
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     parse(&mmd_c).and_then(|d| {
-                        let eff = d.theme_override.as_deref().map(get_theme).unwrap_or_else(|| theme_c.clone());
+                        let eff = d
+                            .theme_override
+                            .as_deref()
+                            .map(get_theme)
+                            .unwrap_or_else(|| theme_c.clone());
                         let l = crate::layout::state::layout(&d, &eff)?;
                         render(&d, &l, &eff, &id_c)
                     })
                 }));
-                let got = match result { Ok(Ok(s)) => s, _ => { groups.push((rel, false, false, 0, 0, 0)); continue; } };
+                let got = match result {
+                    Ok(Ok(s)) => s,
+                    _ => {
+                        groups.push((rel, false, false, 0, 0, 0));
+                        continue;
+                    }
+                };
                 let exact = got == expected;
-                let prefix = got.bytes().zip(expected.bytes()).take_while(|(a, b)| a == b).count();
+                let prefix = got
+                    .bytes()
+                    .zip(expected.bytes())
+                    .take_while(|(a, b)| a == b)
+                    .count();
                 groups.push((rel, true, exact, prefix, got.len(), expected.len()));
             }
         }
@@ -2554,9 +3353,15 @@ mod tests {
         non_exact.sort_by(|a, b| b.3.cmp(&a.3));
         eprintln!("=== Non-exact fixtures sorted by prefix (highest first) ===");
         for (rel, rendered, _, prefix, got_len, exp_len) in &non_exact {
-            if !rendered { eprintln!("  PANIC  {}", rel); continue; }
+            if !rendered {
+                eprintln!("  PANIC  {}", rel);
+                continue;
+            }
             let stem: &str = rel.split('/').last().unwrap_or("");
-            eprintln!("  prefix={:6}  got={:6}  exp={:6}  {}", prefix, got_len, exp_len, stem);
+            eprintln!(
+                "  prefix={:6}  got={:6}  exp={:6}  {}",
+                prefix, got_len, exp_len, stem
+            );
         }
         let exact_count = groups.iter().filter(|(_, _, e, _, _, _)| *e).count();
         eprintln!("=== exact={}/{} ===", exact_count, groups.len());
@@ -2565,24 +3370,48 @@ mod tests {
         // Sort by prefix descending so highest near-miss prints last.
         let base2 = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         for (rel, rendered, exact, prefix, _, _) in &groups {
-            if *exact || !rendered { continue; }
-            let mmd = match fs::read_to_string(base2.join(format!("tests/{}.mmd", rel))) { Ok(s) => s, _ => continue };
-            let expected = match fs::read_to_string(base2.join(format!("tests/reference/{}.svg", rel))) { Ok(s) => s, _ => continue };
+            if *exact || !rendered {
+                continue;
+            }
+            let mmd = match fs::read_to_string(base2.join(format!("tests/{}.mmd", rel))) {
+                Ok(s) => s,
+                _ => continue,
+            };
+            let expected =
+                match fs::read_to_string(base2.join(format!("tests/reference/{}.svg", rel))) {
+                    Ok(s) => s,
+                    _ => continue,
+                };
             let id = fixture_id(rel);
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 parse(&mmd).and_then(|d| {
-                    let t = d.theme_override.as_deref().map(get_theme).unwrap_or_else(|| get_theme("default"));
+                    let t = d
+                        .theme_override
+                        .as_deref()
+                        .map(get_theme)
+                        .unwrap_or_else(|| get_theme("default"));
                     let l = crate::layout::state::layout(&d, &t)?;
                     render(&d, &l, &t, &id)
                 })
             }));
-            let got = match result { Ok(Ok(s)) => s, _ => continue };
+            let got = match result {
+                Ok(Ok(s)) => s,
+                _ => continue,
+            };
             let p = *prefix;
             let ctx = 40;
-            let g_ctx = &got[p.saturating_sub(ctx)..(p+120).min(got.len())];
-            let e_ctx = &expected[p.saturating_sub(ctx)..(p+120).min(expected.len())];
-            eprintln!("DIFF[{}] got: {:?}", rel.split('/').last().unwrap_or(rel), g_ctx);
-            eprintln!("DIFF[{}] exp: {:?}", rel.split('/').last().unwrap_or(rel), e_ctx);
+            let g_ctx = &got[p.saturating_sub(ctx)..(p + 120).min(got.len())];
+            let e_ctx = &expected[p.saturating_sub(ctx)..(p + 120).min(expected.len())];
+            eprintln!(
+                "DIFF[{}] got: {:?}",
+                rel.split('/').last().unwrap_or(rel),
+                g_ctx
+            );
+            eprintln!(
+                "DIFF[{}] exp: {:?}",
+                rel.split('/').last().unwrap_or(rel),
+                e_ctx
+            );
         }
     }
 }

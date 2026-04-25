@@ -64,13 +64,22 @@ pub enum LabelKind {
 
 impl Label {
     pub fn text(s: impl Into<String>) -> Self {
-        Self { text: s.into(), kind: LabelKind::Text }
+        Self {
+            text: s.into(),
+            kind: LabelKind::Text,
+        }
     }
     pub fn string(s: impl Into<String>) -> Self {
-        Self { text: s.into(), kind: LabelKind::String }
+        Self {
+            text: s.into(),
+            kind: LabelKind::String,
+        }
     }
     pub fn markdown(s: impl Into<String>) -> Self {
-        Self { text: s.into(), kind: LabelKind::Markdown }
+        Self {
+            text: s.into(),
+            kind: LabelKind::Markdown,
+        }
     }
 }
 

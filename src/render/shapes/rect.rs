@@ -8,7 +8,9 @@
 //! anchored at `(-w/2, -h/2)` (upstream convention — the parent `<g>`
 //! carries the translate).
 
-use super::types::{build_div_style_prefix, build_inline_style, build_label_style, fmt_num, get_node_classes};
+use super::types::{
+    build_div_style_prefix, build_inline_style, build_label_style, fmt_num, get_node_classes,
+};
 use crate::error::Result;
 use crate::layout::unified::types::Node;
 use crate::theme::ThemeVariables;
@@ -81,7 +83,10 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
         let for_measure = crate::render::foreign_object::replace_fa_icons(&label_content);
         let font = crate::render::foreign_object::HtmlLabelFont::default();
         let (lw, lh) = crate::render::foreign_object::measure_html_markup_label(
-            &for_measure, &font, 200.0, true,
+            &for_measure,
+            &font,
+            200.0,
+            true,
         );
         // Label-specific CSS (color:, font-*) from `style` directives:
         //   - group_style → <g class="label" style="..."> (raw hex)
@@ -91,15 +96,34 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
         let lbl_style = build_label_style(css);
         let div_prefix = build_div_style_prefix(css);
         let opts = crate::render::foreign_object::LabelOpts {
-            extra_span_classes: if is_markdown { "markdown-node-label" } else { "" },
-            group_style: if lbl_style.is_empty() { Some("") } else { Some(&lbl_style) },
-            label_style: if lbl_style.is_empty() { None } else { Some(&lbl_style) },
-            div_style_prefix: if div_prefix.is_empty() { None } else { Some(&div_prefix) },
+            extra_span_classes: if is_markdown {
+                "markdown-node-label"
+            } else {
+                ""
+            },
+            group_style: if lbl_style.is_empty() {
+                Some("")
+            } else {
+                Some(&lbl_style)
+            },
+            label_style: if lbl_style.is_empty() {
+                None
+            } else {
+                Some(&lbl_style)
+            },
+            div_style_prefix: if div_prefix.is_empty() {
+                None
+            } else {
+                Some(&div_prefix)
+            },
             ..crate::render::foreign_object::LabelOpts::default()
         };
         // Use the FA-processed version for rendering too (contains <i> tags).
         out.push_str(&crate::render::foreign_object::render_node_label(
-            &for_measure, lw, lh, &opts,
+            &for_measure,
+            lw,
+            lh,
+            &opts,
         ));
     }
     out.push_str("</g>");

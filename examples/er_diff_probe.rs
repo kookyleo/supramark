@@ -1,5 +1,5 @@
-use mermaid_little::parser::er as parser_er;
 use mermaid_little::layout::er as layout_er;
+use mermaid_little::parser::er as parser_er;
 use mermaid_little::render::svg_er;
 use mermaid_little::theme::get_theme;
 use std::fs;
@@ -30,8 +30,22 @@ fn main() {
         let ctx_lo = i.saturating_sub(40);
         let ctx_hi_a = (i + 200).min(a.len());
         let ctx_hi_b = (i + 200).min(b.len());
-        println!("ER{} diverge at byte {} (got={}, want={})", name, i, a.len(), b.len());
-        println!("got [{}..]: {}", ctx_lo, String::from_utf8_lossy(&a[ctx_lo..ctx_hi_a]));
-        println!("want[{}..]: {}", ctx_lo, String::from_utf8_lossy(&b[ctx_lo..ctx_hi_b]));
+        println!(
+            "ER{} diverge at byte {} (got={}, want={})",
+            name,
+            i,
+            a.len(),
+            b.len()
+        );
+        println!(
+            "got [{}..]: {}",
+            ctx_lo,
+            String::from_utf8_lossy(&a[ctx_lo..ctx_hi_a])
+        );
+        println!(
+            "want[{}..]: {}",
+            ctx_lo,
+            String::from_utf8_lossy(&b[ctx_lo..ctx_hi_b])
+        );
     }
 }

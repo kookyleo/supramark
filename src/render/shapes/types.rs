@@ -37,7 +37,11 @@ pub fn fmt_num(v: f64) -> String {
         return "NaN".to_owned();
     }
     if v.is_infinite() {
-        return if v < 0.0 { "-Infinity".into() } else { "Infinity".into() };
+        return if v < 0.0 {
+            "-Infinity".into()
+        } else {
+            "Infinity".into()
+        };
     }
     // Integer values — no trailing `.0`.
     if v.fract() == 0.0 && v.abs() < 1e16 {
@@ -72,13 +76,37 @@ pub fn create_rounded_rect_path_d(x: f64, y: f64, w: f64, h: f64, radius: f64) -
     let parts = [
         format!("M {} {}", fmt_num(x + r), fmt_num(y)),
         format!("H {}", fmt_num(x + w - r)),
-        format!("A {} {} 0 0 1 {} {}", fmt_num(r), fmt_num(r), fmt_num(x + w), fmt_num(y + r)),
+        format!(
+            "A {} {} 0 0 1 {} {}",
+            fmt_num(r),
+            fmt_num(r),
+            fmt_num(x + w),
+            fmt_num(y + r)
+        ),
         format!("V {}", fmt_num(y + h - r)),
-        format!("A {} {} 0 0 1 {} {}", fmt_num(r), fmt_num(r), fmt_num(x + w - r), fmt_num(y + h)),
+        format!(
+            "A {} {} 0 0 1 {} {}",
+            fmt_num(r),
+            fmt_num(r),
+            fmt_num(x + w - r),
+            fmt_num(y + h)
+        ),
         format!("H {}", fmt_num(x + r)),
-        format!("A {} {} 0 0 1 {} {}", fmt_num(r), fmt_num(r), fmt_num(x), fmt_num(y + h - r)),
+        format!(
+            "A {} {} 0 0 1 {} {}",
+            fmt_num(r),
+            fmt_num(r),
+            fmt_num(x),
+            fmt_num(y + h - r)
+        ),
         format!("V {}", fmt_num(y + r)),
-        format!("A {} {} 0 0 1 {} {}", fmt_num(r), fmt_num(r), fmt_num(x + r), fmt_num(y)),
+        format!(
+            "A {} {} 0 0 1 {} {}",
+            fmt_num(r),
+            fmt_num(r),
+            fmt_num(x + r),
+            fmt_num(y)
+        ),
         "Z".into(),
     ];
     parts.join(" ")
@@ -104,11 +132,29 @@ pub fn create_stadium_path_d(x: f64, y: f64, w: f64, h: f64) -> String {
     let parts = [
         format!("M {} {}", fmt_num(x + r), fmt_num(y)),
         format!("H {}", fmt_num(x + w - r)),
-        format!("A {} {} 0 0 1 {} {}", fmt_num(r), fmt_num(r), fmt_num(x + w), fmt_num(y + r)),
+        format!(
+            "A {} {} 0 0 1 {} {}",
+            fmt_num(r),
+            fmt_num(r),
+            fmt_num(x + w),
+            fmt_num(y + r)
+        ),
         format!("H {}", fmt_num(x)),
-        format!("A {} {} 0 0 1 {} {}", fmt_num(r), fmt_num(r), fmt_num(x + w - r), fmt_num(y + h)),
+        format!(
+            "A {} {} 0 0 1 {} {}",
+            fmt_num(r),
+            fmt_num(r),
+            fmt_num(x + w - r),
+            fmt_num(y + h)
+        ),
         format!("H {}", fmt_num(x + r)),
-        format!("A {} {} 0 0 1 {} {}", fmt_num(r), fmt_num(r), fmt_num(x), fmt_num(y + r)),
+        format!(
+            "A {} {} 0 0 1 {} {}",
+            fmt_num(r),
+            fmt_num(r),
+            fmt_num(x),
+            fmt_num(y + r)
+        ),
         "Z".into(),
     ];
     parts.join(" ")
@@ -168,7 +214,11 @@ pub fn create_decision_box_path_d(x: f64, y: f64, size: f64) -> String {
 /// Upstream produces `"${look === 'handDrawn' ? 'rough-node' : 'node'} ${cssClasses} ${extra ?? ''}"`
 /// — note the trailing space when `extra` is empty, which we preserve
 /// for byte exactness.
-pub fn get_node_classes(look: Option<&str>, css_classes: Option<&str>, extra: Option<&str>) -> String {
+pub fn get_node_classes(
+    look: Option<&str>,
+    css_classes: Option<&str>,
+    extra: Option<&str>,
+) -> String {
     let base = if matches!(look, Some("handDrawn")) {
         "rough-node"
     } else {
@@ -217,10 +267,7 @@ pub fn measure_label(label: &str, font_family: &str, font_size: f64, bold: bool)
 ///
 /// `pts` are already in centred-around-origin coordinates — no
 /// further translation is applied inside the inner `<polygon>`.
-pub fn emit_polygon_node(
-    node: &crate::layout::unified::types::Node,
-    pts: &[(f64, f64)],
-) -> String {
+pub fn emit_polygon_node(node: &crate::layout::unified::types::Node, pts: &[(f64, f64)]) -> String {
     let classes = get_node_classes(node.look.as_deref(), node.css_classes.as_deref(), None);
     let id = node.dom_id.clone().unwrap_or_else(|| node.id.clone());
     let tx = node.x.unwrap_or(0.0);
@@ -278,7 +325,13 @@ pub fn hex_color_to_rgb(value: &str) -> String {
         let b = u8::from_str_radix(&s[4..6], 16).ok()?;
         Some((r, g, b))
     };
-    let rgb = if hex.len() == 3 { parse3(hex) } else if hex.len() == 6 { parse6(hex) } else { None };
+    let rgb = if hex.len() == 3 {
+        parse3(hex)
+    } else if hex.len() == 6 {
+        parse6(hex)
+    } else {
+        None
+    };
     match rgb {
         Some((r, g, b)) => format!("rgb({}, {}, {})", r, g, b),
         None => v.to_string(),
@@ -290,10 +343,24 @@ pub fn hex_color_to_rgb(value: &str) -> String {
 fn is_label_style_key(key: &str) -> bool {
     matches!(
         key,
-        "color" | "font-size" | "font-family" | "font-weight" | "font-style"
-        | "text-decoration" | "text-align" | "text-transform" | "line-height"
-        | "letter-spacing" | "word-spacing" | "text-shadow" | "text-overflow"
-        | "white-space" | "word-wrap" | "word-break" | "overflow-wrap" | "hyphens"
+        "color"
+            | "font-size"
+            | "font-family"
+            | "font-weight"
+            | "font-style"
+            | "text-decoration"
+            | "text-align"
+            | "text-transform"
+            | "line-height"
+            | "letter-spacing"
+            | "word-spacing"
+            | "text-shadow"
+            | "text-overflow"
+            | "white-space"
+            | "word-wrap"
+            | "word-break"
+            | "overflow-wrap"
+            | "hyphens"
     )
 }
 
@@ -301,7 +368,9 @@ fn is_label_style_key(key: &str) -> bool {
 /// trailing `;`. Returns `(key, value)` or `None` if malformed.
 fn normalise_css_decl(s: &str) -> Option<(String, String)> {
     let s = s.trim().trim_end_matches(';');
-    if s.is_empty() { return None; }
+    if s.is_empty() {
+        return None;
+    }
     let colon = s.find(':')?;
     let key = s[..colon].trim().to_string();
     let value = s[colon + 1..].trim().to_string();
@@ -312,7 +381,8 @@ fn normalise_css_decl(s: &str) -> Option<(String, String)> {
 /// Filters out label-specific keys (color, font-*, text-*, …) and normalises
 /// each entry as `key:value !important`, joined with `;`.
 pub fn build_inline_style(styles: &[String]) -> String {
-    let parts: Vec<String> = styles.iter()
+    let parts: Vec<String> = styles
+        .iter()
         .filter_map(|s| normalise_css_decl(s))
         .filter(|(key, _)| !is_label_style_key(key))
         .map(|(k, v)| format!("{}:{} !important", k, v))
@@ -324,7 +394,8 @@ pub fn build_inline_style(styles: &[String]) -> String {
 /// Keeps only label-specific keys and normalises as `key:value !important`,
 /// joined with `;`. Returns an empty string when none are present.
 pub fn build_label_style(styles: &[String]) -> String {
-    let parts: Vec<String> = styles.iter()
+    let parts: Vec<String> = styles
+        .iter()
         .filter_map(|s| normalise_css_decl(s))
         .filter(|(key, _)| is_label_style_key(key))
         .map(|(k, v)| format!("{}:{} !important", k, v))
@@ -338,12 +409,17 @@ pub fn build_label_style(styles: &[String]) -> String {
 ///
 /// Output format: `"color: rgb(255,255,255) !important; "` (trailing space).
 pub fn build_div_style_prefix(styles: &[String]) -> String {
-    let parts: Vec<String> = styles.iter()
+    let parts: Vec<String> = styles
+        .iter()
         .filter_map(|s| normalise_css_decl(s))
         .filter(|(key, _)| is_label_style_key(key))
         .map(|(k, v)| {
             // For color properties, convert hex to rgb.
-            let converted = if k == "color" { hex_color_to_rgb(&v) } else { v.clone() };
+            let converted = if k == "color" {
+                hex_color_to_rgb(&v)
+            } else {
+                v.clone()
+            };
             format!("{}: {} !important; ", k, converted)
         })
         .collect();
@@ -406,10 +482,7 @@ mod tests {
     #[test]
     fn hexagon_path_byte_exact() {
         let d = create_hexagon_path_d(0.0, 0.0, 100.0, 50.0, 12.0);
-        assert_eq!(
-            d,
-            "M12,0 L88,0 L100,-25 L88,-50 L12,-50 L0,-25 Z"
-        );
+        assert_eq!(d, "M12,0 L88,0 L100,-25 L88,-50 L12,-50 L0,-25 Z");
     }
 
     #[test]
@@ -429,13 +502,25 @@ mod tests {
 
     #[test]
     fn xml_escape_basic() {
-        assert_eq!(xml_escape("a & b < c > d \"e\""), "a &amp; b &lt; c &gt; d &quot;e&quot;");
+        assert_eq!(
+            xml_escape("a & b < c > d \"e\""),
+            "a &amp; b &lt; c &gt; d &quot;e&quot;"
+        );
     }
 
     #[test]
     fn get_node_classes_default_look() {
-        assert_eq!(get_node_classes(None, Some("flowchart"), None), "node flowchart ");
-        assert_eq!(get_node_classes(Some("handDrawn"), Some("flowchart"), None), "rough-node flowchart ");
-        assert_eq!(get_node_classes(None, None, Some("extra")), "node undefined extra");
+        assert_eq!(
+            get_node_classes(None, Some("flowchart"), None),
+            "node flowchart "
+        );
+        assert_eq!(
+            get_node_classes(Some("handDrawn"), Some("flowchart"), None),
+            "rough-node flowchart "
+        );
+        assert_eq!(
+            get_node_classes(None, None, Some("extra")),
+            "node undefined extra"
+        );
     }
 }

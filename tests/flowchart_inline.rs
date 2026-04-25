@@ -83,18 +83,28 @@ fn run_one(rel: &str) -> Result<(bool, String), String> {
     if is_elk_source(&source) {
         return Ok((false, "elk — out of scope".into()));
     }
-    let expected = fs::read_to_string(&svg_path).map_err(|e| format!("read {:?}: {e}", svg_path))?;
+    let expected =
+        fs::read_to_string(&svg_path).map_err(|e| format!("read {:?}: {e}", svg_path))?;
     let id = id_for(rel);
     let d = fcp::parse(&source).map_err(|e| format!("parse: {e}"))?;
     let th = theme::get_theme("default");
     let l = fcl::layout(&d, &th).map_err(|e| format!("layout: {e}"))?;
     let got = svg_flowchart::render(&d, &l, &th, &id).map_err(|e| format!("render: {e}"))?;
-    Ok((got == expected, if got == expected { String::new() } else {
-        let mut diff = String::new();
-        let byte = got.bytes().zip(expected.bytes()).position(|(a, b)| a != b).unwrap_or(0);
-        diff.push_str(&format!("first-diff at byte {byte}"));
-        diff
-    }))
+    Ok((
+        got == expected,
+        if got == expected {
+            String::new()
+        } else {
+            let mut diff = String::new();
+            let byte = got
+                .bytes()
+                .zip(expected.bytes())
+                .position(|(a, b)| a != b)
+                .unwrap_or(0);
+            diff.push_str(&format!("first-diff at byte {byte}"));
+            diff
+        },
+    ))
 }
 
 #[test]
@@ -102,7 +112,10 @@ fn flowchart_parser_roundtrips_all_fixtures() {
     // Less strict than byte-exact: we just verify the parser and layout
     // run to completion without panicking on the ~270 non-elk fixtures.
     let ignored = read_known_ignored();
-    let dirs = ["ext_fixtures/cypress/flowchart", "ext_fixtures/demos/flowchart"];
+    let dirs = [
+        "ext_fixtures/cypress/flowchart",
+        "ext_fixtures/demos/flowchart",
+    ];
     let mut total = 0usize;
     let mut skipped_elk = 0usize;
     let mut skipped_ignored = 0usize;
@@ -136,9 +149,8 @@ fn flowchart_parser_roundtrips_all_fixtures() {
             };
             let th = theme::get_theme("default");
             let rel_for_panic = rel.clone();
-            let l_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                fcl::layout(&d, &th)
-            }));
+            let l_result =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| fcl::layout(&d, &th)));
             let l = match l_result {
                 Ok(Ok(l)) => l,
                 Ok(Err(e)) => {
@@ -190,7 +202,10 @@ fn flowchart_parser_roundtrips_all_fixtures() {
 #[test]
 fn flowchart_byte_exact_sweep() {
     let ignored = read_known_ignored();
-    let dirs = ["ext_fixtures/cypress/flowchart", "ext_fixtures/demos/flowchart"];
+    let dirs = [
+        "ext_fixtures/cypress/flowchart",
+        "ext_fixtures/demos/flowchart",
+    ];
     let mut total = 0usize;
     let mut pass = 0usize;
     let mut diffs: Vec<(String, String)> = Vec::new();
@@ -237,8 +252,17 @@ fn flowchart_single_diff_report() {
     let expected = std::fs::read_to_string(&svg_path).unwrap();
     let id = id_for(rel);
     let d = fcp::parse(&source).unwrap();
-    eprintln!("vertices: {:?}", d.vertices.iter().map(|n| &n.id).collect::<Vec<_>>());
-    eprintln!("subgraphs: {:?}", d.subgraphs.iter().map(|s| (&s.id, &s.title, &s.members, &s.children)).collect::<Vec<_>>());
+    eprintln!(
+        "vertices: {:?}",
+        d.vertices.iter().map(|n| &n.id).collect::<Vec<_>>()
+    );
+    eprintln!(
+        "subgraphs: {:?}",
+        d.subgraphs
+            .iter()
+            .map(|s| (&s.id, &s.title, &s.members, &s.children))
+            .collect::<Vec<_>>()
+    );
     eprintln!("edges: {}", d.edges.len());
     let th = theme::get_theme("default");
     let l = fcl::layout(&d, &th).unwrap();
@@ -250,12 +274,19 @@ fn flowchart_single_diff_report() {
     for e in &l.edges {
         eprintln!("  edge id={} lx={:?} ly={:?}", e.id, e.label_x, e.label_y);
         if let Some(pts) = &e.points {
-            let s: Vec<String> = pts.iter().map(|p| format!("({:.3},{:.3})", p.x, p.y)).collect();
+            let s: Vec<String> = pts
+                .iter()
+                .map(|p| format!("({:.3},{:.3})", p.x, p.y))
+                .collect();
             eprintln!("    pts: {}", s.join(" "));
         }
     }
     let got = svg_flowchart::render(&d, &l, &th, &id).unwrap();
-    let byte = got.bytes().zip(expected.bytes()).position(|(a, b)| a != b).unwrap_or(0);
+    let byte = got
+        .bytes()
+        .zip(expected.bytes())
+        .position(|(a, b)| a != b)
+        .unwrap_or(0);
     let context = 160usize;
     let g_end = (byte + context).min(got.len());
     let e_end = (byte + context).min(expected.len());

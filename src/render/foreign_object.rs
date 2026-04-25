@@ -199,7 +199,11 @@ pub fn render_edge_label(
     let transform_attr = if text.is_empty() {
         String::new()
     } else {
-        format!(r#" transform="translate({lx}, {ly})""#, lx = fmt_num(label_x), ly = fmt_num(label_y))
+        format!(
+            r#" transform="translate({lx}, {ly})""#,
+            lx = fmt_num(label_x),
+            ly = fmt_num(label_y)
+        )
     };
     format!(
         r#"<g class="edgeLabel"{transform}>{inner}</g>"#,
@@ -439,7 +443,10 @@ fn parse_html_text_segments(html: &str, base_bold: bool) -> Vec<(String, bool)> 
             let next = bytes.get(i + 1).copied();
             let is_tag_start = match next {
                 Some(c) if c.is_ascii_alphabetic() => true,
-                Some(b'/') => bytes.get(i + 2).map(|c| c.is_ascii_alphabetic()).unwrap_or(false),
+                Some(b'/') => bytes
+                    .get(i + 2)
+                    .map(|c| c.is_ascii_alphabetic())
+                    .unwrap_or(false),
                 _ => false,
             };
             if is_tag_start {

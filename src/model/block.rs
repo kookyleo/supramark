@@ -90,7 +90,9 @@ pub enum BlockShape {
 }
 
 impl Default for BlockShape {
-    fn default() -> Self { BlockShape::Na }
+    fn default() -> Self {
+        BlockShape::Na
+    }
 }
 
 /// An edge between two blocks. Maps to upstream `Block { type: 'edge' }`.
@@ -108,7 +110,14 @@ pub struct BlockEdge {
 
 /// Direction token inside a `<[...]>(dir)` block arrow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ArrowDir { Up, Down, Left, Right, X, Y }
+pub enum ArrowDir {
+    Up,
+    Down,
+    Left,
+    Right,
+    X,
+    Y,
+}
 
 /// `classDef name css-attributes`.
 #[derive(Debug, Clone, Default)]

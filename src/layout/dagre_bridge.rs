@@ -184,7 +184,9 @@ fn build_cluster_anchors(
     use std::collections::{HashMap, HashSet};
 
     // Collect all cluster ids.
-    let cluster_ids: HashSet<&str> = data.nodes.iter()
+    let cluster_ids: HashSet<&str> = data
+        .nodes
+        .iter()
         .filter(|n| n.is_group && !excluded.contains(n.id.as_str()))
         .map(|n| n.id.as_str())
         .collect();
@@ -196,7 +198,8 @@ fn build_cluster_anchors(
     // For each cluster, determine if it has external connections.
     // A cluster has external connections if any edge has exactly one endpoint
     // that is a descendant of (or is) the cluster.
-    let desc_of: HashMap<&str, HashSet<String>> = cluster_ids.iter()
+    let desc_of: HashMap<&str, HashSet<String>> = cluster_ids
+        .iter()
         .map(|&cid| (cid, all_descendants(cid, data)))
         .collect();
 
@@ -228,7 +231,9 @@ fn build_cluster_anchors(
         cluster_ids: &HashSet<&str>,
     ) -> Option<&'a str> {
         // Find direct children of this cluster.
-        let children: Vec<&Node> = data.nodes.iter()
+        let children: Vec<&Node> = data
+            .nodes
+            .iter()
             .filter(|n| n.parent_id.as_deref() == Some(cluster_id))
             .collect();
         for child in &children {
@@ -252,7 +257,8 @@ fn build_cluster_anchors(
             anchors.insert(cid.to_string(), anchor.to_string());
             log::debug!(
                 "dagre_bridge: cluster '{}' has external connections, anchor='{}'",
-                cid, anchor
+                cid,
+                anchor
             );
         }
     }
@@ -408,12 +414,18 @@ fn build_graph_filtered_ex<'a>(
         // an isolated cluster (isolated clusters enter the outer dagre as plain
         // leaf nodes and do not need anchor rewriting).
         let dagre_src: &str = if !isolated_cluster_ids.contains(effective_src) {
-            cluster_anchors.get(effective_src).map(|s| s.as_str()).unwrap_or(effective_src)
+            cluster_anchors
+                .get(effective_src)
+                .map(|s| s.as_str())
+                .unwrap_or(effective_src)
         } else {
             effective_src
         };
         let dagre_dst: &str = if !isolated_cluster_ids.contains(effective_dst) {
-            cluster_anchors.get(effective_dst).map(|s| s.as_str()).unwrap_or(effective_dst)
+            cluster_anchors
+                .get(effective_dst)
+                .map(|s| s.as_str())
+                .unwrap_or(effective_dst)
         } else {
             effective_dst
         };
@@ -538,14 +550,24 @@ fn collect_edges(
             let orig_src = orig.extra.get("orig_start").map(|s| s.as_str());
             let orig_dst = orig.extra.get("orig_end").map(|s| s.as_str());
             let (eff_src, eff_dst) = if let (Some(os), Some(od)) = (orig_src, orig_dst) {
-                if g.has_node(os) && g.has_node(od) { (os, od) } else { (src_raw, dst_raw) }
+                if g.has_node(os) && g.has_node(od) {
+                    (os, od)
+                } else {
+                    (src_raw, dst_raw)
+                }
             } else {
                 (src_raw, dst_raw)
             };
             // Apply anchor rewriting so we look up the edge under the same
             // (dagre_src, dagre_dst) key that was used in build_graph_filtered_ex.
-            let dagre_src: &str = cluster_anchors.get(eff_src).map(|s| s.as_str()).unwrap_or(eff_src);
-            let dagre_dst: &str = cluster_anchors.get(eff_dst).map(|s| s.as_str()).unwrap_or(eff_dst);
+            let dagre_src: &str = cluster_anchors
+                .get(eff_src)
+                .map(|s| s.as_str())
+                .unwrap_or(eff_src);
+            let dagre_dst: &str = cluster_anchors
+                .get(eff_dst)
+                .map(|s| s.as_str())
+                .unwrap_or(eff_dst);
             let name = if orig.id.is_empty() {
                 None
             } else {
@@ -696,7 +718,9 @@ fn is_isolated_cluster(cluster_id: &str, data: &LayoutData) -> bool {
         }
     }
     // Collect the set of all cluster ids for the orig_start/orig_end check below.
-    let cluster_ids: HashSet<&str> = data.nodes.iter()
+    let cluster_ids: HashSet<&str> = data
+        .nodes
+        .iter()
         .filter(|n| n.is_group)
         .map(|n| n.id.as_str())
         .collect();
@@ -801,9 +825,7 @@ fn is_isolated_within(
         let mut queue = vec![sub_cluster_id];
         while let Some(cid) = queue.pop() {
             for n in &data.nodes {
-                if n.parent_id.as_deref() == Some(cid)
-                    && parent_members.contains(n.id.as_str())
-                {
+                if n.parent_id.as_deref() == Some(cid) && parent_members.contains(n.id.as_str()) {
                     m.insert(n.id.as_str());
                     if n.is_group {
                         queue.push(n.id.as_str());
@@ -815,7 +837,9 @@ fn is_isolated_within(
     };
 
     // Collect cluster ids for the orig-endpoint cluster-to-cluster skip below.
-    let cluster_ids: std::collections::HashSet<&str> = data.nodes.iter()
+    let cluster_ids: std::collections::HashSet<&str> = data
+        .nodes
+        .iter()
         .filter(|n| n.is_group)
         .map(|n| n.id.as_str())
         .collect();
@@ -899,12 +923,7 @@ fn layout_isolated_cluster(
 
     for cc in &cluster_children {
         if is_isolated_within(&cc.id, &parent_members, data) {
-            let inner = layout_isolated_cluster(
-                &cc.id,
-                data,
-                inner_rankdir,
-                inner_ranksep,
-            );
+            let inner = layout_isolated_cluster(&cc.id, data, inner_rankdir, inner_ranksep);
             sub_isolated.insert(cc.id.clone(), inner);
         } else {
             non_isolated_cluster_children.push(cc);
@@ -920,11 +939,14 @@ fn layout_isolated_cluster(
     let mut g: Graph<NodeLabel, EdgeLabel> = Graph::with_options(opts);
 
     // Add the cluster node itself as compound root.
-    g.set_node(cluster_id.to_string(), Some(NodeLabel {
-        width: 0.0,
-        height: 0.0,
-        ..NodeLabel::default()
-    }));
+    g.set_node(
+        cluster_id.to_string(),
+        Some(NodeLabel {
+            width: 0.0,
+            height: 0.0,
+            ..NodeLabel::default()
+        }),
+    );
 
     // Add leaf children.
     for child in &leaf_children {
@@ -947,11 +969,14 @@ fn layout_isolated_cluster(
     // Each such cluster and all its descendants go in as compound nodes.
     for cc in &non_isolated_cluster_children {
         // Add the cluster node itself.
-        g.set_node(cc.id.clone(), Some(NodeLabel {
-            width: 0.0,
-            height: 0.0,
-            ..NodeLabel::default()
-        }));
+        g.set_node(
+            cc.id.clone(),
+            Some(NodeLabel {
+                width: 0.0,
+                height: 0.0,
+                ..NodeLabel::default()
+            }),
+        );
         g.set_parent(&cc.id, Some(cluster_id));
         // Recursively add all descendants of this non-isolated cluster.
         let mut stack: Vec<&str> = vec![cc.id.as_str()];
@@ -959,11 +984,14 @@ fn layout_isolated_cluster(
             for n in &data.nodes {
                 if n.parent_id.as_deref() == Some(pid) {
                     if n.is_group {
-                        g.set_node(n.id.clone(), Some(NodeLabel {
-                            width: 0.0,
-                            height: 0.0,
-                            ..NodeLabel::default()
-                        }));
+                        g.set_node(
+                            n.id.clone(),
+                            Some(NodeLabel {
+                                width: 0.0,
+                                height: 0.0,
+                                ..NodeLabel::default()
+                            }),
+                        );
                         g.set_parent(&n.id, Some(pid));
                         stack.push(n.id.as_str());
                     } else {
@@ -979,8 +1007,12 @@ fn layout_isolated_cluster(
     // cluster_id itself for edge purposes).
     let graph_node_ids: std::collections::HashSet<String> = {
         let mut s = std::collections::HashSet::new();
-        for lc in &leaf_children { s.insert(lc.id.clone()); }
-        for cid in sub_isolated.keys() { s.insert(cid.clone()); }
+        for lc in &leaf_children {
+            s.insert(lc.id.clone());
+        }
+        for cid in sub_isolated.keys() {
+            s.insert(cid.clone());
+        }
         for cc in &non_isolated_cluster_children {
             s.insert(cc.id.clone());
             let desc = all_descendants(&cc.id, data);
@@ -1027,7 +1059,12 @@ fn layout_isolated_cluster(
 
     // Read back cluster dimensions (the cluster node's rect, excluding inner margins).
     let (cluster_width, cluster_height, inner_x, inner_y) = if let Some(lbl) = g.node(cluster_id) {
-        (lbl.width, lbl.height, lbl.x.unwrap_or(0.0), lbl.y.unwrap_or(0.0))
+        (
+            lbl.width,
+            lbl.height,
+            lbl.x.unwrap_or(0.0),
+            lbl.y.unwrap_or(0.0),
+        )
     } else {
         (0.0, 0.0, 0.0, 0.0)
     };
@@ -1038,7 +1075,12 @@ fn layout_isolated_cluster(
         if let Some(lbl) = g.node(&child.id) {
             child_positions.insert(
                 child.id.clone(),
-                (lbl.x.unwrap_or(0.0), lbl.y.unwrap_or(0.0), lbl.width, lbl.height),
+                (
+                    lbl.x.unwrap_or(0.0),
+                    lbl.y.unwrap_or(0.0),
+                    lbl.width,
+                    lbl.height,
+                ),
             );
         }
     }
@@ -1046,7 +1088,12 @@ fn layout_isolated_cluster(
         if let Some(lbl) = g.node(cid) {
             child_positions.insert(
                 cid.clone(),
-                (lbl.x.unwrap_or(0.0), lbl.y.unwrap_or(0.0), lbl.width, lbl.height),
+                (
+                    lbl.x.unwrap_or(0.0),
+                    lbl.y.unwrap_or(0.0),
+                    lbl.width,
+                    lbl.height,
+                ),
             );
         }
     }
@@ -1054,7 +1101,12 @@ fn layout_isolated_cluster(
         if let Some(lbl) = g.node(&cc.id) {
             child_positions.insert(
                 cc.id.clone(),
-                (lbl.x.unwrap_or(0.0), lbl.y.unwrap_or(0.0), lbl.width, lbl.height),
+                (
+                    lbl.x.unwrap_or(0.0),
+                    lbl.y.unwrap_or(0.0),
+                    lbl.width,
+                    lbl.height,
+                ),
             );
         }
         // Also collect positions for all descendants of non-isolated clusters.
@@ -1065,7 +1117,12 @@ fn layout_isolated_cluster(
                     if let Some(lbl) = g.node(&n.id) {
                         child_positions.insert(
                             n.id.clone(),
-                            (lbl.x.unwrap_or(0.0), lbl.y.unwrap_or(0.0), lbl.width, lbl.height),
+                            (
+                                lbl.x.unwrap_or(0.0),
+                                lbl.y.unwrap_or(0.0),
+                                lbl.width,
+                                lbl.height,
+                            ),
                         );
                     }
                     if n.is_group {
@@ -1134,14 +1191,19 @@ fn layout_isolated_cluster(
         }
         v
     };
-    let bbox_width  = inner_margin + cluster_width  + max_half_node_w;
+    let bbox_width = inner_margin + cluster_width + max_half_node_w;
     let bbox_height = inner_margin + cluster_height + max_half_node_h;
 
     log::debug!(
         "dagre_bridge: inner layout for isolated cluster '{}': cluster_w={}, cluster_h={}, \
          inner_x={}, inner_y={}, bbox_w={}, bbox_h={}, sub_isolated={:?}",
-        cluster_id, cluster_width, cluster_height,
-        inner_x, inner_y, bbox_width, bbox_height,
+        cluster_id,
+        cluster_width,
+        cluster_height,
+        inner_x,
+        inner_y,
+        bbox_width,
+        bbox_height,
         sub_isolated.keys().collect::<Vec<_>>(),
     );
 
@@ -1164,7 +1226,9 @@ fn layout_isolated_cluster(
 /// list. This affects the rendering order in the SVG `<g class="edgePaths">`.
 fn reorder_cluster_edges(edges: Vec<Edge>, data: &LayoutData) -> Vec<Edge> {
     // Build set of all cluster ids in data.
-    let cluster_ids: std::collections::HashSet<&str> = data.nodes.iter()
+    let cluster_ids: std::collections::HashSet<&str> = data
+        .nodes
+        .iter()
         .filter(|n| n.is_group)
         .map(|n| n.id.as_str())
         .collect();
@@ -1175,9 +1239,15 @@ fn reorder_cluster_edges(edges: Vec<Edge>, data: &LayoutData) -> Vec<Edge> {
 
     let is_cluster_edge = |e: &Edge| -> bool {
         // Use original (pre-retarget) endpoints to detect cluster connections.
-        let orig_src = e.extra.get("orig_start").map(|s| s.as_str())
+        let orig_src = e
+            .extra
+            .get("orig_start")
+            .map(|s| s.as_str())
             .unwrap_or_else(|| edge_source(e).unwrap_or(""));
-        let orig_dst = e.extra.get("orig_end").map(|s| s.as_str())
+        let orig_dst = e
+            .extra
+            .get("orig_end")
+            .map(|s| s.as_str())
             .unwrap_or_else(|| edge_target(e).unwrap_or(""));
         cluster_ids.contains(orig_src) || cluster_ids.contains(orig_dst)
     };
@@ -1234,8 +1304,7 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
     // positions from the recursive inner layouts.
     // Also build a flat map: node_id → (x, y) for all nodes inside any
     // isolated cluster at any nesting level.
-    let mut all_isolated_ids: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
+    let mut all_isolated_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     // Maps node_id → (x, y, w, h) as computed by the inner dagre.
     let mut inner_positions: std::collections::HashMap<String, (f64, f64, f64, f64)> =
         std::collections::HashMap::new();
@@ -1271,8 +1340,7 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
     //
     // All descendants of isolated clusters are excluded from the outer graph
     // since they are already placed by the inner dagre pass.
-    let mut excluded_node_ids: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
+    let mut excluded_node_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
     for cid in isolated_layouts.keys() {
         for desc_id in all_descendants(cid, data) {
             excluded_node_ids.insert(desc_id);
@@ -1310,10 +1378,7 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
     // Build cluster anchor map for non-isolated clusters with external connections.
     // Must be computed from outer_data (with isolated clusters replaced as leaf nodes).
     let outer_cluster_anchors = build_cluster_anchors(&outer_data, &excluded_refs);
-    let mut g = build_graph_filtered(
-        &outer_data,
-        &excluded_refs,
-    );
+    let mut g = build_graph_filtered(&outer_data, &excluded_refs);
     let opts = build_layout_options(&outer_data);
     dagre::layout(&mut g, Some(opts));
 
@@ -1338,8 +1403,7 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
     // is NOT the cluster itself) — its final position comes from the inner
     // dagre pass, not the outer one.
     let is_isolated_descendant = |node: &Node| -> bool {
-        inner_positions.contains_key(node.id.as_str())
-            && !all_isolated_ids.contains(&node.id)
+        inner_positions.contains_key(node.id.as_str()) && !all_isolated_ids.contains(&node.id)
     };
 
     let cluster_padding = 8.0_f64; // upstream insertCluster padding
@@ -1381,7 +1445,9 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
                 // Formula (upstream positionNode with diff = -padding = -8):
                 //   tx = outer_x + diff - bbox_width/2 = outer_x - 8 - bbox_w/2
                 //   ty = outer_y - bbox_h/2 - padding
-                let parent_is_isolated = orig.parent_id.as_deref()
+                let parent_is_isolated = orig
+                    .parent_id
+                    .as_deref()
                     .map(|p| all_isolated_ids.contains(p))
                     .unwrap_or(false);
                 if !parent_is_isolated {
@@ -1396,8 +1462,13 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
                             log::debug!(
                                 "dagre_bridge: isolated cluster '{}' outer_x={} outer_y={} \
                                  bbox_w={} bbox_h={} → tx={} ty={}",
-                                orig.id, outer_x, outer_y,
-                                il.bbox_width, il.bbox_height, tx, ty
+                                orig.id,
+                                outer_x,
+                                outer_y,
+                                il.bbox_width,
+                                il.bbox_height,
+                                tx,
+                                ty
                             );
                         }
                     }

@@ -153,18 +153,49 @@ pub fn draw(shape_id: &str, node: &Node, theme: &ThemeVariables) -> Result<Strin
         // Upstream shapes deferred to later waves — explicit list so
         // the error message differentiates "known but not yet
         // implemented" from "unknown".
-        "anchor" | "bang" | "bowTieRect" | "card" | "cloud" | "crossedCircle"
-        | "curlyBraceLeft" | "curlyBraceRight" | "curlyBraces" | "curvedTrapezoid"
-        | "defaultMindmapNode" | "dividedRect" | "document" | "filledCircle"
-        | "flippedTriangle" | "halfRoundedRectangle" | "hourglass" | "icon"
-        | "iconCircle" | "iconRounded" | "iconSquare" | "imageSquare"
-        | "kanbanItem" | "lightningBolt" | "linedCylinder" | "linedWaveEdgedRect"
-        | "mindmapCircle" | "multiRect" | "multiWaveEdgedRectangle" | "shadedProcess"
-        | "slopedRect" | "taggedRect" | "taggedWaveEdgedRectangle" | "text"
-        | "tiltedCylinder" | "trapezoidalPentagon" | "triangle" | "waveEdgedRectangle"
-        | "waveRectangle" | "windowPane" => {
-            Err(MermaidError::Unsupported(format!("shape '{}' (deferred)", shape_id)))
-        }
+        "anchor"
+        | "bang"
+        | "bowTieRect"
+        | "card"
+        | "cloud"
+        | "crossedCircle"
+        | "curlyBraceLeft"
+        | "curlyBraceRight"
+        | "curlyBraces"
+        | "curvedTrapezoid"
+        | "defaultMindmapNode"
+        | "dividedRect"
+        | "document"
+        | "filledCircle"
+        | "flippedTriangle"
+        | "halfRoundedRectangle"
+        | "hourglass"
+        | "icon"
+        | "iconCircle"
+        | "iconRounded"
+        | "iconSquare"
+        | "imageSquare"
+        | "kanbanItem"
+        | "lightningBolt"
+        | "linedCylinder"
+        | "linedWaveEdgedRect"
+        | "mindmapCircle"
+        | "multiRect"
+        | "multiWaveEdgedRectangle"
+        | "shadedProcess"
+        | "slopedRect"
+        | "taggedRect"
+        | "taggedWaveEdgedRectangle"
+        | "text"
+        | "tiltedCylinder"
+        | "trapezoidalPentagon"
+        | "triangle"
+        | "waveEdgedRectangle"
+        | "waveRectangle"
+        | "windowPane" => Err(MermaidError::Unsupported(format!(
+            "shape '{}' (deferred)",
+            shape_id
+        ))),
 
         _ => Err(MermaidError::Unsupported(format!("shape '{}'", shape_id))),
     }

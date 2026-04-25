@@ -40,20 +40,25 @@ use crate::theme::ThemeVariables;
 /// * Per-node foreignObject labels at `(0, 0, fo_w, fo_h)` each.
 /// * Edge path points using absolute waypoint coords (no transform on paths).
 /// * Edge-label foreignObjects at `(0, 0, el_w, el_h)`.
-fn compute_jsdom_bounds(
-    l: &RequirementLayout,
-    title: Option<&str>,
-) -> (f64, f64, f64, f64) {
+fn compute_jsdom_bounds(l: &RequirementLayout, title: Option<&str>) -> (f64, f64, f64, f64) {
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
     let mut max_y = f64::NEG_INFINITY;
 
     let mut acc = |x: f64, y: f64, w: f64, h: f64| {
-        if min_x > x { min_x = x; }
-        if min_y > y { min_y = y; }
-        if max_x < x + w { max_x = x + w; }
-        if max_y < y + h { max_y = y + h; }
+        if min_x > x {
+            min_x = x;
+        }
+        if min_y > y {
+            min_y = y;
+        }
+        if max_x < x + w {
+            max_x = x + w;
+        }
+        if max_y < y + h {
+            max_y = y + h;
+        }
     };
 
     for (n, labels) in l.graph.nodes.iter().zip(l.node_labels.iter()) {
@@ -164,8 +169,9 @@ pub fn render(
     // the pre-title center as the `x` attribute.
     let (pre_bx, _pre_by, pre_bw, _pre_bh) = compute_jsdom_bounds(l, None);
     let title_x = pre_bx + pre_bw / 2.0; // center of diagram (before title)
-    // Compute viewBox using JSDOM-aware bounds (ignores transforms, unions local coords).
-    let (bx, by, bw, bh) = compute_jsdom_bounds(l, if title.is_empty() { None } else { Some(title) });
+                                         // Compute viewBox using JSDOM-aware bounds (ignores transforms, unions local coords).
+    let (bx, by, bw, bh) =
+        compute_jsdom_bounds(l, if title.is_empty() { None } else { Some(title) });
     let pad = 8.0;
     let vb_x = bx - pad;
     let vb_y = by - pad;
@@ -274,10 +280,10 @@ fn render_node(
     node_index: usize,
     theme: &ThemeVariables,
 ) -> String {
+    use crate::font_metrics::text_width;
     use crate::render::foreign_object::{
         foreign_object_body, measure_html_label, HtmlLabelFont, LabelOpts,
     };
-    use crate::font_metrics::text_width;
 
     // Compute node/label styles from css_styles (classDef + inline styles).
     // Upstream `styles2String` splits into nodeStyles (stroke/fill/etc) and
@@ -327,7 +333,8 @@ fn render_node(
     // accounts for the max FO width via box_size().
     let padding = 20.0;
     let gap = 20.0; // space between name bottom and divider
-    let (kind_fo_w, kind_fo_h) = measure_html_label(&labels.kind_header, &kind_font, f64::INFINITY, false);
+    let (kind_fo_w, kind_fo_h) =
+        measure_html_label(&labels.kind_header, &kind_font, f64::INFINITY, false);
     // Use layout-computed dimensions (= max_fo_w + padding, kind_fo_h + padding)
     let total_w = n.width.unwrap_or(kind_fo_w + padding);
     let total_h = n.height.unwrap_or(kind_fo_h + padding);
@@ -401,12 +408,21 @@ fn render_node(
 
     // Pre-compute normalized div prefix (JSDOM parses cssText, adds spaces/rgb conversion).
     let div_prefix = normalize_label_styles_for_div(&label_styles_str);
-    let div_prefix_opt: Option<&str> = if div_prefix.is_empty() { None } else { Some(&div_prefix) };
-    let label_style_opt: Option<&str> = if label_styles_str.is_empty() { None } else { Some(&label_styles_str) };
+    let div_prefix_opt: Option<&str> = if div_prefix.is_empty() {
+        None
+    } else {
+        Some(&div_prefix)
+    };
+    let label_style_opt: Option<&str> = if label_styles_str.is_empty() {
+        None
+    } else {
+        Some(&label_styles_str)
+    };
 
     // Kind label — centered, y_offset=0.
     let kind_esc = xml_escape(&labels.kind_header);
-    let kind_max_w = (text_width(&kind_esc, "sans-serif", 16.0, false, false) + 50.0).round() as i64;
+    let kind_max_w =
+        (text_width(&kind_esc, "sans-serif", 16.0, false, false) + 50.0).round() as i64;
     {
         let kind_orig_y = -kind_fo_h / 2.0; // yOffset=0
         let opts = LabelOpts {
@@ -436,7 +452,8 @@ fn render_node(
     // JSDOM measures textContent (markdown stripped) of the name FO.
     let name_plain = crate::text::markdown_text_content(&labels.name);
     let (name_fo_w, name_fo_h) = measure_html_label(&name_plain, &name_font, f64::INFINITY, false);
-    let name_max_w = (text_width(&name_esc, "sans-serif", 16.0, false, false) + 50.0).round() as i64;
+    let name_max_w =
+        (text_width(&name_esc, "sans-serif", 16.0, false, false) + 50.0).round() as i64;
     {
         let name_y_offset = kind_fo_h;
         let name_orig_y = -name_fo_h / 2.0 + name_y_offset;
@@ -450,7 +467,11 @@ fn render_node(
         // and font-weight: bold is always present (without !important).
         // Only computed when label_styles_str is non-empty (otherwise div prefix is empty).
         let name_div_prefix = normalize_name_label_div_prefix(&label_styles_str);
-        let name_div_opt: Option<&str> = if name_div_prefix.is_empty() { None } else { Some(&name_div_prefix) };
+        let name_div_opt: Option<&str> = if name_div_prefix.is_empty() {
+            None
+        } else {
+            Some(&name_div_prefix)
+        };
         let opts = LabelOpts {
             extra_span_classes: "markdown-node-label",
             max_width: name_max_w as f64,
@@ -465,7 +486,9 @@ fn render_node(
             tx = fmt_num(-name_fo_w / 2.0),
             ty = fmt_num(re_translate(name_orig_y)),
         ));
-        s.push_str(&foreign_object_body(&name_html, name_fo_w, name_fo_h, &opts));
+        s.push_str(&foreign_object_body(
+            &name_html, name_fo_w, name_fo_h, &opts,
+        ));
         s.push_str("</g>");
     }
 
@@ -481,7 +504,8 @@ fn render_node(
         // JSDOM measures textContent (markdown stripped) of the body row FO.
         let row_plain = crate::text::markdown_text_content(row);
         let (row_fo_w, row_fo_h) = measure_html_label(&row_plain, &body_font, f64::INFINITY, false);
-        let row_max_w = (text_width(&row_esc, "sans-serif", 16.0, false, false) + 50.0).round() as i64;
+        let row_max_w =
+            (text_width(&row_esc, "sans-serif", 16.0, false, false) + 50.0).round() as i64;
         let row_y_offset = body_start_offset + i as f64 * row_fo_h;
         let row_orig_y = -row_fo_h / 2.0 + row_y_offset;
         // Body labels use left-aligned x: hx + padding/2 = -totalW/2 + 10
@@ -581,7 +605,14 @@ impl LcgRng {
 ///
 /// All calls after #1 produce 0 with roughness=0, but the RNG state still advances.
 /// We must consume all 11 to keep subsequent segments in sync with upstream.
-fn rough_line_segment(x1: f64, y1: f64, x2: f64, y2: f64, rng: &mut LcgRng, _is_second: bool) -> String {
+fn rough_line_segment(
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    rng: &mut LcgRng,
+    _is_second: bool,
+) -> String {
     // Call 1: p = 0.2 + 0.2 * W(o)
     let p = 0.2 + 0.2 * rng.next();
     // Calls 2-11: G() / E() calls that return 0 with roughness=0 but must advance RNG
@@ -656,7 +687,15 @@ fn edge_path_basis(pts: &[crate::layout::unified::Point]) -> String {
         let cp2y = (y0 + 2.0 * y1) / 3.0;
         let ex = (x0 + 4.0 * x1 + x) / 6.0;
         let ey = (y0 + 4.0 * y1 + y) / 6.0;
-        d.push_str(&format!("C{},{},{},{},{},{}", fmt_r3(cp1x), fmt_r3(cp1y), fmt_r3(cp2x), fmt_r3(cp2y), fmt_r3(ex), fmt_r3(ey)));
+        d.push_str(&format!(
+            "C{},{},{},{},{},{}",
+            fmt_r3(cp1x),
+            fmt_r3(cp1y),
+            fmt_r3(cp2x),
+            fmt_r3(cp2y),
+            fmt_r3(ex),
+            fmt_r3(ey)
+        ));
     };
 
     for (i, p) in pts.iter().enumerate() {
@@ -720,10 +759,7 @@ fn render_edge(id_prefix: &str, e: &UEdge) -> String {
         Some("dashed") => "edge-pattern-dashed",
         _ => "edge-pattern-solid",
     };
-    let classes = format!(
-        " edge-thickness-normal {} relationshipLine",
-        pattern_cls,
-    );
+    let classes = format!(" edge-thickness-normal {} relationshipLine", pattern_cls,);
 
     // Build base64 data-points from the edge's point array.
     let data_points_b64 = {
@@ -755,9 +791,13 @@ fn render_edge(id_prefix: &str, e: &UEdge) -> String {
     let style = {
         let edge_styles = e.style.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
         // styles = each item + ";"
-        let styles: String = edge_styles.iter().fold(String::new(), |acc, s| acc + s + ";");
+        let styles: String = edge_styles
+            .iter()
+            .fold(String::new(), |acc, s| acc + s + ";");
         // reduce2 = each item prepended with ";"
-        let reduce2: String = edge_styles.iter().fold(String::new(), |acc, s| acc + ";" + s);
+        let reduce2: String = edge_styles
+            .iter()
+            .fold(String::new(), |acc, s| acc + ";" + s);
         format!("{};{}", styles, reduce2)
     };
     let mut marker_attrs = String::new();
@@ -838,34 +878,19 @@ fn marker_defs(id_prefix: &str) -> String {
 ///   `.req-title-line`, `.relationshipLine`, `.relationshipLabel`,
 ///   `.edgeLabel`, `.divider`, `.label`, `.labelBkg`.
 fn requirement_specific_css(id: &str, theme: &ThemeVariables) -> String {
-    let rel_color = theme
-        .relation_color
-        .as_deref()
-        .unwrap_or("#333333");
-    let req_bg = theme
-        .requirement_background
-        .as_deref()
-        .unwrap_or("#ECECFF");
+    let rel_color = theme.relation_color.as_deref().unwrap_or("#333333");
+    let req_bg = theme.requirement_background.as_deref().unwrap_or("#ECECFF");
     let req_border = theme
         .requirement_border_color
         .as_deref()
         .unwrap_or("hsl(240, 60%, 86.2745098039%)");
-    let req_border_size = theme
-        .requirement_border_size
-        .as_deref()
-        .unwrap_or("1");
-    let req_text = theme
-        .requirement_text_color
-        .as_deref()
-        .unwrap_or("#131300");
+    let req_border_size = theme.requirement_border_size.as_deref().unwrap_or("1");
+    let req_text = theme.requirement_text_color.as_deref().unwrap_or("#131300");
     let rel_label_bg = theme
         .relation_label_background
         .as_deref()
         .unwrap_or("rgba(232,232,232, 0.8)");
-    let rel_label_color = theme
-        .relation_label_color
-        .as_deref()
-        .unwrap_or("black");
+    let rel_label_color = theme.relation_label_color.as_deref().unwrap_or("black");
     let ff_raw = theme
         .font_family
         .as_deref()
@@ -1075,8 +1100,11 @@ fn normalize_name_label_div_prefix(label_styles: &str) -> String {
                 has_font_weight = true;
             } else {
                 // Normalize color values, keep !important
-                let normalized_val = if key == "color" || key == "background-color"
-                    || key == "border-color" || key == "fill" || key == "stroke"
+                let normalized_val = if key == "color"
+                    || key == "background-color"
+                    || key == "border-color"
+                    || key == "fill"
+                    || key == "stroke"
                 {
                     hex_to_rgb(val)
                 } else {
@@ -1120,8 +1148,11 @@ fn normalize_label_styles_for_div(label_styles: &str) -> String {
             let key = key_val[..colon_pos].trim();
             let val = key_val[colon_pos + 1..].trim();
             // Convert hex colors to rgb
-            let normalized_val = if key == "color" || key == "background-color"
-                || key == "border-color" || key == "fill" || key == "stroke"
+            let normalized_val = if key == "color"
+                || key == "background-color"
+                || key == "border-color"
+                || key == "fill"
+                || key == "stroke"
             {
                 hex_to_rgb(val)
             } else {
@@ -1300,12 +1331,22 @@ mod tests {
                         matched += 1;
                         eprintln!("[requirement-MATCH] {}", stem);
                     } else {
-                        let prefix = got.bytes().zip(expected.bytes())
-                            .take_while(|(a, b)| a == b).count();
-                        eprintln!("[requirement-DIFF] {} got={} exp={} prefix={}", stem, got.len(), expected.len(), prefix);
+                        let prefix = got
+                            .bytes()
+                            .zip(expected.bytes())
+                            .take_while(|(a, b)| a == b)
+                            .count();
+                        eprintln!(
+                            "[requirement-DIFF] {} got={} exp={} prefix={}",
+                            stem,
+                            got.len(),
+                            expected.len(),
+                            prefix
+                        );
                         if prefix < expected.len() {
-                            let exp_ctx = &expected[prefix..std::cmp::min(prefix+80, expected.len())];
-                            let got_ctx = &got[prefix..std::cmp::min(prefix+80, got.len())];
+                            let exp_ctx =
+                                &expected[prefix..std::cmp::min(prefix + 80, expected.len())];
+                            let got_ctx = &got[prefix..std::cmp::min(prefix + 80, got.len())];
                             eprintln!("  exp: {:?}", exp_ctx);
                             eprintln!("  got: {:?}", got_ctx);
                         }
@@ -1459,8 +1500,10 @@ mod tests {
             let gb: Vec<u8> = got.bytes().collect();
             let eb: Vec<u8> = exp.bytes().collect();
             let ctx_start = if prefix > 30 { prefix - 30 } else { 0 };
-            let got_ctx = String::from_utf8_lossy(&gb[ctx_start..std::cmp::min(prefix + 100, gb.len())]);
-            let exp_ctx = String::from_utf8_lossy(&eb[ctx_start..std::cmp::min(prefix + 100, eb.len())]);
+            let got_ctx =
+                String::from_utf8_lossy(&gb[ctx_start..std::cmp::min(prefix + 100, gb.len())]);
+            let exp_ctx =
+                String::from_utf8_lossy(&eb[ctx_start..std::cmp::min(prefix + 100, eb.len())]);
             eprintln!("[req07-diff-got] ...{}...", got_ctx);
             eprintln!("[req07-diff-exp] ...{}...", exp_ctx);
         }
@@ -1496,7 +1539,10 @@ mod tests {
             .count();
         eprintln!(
             "[req{}-diag] got={} exp={} prefix={}",
-            name, got.len(), exp.len(), prefix
+            name,
+            got.len(),
+            exp.len(),
+            prefix
         );
         let _ = std::fs::write(format!("/tmp/got_req{}.svg", name), &got);
         let _ = std::fs::write(format!("/tmp/exp_req{}.svg", name), &exp);
@@ -1504,8 +1550,10 @@ mod tests {
             let gb: Vec<u8> = got.bytes().collect();
             let eb: Vec<u8> = exp.bytes().collect();
             let ctx_start = if prefix > 60 { prefix - 60 } else { 0 };
-            let got_ctx = String::from_utf8_lossy(&gb[ctx_start..std::cmp::min(prefix + 200, gb.len())]);
-            let exp_ctx = String::from_utf8_lossy(&eb[ctx_start..std::cmp::min(prefix + 200, eb.len())]);
+            let got_ctx =
+                String::from_utf8_lossy(&gb[ctx_start..std::cmp::min(prefix + 200, gb.len())]);
+            let exp_ctx =
+                String::from_utf8_lossy(&eb[ctx_start..std::cmp::min(prefix + 200, eb.len())]);
             eprintln!("[req{}-diff-got] ...{}...", name, got_ctx);
             eprintln!("[req{}-diff-exp] ...{}...", name, exp_ctx);
         }
@@ -1536,8 +1584,14 @@ mod tests {
     #[test]
     fn debug_measure_html_labels() {
         use crate::render::foreign_object::{measure_html_label, HtmlLabelFont};
-        let font_plain = HtmlLabelFont { bold: Some(false), ..HtmlLabelFont::default() };
-        let font_bold = HtmlLabelFont { bold: Some(true), ..HtmlLabelFont::default() };
+        let font_plain = HtmlLabelFont {
+            bold: Some(false),
+            ..HtmlLabelFont::default()
+        };
+        let font_bold = HtmlLabelFont {
+            bold: Some(true),
+            ..HtmlLabelFont::default()
+        };
         let labels = [
             ("Text: **Bolded text** _italicized text_", 219.830078125),
             ("Risk: High", 70.3623046875),
@@ -1554,7 +1608,10 @@ mod tests {
         for (text, exp_w) in &labels {
             let (wp, hp) = measure_html_label(text, &font_plain, f64::INFINITY, false);
             let (wb, hb) = measure_html_label(text, &font_bold, f64::INFINITY, false);
-            eprintln!("label={:50} plain={:20} bold={:20} h={:10} exp={}", text, wp, wb, hp, exp_w);
+            eprintln!(
+                "label={:50} plain={:20} bold={:20} h={:10} exp={}",
+                text, wp, wb, hp, exp_w
+            );
         }
     }
 }

@@ -9,13 +9,15 @@
 //! `statement` / `blockStatement` / `nodeStatement` rules.
 
 use crate::error::{MermaidError, Result};
-use crate::model::block::{
-    ArrowDir, BlockDiagram, BlockEdge, BlockNode, BlockShape, ClassDef,
-};
+use crate::model::block::{ArrowDir, BlockDiagram, BlockEdge, BlockNode, BlockShape, ClassDef};
 
 /// Convenience builder for a parse error with placeholder line/col.
 fn perr(msg: impl Into<String>) -> MermaidError {
-    MermaidError::Parse { line: 0, col: 0, message: msg.into() }
+    MermaidError::Parse {
+        line: 0,
+        col: 0,
+        message: msg.into(),
+    }
 }
 
 pub fn parse(source: &str) -> Result<BlockDiagram> {
@@ -63,7 +65,10 @@ enum Tok {
     /// Direction word inside `<[...]>(...)`.
     Dir(ArrowDir),
     /// `A --> B`, `A --x B` etc. Full edge body including optional label spacing.
-    Link { typestr: String, label: Option<String> },
+    Link {
+        typestr: String,
+        label: Option<String>,
+    },
     /// `classDef ID css` — emits ID + css segments.
     ClassDef(String, String),
     /// `class A,B name` — ids + style class.
@@ -83,28 +88,43 @@ struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     fn new(src: &'a str) -> Self {
-        Self { src: src.as_bytes(), pos: 0 }
+        Self {
+            src: src.as_bytes(),
+            pos: 0,
+        }
     }
 
-    fn peek(&self) -> Option<u8> { self.src.get(self.pos).copied() }
+    fn peek(&self) -> Option<u8> {
+        self.src.get(self.pos).copied()
+    }
     fn bump(&mut self) -> Option<u8> {
         let b = self.peek();
-        if b.is_some() { self.pos += 1; }
+        if b.is_some() {
+            self.pos += 1;
+        }
         b
     }
-    fn rest(&self) -> &str { std::str::from_utf8(&self.src[self.pos..]).unwrap_or("") }
+    fn rest(&self) -> &str {
+        std::str::from_utf8(&self.src[self.pos..]).unwrap_or("")
+    }
 
-    fn starts_with(&self, s: &str) -> bool { self.rest().starts_with(s) }
+    fn starts_with(&self, s: &str) -> bool {
+        self.rest().starts_with(s)
+    }
 
     /// Skip blanks (space/tab) and `%% ... \n` comments, but NOT newlines.
     fn skip_blanks(&mut self) {
         loop {
             match self.peek() {
-                Some(b' ' | b'\t' | b'\r') => { self.pos += 1; }
+                Some(b' ' | b'\t' | b'\r') => {
+                    self.pos += 1;
+                }
                 Some(b'%') if self.rest().starts_with("%%") => {
                     // Consume until newline
                     while let Some(c) = self.peek() {
-                        if c == b'\n' { break; }
+                        if c == b'\n' {
+                            break;
+                        }
                         self.pos += 1;
                     }
                 }
@@ -117,10 +137,14 @@ impl<'a> Lexer<'a> {
     fn read_until_byte(&mut self, stop: u8) -> String {
         let start = self.pos;
         while let Some(c) = self.peek() {
-            if c == stop { break; }
+            if c == stop {
+                break;
+            }
             self.pos += 1;
         }
-        std::str::from_utf8(&self.src[start..self.pos]).unwrap_or("").to_string()
+        std::str::from_utf8(&self.src[start..self.pos])
+            .unwrap_or("")
+            .to_string()
     }
 
     /// Read a quoted `"..."` string. Current pos is on the opening quote.
@@ -129,11 +153,17 @@ impl<'a> Lexer<'a> {
         self.pos += 1;
         let start = self.pos;
         while let Some(c) = self.peek() {
-            if c == b'"' { break; }
+            if c == b'"' {
+                break;
+            }
             self.pos += 1;
         }
-        let s = std::str::from_utf8(&self.src[start..self.pos]).unwrap_or("").to_string();
-        if self.peek() == Some(b'"') { self.pos += 1; }
+        let s = std::str::from_utf8(&self.src[start..self.pos])
+            .unwrap_or("")
+            .to_string();
+        if self.peek() == Some(b'"') {
+            self.pos += 1;
+        }
         s
     }
 
@@ -141,8 +171,12 @@ impl<'a> Lexer<'a> {
     fn consume_keyword(&mut self, kw: &str) -> bool {
         let len = kw.len();
         let bytes = self.src;
-        if bytes.len() - self.pos < len { return false; }
-        if &bytes[self.pos..self.pos + len] != kw.as_bytes() { return false; }
+        if bytes.len() - self.pos < len {
+            return false;
+        }
+        if &bytes[self.pos..self.pos + len] != kw.as_bytes() {
+            return false;
+        }
         // Require non-identifier-char boundary after.
         let after = bytes.get(self.pos + len).copied();
         match after {
@@ -158,52 +192,82 @@ impl<'a> Lexer<'a> {
         self.skip_blanks();
         match self.peek() {
             None => Ok(Tok::Eof),
-            Some(b'\n') => { self.pos += 1; Ok(Tok::Newline) }
+            Some(b'\n') => {
+                self.pos += 1;
+                Ok(Tok::Newline)
+            }
             Some(b':') => {
                 // `:N` size suffix.
                 self.pos += 1;
                 let start = self.pos;
                 while let Some(c) = self.peek() {
-                    if c.is_ascii_digit() { self.pos += 1; } else { break; }
+                    if c.is_ascii_digit() {
+                        self.pos += 1;
+                    } else {
+                        break;
+                    }
                 }
                 let n: i64 = std::str::from_utf8(&self.src[start..self.pos])
-                    .unwrap_or("1").parse().unwrap_or(1);
+                    .unwrap_or("1")
+                    .parse()
+                    .unwrap_or(1);
                 Ok(Tok::Size(n))
             }
             Some(b'"') => Ok(Tok::Str(self.read_quoted())),
             _ => {
                 // Keywords and identifiers.
-                if self.consume_keyword("block-beta") { return Ok(Tok::BlockDiagramKey); }
-                if self.starts_with("block:") { self.pos += 6; return Ok(Tok::IdBlock); }
-                if self.consume_keyword("block") { return Ok(Tok::BlockDiagramKey); }
-                if self.consume_keyword("end") { return Ok(Tok::End); }
+                if self.consume_keyword("block-beta") {
+                    return Ok(Tok::BlockDiagramKey);
+                }
+                if self.starts_with("block:") {
+                    self.pos += 6;
+                    return Ok(Tok::IdBlock);
+                }
+                if self.consume_keyword("block") {
+                    return Ok(Tok::BlockDiagramKey);
+                }
+                if self.consume_keyword("end") {
+                    return Ok(Tok::End);
+                }
                 // `columns N` / `columns auto`
-                if self.starts_with("columns") && matches!(
-                    self.src.get(self.pos + 7).copied(), Some(b' ' | b'\t')
-                ) {
+                if self.starts_with("columns")
+                    && matches!(self.src.get(self.pos + 7).copied(), Some(b' ' | b'\t'))
+                {
                     self.pos += 7;
                     // Consume whitespace then value.
-                    while matches!(self.peek(), Some(b' ' | b'\t')) { self.pos += 1; }
+                    while matches!(self.peek(), Some(b' ' | b'\t')) {
+                        self.pos += 1;
+                    }
                     if self.starts_with("auto") {
                         self.pos += 4;
                         return Ok(Tok::Columns(-1));
                     }
                     let start = self.pos;
-                    while matches!(self.peek(), Some(c) if c.is_ascii_digit()) { self.pos += 1; }
+                    while matches!(self.peek(), Some(c) if c.is_ascii_digit()) {
+                        self.pos += 1;
+                    }
                     let n: i64 = std::str::from_utf8(&self.src[start..self.pos])
-                        .unwrap_or("1").parse().unwrap_or(1);
+                        .unwrap_or("1")
+                        .parse()
+                        .unwrap_or(1);
                     return Ok(Tok::Columns(n));
                 }
                 // `space:N` or `space`
                 if self.starts_with("space:") {
                     self.pos += 6;
                     let start = self.pos;
-                    while matches!(self.peek(), Some(c) if c.is_ascii_digit()) { self.pos += 1; }
+                    while matches!(self.peek(), Some(c) if c.is_ascii_digit()) {
+                        self.pos += 1;
+                    }
                     let n: i64 = std::str::from_utf8(&self.src[start..self.pos])
-                        .unwrap_or("1").parse().unwrap_or(1);
+                        .unwrap_or("1")
+                        .parse()
+                        .unwrap_or(1);
                     return Ok(Tok::SpaceBlock(n));
                 }
-                if self.consume_keyword("space") { return Ok(Tok::SpaceBlock(1)); }
+                if self.consume_keyword("space") {
+                    return Ok(Tok::SpaceBlock(1));
+                }
                 // classDef / class / style
                 if self.consume_keyword("classDef") {
                     self.skip_blanks();
@@ -248,7 +312,8 @@ impl<'a> Lexer<'a> {
                 if id.is_empty() {
                     let c = self.peek().unwrap_or(b'?');
                     return Err(perr(format!(
-                        "block parser: unexpected byte {:?} at pos {}", c as char, self.pos
+                        "block parser: unexpected byte {:?} at pos {}",
+                        c as char, self.pos
                     )));
                 }
                 Ok(Tok::NodeId(id))
@@ -259,26 +324,42 @@ impl<'a> Lexer<'a> {
     fn read_ident_word(&mut self) -> String {
         let start = self.pos;
         while let Some(c) = self.peek() {
-            if is_id_boundary(c) { break; }
-            if matches!(c, b'(' | b'[' | b'{' | b'}' | b')' | b'<' | b'>' | b':' | b'"') { break; }
+            if is_id_boundary(c) {
+                break;
+            }
+            if matches!(
+                c,
+                b'(' | b'[' | b'{' | b'}' | b')' | b'<' | b'>' | b':' | b'"'
+            ) {
+                break;
+            }
             self.pos += 1;
         }
-        std::str::from_utf8(&self.src[start..self.pos]).unwrap_or("").to_string()
+        std::str::from_utf8(&self.src[start..self.pos])
+            .unwrap_or("")
+            .to_string()
     }
 
     fn read_class_ids(&mut self) -> String {
         // \w+ (, \s* \w+)*
         let start = self.pos;
         loop {
-            while matches!(self.peek(), Some(c) if c.is_ascii_alphanumeric() || c == b'_') { self.pos += 1; }
+            while matches!(self.peek(), Some(c) if c.is_ascii_alphanumeric() || c == b'_') {
+                self.pos += 1;
+            }
             if self.peek() == Some(b',') {
                 self.pos += 1;
-                while matches!(self.peek(), Some(b' ' | b'\t')) { self.pos += 1; }
+                while matches!(self.peek(), Some(b' ' | b'\t')) {
+                    self.pos += 1;
+                }
             } else {
                 break;
             }
         }
-        std::str::from_utf8(&self.src[start..self.pos]).unwrap_or("").trim().to_string()
+        std::str::from_utf8(&self.src[start..self.pos])
+            .unwrap_or("")
+            .trim()
+            .to_string()
     }
 
     /// Try parsing an edge token. Upstream jison regex:
@@ -291,24 +372,35 @@ impl<'a> Lexer<'a> {
         // Optional lead x/o/< followed by `-- ... ->|x|o` or `== ... =>|x|o`
         let lead = bytes.get(i).copied();
         let mut j = i;
-        if matches!(lead, Some(b'x' | b'o' | b'<')) { j += 1; }
+        if matches!(lead, Some(b'x' | b'o' | b'<')) {
+            j += 1;
+        }
         // Now expect `--` or `==` or `-.`.
         let dashes = bytes.get(j).copied();
-        if !matches!(dashes, Some(b'-' | b'=')) { return Ok(None); }
+        if !matches!(dashes, Some(b'-' | b'=')) {
+            return Ok(None);
+        }
         let dash_c = dashes.unwrap();
         let mut k = j;
-        while bytes.get(k).copied() == Some(dash_c) { k += 1; }
-        if k - j < 2 { return Ok(None); }
+        while bytes.get(k).copied() == Some(dash_c) {
+            k += 1;
+        }
+        if k - j < 2 {
+            return Ok(None);
+        }
         // Undirected link: 3+ dashes followed by non-link char (whitespace
         // or identifier). Consume the run as `---`-style link.
         let next = bytes.get(k).copied();
-        if dash_c == b'-'
-            && k - j >= 3
-            && !matches!(next, Some(b'x' | b'o' | b'>' | b'-' | b'='))
-        {
+        if dash_c == b'-' && k - j >= 3 && !matches!(next, Some(b'x' | b'o' | b'>' | b'-' | b'=')) {
             self.pos = k;
-            let typestr = std::str::from_utf8(&bytes[i..k]).unwrap_or("").trim().to_string();
-            return Ok(Some(Tok::Link { typestr, label: None }));
+            let typestr = std::str::from_utf8(&bytes[i..k])
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            return Ok(Some(Tok::Link {
+                typestr,
+                label: None,
+            }));
         }
         // Case 1: immediate close `->x|o|>`
         if matches!(next, Some(b'x' | b'o' | b'>' | b'-' | b'=')) && k - j >= 2 {
@@ -316,18 +408,32 @@ impl<'a> Lexer<'a> {
             // But not `--"label"` scenarios. If next is dash/equal continue consuming
             // then check for final char.
             let mut m = k;
-            while bytes.get(m).copied() == Some(dash_c) { m += 1; }
+            while bytes.get(m).copied() == Some(dash_c) {
+                m += 1;
+            }
             let final_c = bytes.get(m).copied();
             if matches!(final_c, Some(b'x' | b'o' | b'>')) {
                 // consume final, return full link
                 self.pos = m + 1;
-                let typestr = std::str::from_utf8(&bytes[i..self.pos]).unwrap_or("").trim().to_string();
-                return Ok(Some(Tok::Link { typestr, label: None }));
+                let typestr = std::str::from_utf8(&bytes[i..self.pos])
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                return Ok(Some(Tok::Link {
+                    typestr,
+                    label: None,
+                }));
             } else if dash_c == b'-' && bytes.get(m - 1).copied() == Some(b'-') {
                 // Plain `---` (n dashes, no arrowhead) — undirected.
                 self.pos = m;
-                let typestr = std::str::from_utf8(&bytes[i..self.pos]).unwrap_or("").trim().to_string();
-                return Ok(Some(Tok::Link { typestr, label: None }));
+                let typestr = std::str::from_utf8(&bytes[i..self.pos])
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                return Ok(Some(Tok::Link {
+                    typestr,
+                    label: None,
+                }));
             }
         }
         // Case 2: `--` then whitespace + `"label"` + space + close link.
@@ -336,28 +442,58 @@ impl<'a> Lexer<'a> {
         if k - j == 2 && matches!(next, Some(b' ' | b'\t' | b'"')) {
             // Skip whitespace, read `"..."`, skip whitespace, then expect close link `-->`.
             let mut p = k;
-            while matches!(bytes.get(p).copied(), Some(b' ' | b'\t')) { p += 1; }
-            if bytes.get(p).copied() != Some(b'"') { self.pos = save; return Ok(None); }
+            while matches!(bytes.get(p).copied(), Some(b' ' | b'\t')) {
+                p += 1;
+            }
+            if bytes.get(p).copied() != Some(b'"') {
+                self.pos = save;
+                return Ok(None);
+            }
             // read string
             p += 1;
             let lstart = p;
-            while matches!(bytes.get(p).copied(), Some(c) if c != b'"') { p += 1; }
-            let label = std::str::from_utf8(&bytes[lstart..p]).unwrap_or("").to_string();
-            if bytes.get(p).copied() != Some(b'"') { self.pos = save; return Ok(None); }
+            while matches!(bytes.get(p).copied(), Some(c) if c != b'"') {
+                p += 1;
+            }
+            let label = std::str::from_utf8(&bytes[lstart..p])
+                .unwrap_or("")
+                .to_string();
+            if bytes.get(p).copied() != Some(b'"') {
+                self.pos = save;
+                return Ok(None);
+            }
             p += 1;
-            while matches!(bytes.get(p).copied(), Some(b' ' | b'\t')) { p += 1; }
+            while matches!(bytes.get(p).copied(), Some(b' ' | b'\t')) {
+                p += 1;
+            }
             // Now expect closing link.
             let lead2 = bytes.get(p).copied();
             let mut q = p;
-            if matches!(lead2, Some(b'x' | b'o' | b'<')) { q += 1; }
-            while bytes.get(q).copied() == Some(dash_c) { q += 1; }
-            if q - p < 2 { self.pos = save; return Ok(None); }
+            if matches!(lead2, Some(b'x' | b'o' | b'<')) {
+                q += 1;
+            }
+            while bytes.get(q).copied() == Some(dash_c) {
+                q += 1;
+            }
+            if q - p < 2 {
+                self.pos = save;
+                return Ok(None);
+            }
             let final_c = bytes.get(q).copied();
-            if !matches!(final_c, Some(b'x' | b'o' | b'>')) { self.pos = save; return Ok(None); }
+            if !matches!(final_c, Some(b'x' | b'o' | b'>')) {
+                self.pos = save;
+                return Ok(None);
+            }
             self.pos = q + 1;
             // typestr combining start+end — upstream LINK token from LLABEL match.
-            let typestr = std::str::from_utf8(&bytes[p..self.pos]).unwrap_or("").trim().to_string();
-            return Ok(Some(Tok::Link { typestr, label: Some(label) }));
+            let typestr = std::str::from_utf8(&bytes[p..self.pos])
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            return Ok(Some(Tok::Link {
+                typestr,
+                label: Some(label),
+            }));
         }
         let _ = save;
         Ok(None)
@@ -395,8 +531,8 @@ fn close_sequences(open: &str) -> &'static [&'static str] {
         "([" => &["])"],
         "[[" => &["]]"],
         "[(" => &[")]"],
-        "[/" => &["/]", "\\]"],   // `[/ ... /]` lean_right ; `[/ ... \]` trapezoid
-        "[\\" => &["\\]", "/]"],  // `[\...\]` lean_left ; `[\.../]` inv_trapezoid
+        "[/" => &["/]", "\\]"], // `[/ ... /]` lean_right ; `[/ ... \]` trapezoid
+        "[\\" => &["\\]", "/]"], // `[\...\]` lean_left ; `[\.../]` inv_trapezoid
         "{{" => &["}}"],
         // Plain `[` may close with `\]` (lean_left / trapezoid_alt) or `/]`
         // (lean_right_alt) in addition to the standard `]`.
@@ -491,7 +627,9 @@ fn mulberry32_next(state: &mut u32) -> f64 {
 ///   Terminate when lo/scale2 != hi/scale2 (ULP straddles a bucket
 ///   boundary).  Round up if exact_rem >= scale2/2.
 fn js_random_to_base36_prefix(x: f64) -> String {
-    if x <= 0.0 { return String::new(); }
+    if x <= 0.0 {
+        return String::new();
+    }
     let bits = x.to_bits();
     let raw_exp = ((bits >> 52) & 0x7ff) as i32;
     let exp = raw_exp - 1023;
@@ -499,26 +637,28 @@ fn js_random_to_base36_prefix(x: f64) -> String {
     let shift_i: i32 = 52 - exp;
     // For mulberry32 outputs in (0,1): exp in [-4, -1], shift in [53, 56].
     // scale2 = 2^(shift+1) <= 2^57, fits in u128.
-    if shift_i <= 0 || shift_i >= 63 { return String::new(); }
+    if shift_i <= 0 || shift_i >= 63 {
+        return String::new();
+    }
     let shift = shift_i as u32;
 
     // scale2 = 2^(shift+1).  After modulo, values < scale2, so *36 < 36*2^63 < 2^128.
     let scale2: u128 = 1u128 << (shift + 1);
-    let mut lo:    u128 = 2 * (mantissa as u128) - 1;
-    let mut hi:    u128 = 2 * (mantissa as u128) + 1;
+    let mut lo: u128 = 2 * (mantissa as u128) - 1;
+    let mut hi: u128 = 2 * (mantissa as u128) + 1;
     let mut exact: u128 = 2 * (mantissa as u128);
 
     const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     let mut out = String::with_capacity(12);
     for _ in 0..12 {
-        lo    *= 36;
-        hi    *= 36;
+        lo *= 36;
+        hi *= 36;
         exact *= 36;
-        let lo_d    = lo    / scale2;
-        let hi_d    = hi    / scale2;
-        let ex_d    = exact / scale2;
-        lo    %= scale2;
-        hi    %= scale2;
+        let lo_d = lo / scale2;
+        let hi_d = hi / scale2;
+        let ex_d = exact / scale2;
+        lo %= scale2;
+        hi %= scale2;
         exact %= scale2;
 
         // Determine digit: exact position, with round-up when remainder
@@ -529,10 +669,18 @@ fn js_random_to_base36_prefix(x: f64) -> String {
             if exact >= scale2 / 2 {
                 digit = digit.saturating_add(1);
             }
-            if digit >= 36 { out.push('z'); } else { out.push(DIGITS[digit] as char); }
+            if digit >= 36 {
+                out.push('z');
+            } else {
+                out.push(DIGITS[digit] as char);
+            }
             break;
         }
-        if digit >= 36 { out.push('z'); } else { out.push(DIGITS[digit] as char); }
+        if digit >= 36 {
+            out.push('z');
+        } else {
+            out.push(DIGITS[digit] as char);
+        }
     }
     out
 }
@@ -557,7 +705,9 @@ impl<'a> Parser<'a> {
     }
 
     fn next_tok(&mut self) -> Result<Tok> {
-        if let Some(t) = self.peeked.take() { return Ok(t); }
+        if let Some(t) = self.peeked.take() {
+            return Ok(t);
+        }
         self.lexer.next()
     }
 
@@ -571,7 +721,9 @@ impl<'a> Parser<'a> {
     fn skip_newlines(&mut self) -> Result<()> {
         loop {
             match self.peek_tok()? {
-                Tok::Newline => { self.next_tok()?; }
+                Tok::Newline => {
+                    self.next_tok()?;
+                }
                 _ => return Ok(()),
             }
         }
@@ -597,7 +749,8 @@ impl<'a> Parser<'a> {
         let head = self.next_tok()?;
         if head != Tok::BlockDiagramKey {
             return Err(perr(format!(
-                "block parser: expected 'block' / 'block-beta' header; got {:?}", head
+                "block parser: expected 'block' / 'block-beta' header; got {:?}",
+                head
             )));
         }
         let children = self.parse_document()?;
@@ -614,7 +767,11 @@ impl<'a> Parser<'a> {
         // Apply classDef bindings.
         let apply_class = std::mem::take(&mut self.apply_class);
         for (id_list, css_class) in apply_class {
-            for id in id_list.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            for id in id_list
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+            {
                 if let Some(n) = find_node_mut(&mut root, id) {
                     n.classes.push(css_class.clone());
                 }
@@ -622,7 +779,11 @@ impl<'a> Parser<'a> {
         }
         let apply_style = std::mem::take(&mut self.apply_style);
         for (id_list, css) in apply_style {
-            for id in id_list.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            for id in id_list
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+            {
                 if let Some(n) = find_node_mut(&mut root, id) {
                     for s in css.split(',') {
                         n.styles.push(s.trim().to_string());
@@ -712,12 +873,17 @@ impl<'a> Parser<'a> {
         loop {
             match self.peek_tok()? {
                 Tok::Eof | Tok::End => break,
-                Tok::Newline => { self.next_tok()?; continue; }
+                Tok::Newline => {
+                    self.next_tok()?;
+                    continue;
+                }
                 _ => {
                     let stmts = self.parse_statement()?;
                     out.extend(stmts);
                     // Optional newline/EOF separator.
-                    if matches!(self.peek_tok()?, Tok::Newline) { self.next_tok()?; }
+                    if matches!(self.peek_tok()?, Tok::Newline) {
+                        self.next_tok()?;
+                    }
                 }
             }
         }
@@ -761,14 +927,19 @@ impl<'a> Parser<'a> {
                 let children = self.parse_document()?;
                 match self.next_tok()? {
                     Tok::End => {}
-                    other => return Err(perr(format!(
-                        "block parser: expected 'end' after block body; got {:?}", other
-                    ))),
+                    other => {
+                        return Err(perr(format!(
+                            "block parser: expected 'end' after block body; got {:?}",
+                            other
+                        )))
+                    }
                 }
                 let mut composite = node;
                 composite.shape = BlockShape::Composite;
                 composite.children = children;
-                if composite.label.is_none() { composite.label = Some(String::new()); }
+                if composite.label.is_none() {
+                    composite.label = Some(String::new());
+                }
                 Ok(vec![composite])
             }
             Tok::BlockDiagramKey => {
@@ -777,9 +948,12 @@ impl<'a> Parser<'a> {
                 let children = self.parse_document()?;
                 match self.next_tok()? {
                     Tok::End => {}
-                    other => return Err(perr(format!(
-                        "block parser: expected 'end' after block body; got {:?}", other
-                    ))),
+                    other => {
+                        return Err(perr(format!(
+                            "block parser: expected 'end' after block body; got {:?}",
+                            other
+                        )))
+                    }
                 }
                 let id = self.new_composite_id();
                 Ok(vec![BlockNode {
@@ -872,11 +1046,18 @@ impl<'a> Parser<'a> {
         let t = self.next_tok()?;
         let id = match t {
             Tok::NodeId(s) => s,
-            other => return Err(perr(format!(
-                "block parser: expected node id; got {:?}", other
-            ))),
+            other => {
+                return Err(perr(format!(
+                    "block parser: expected node id; got {:?}",
+                    other
+                )))
+            }
         };
-        let mut node = BlockNode { id, width_in_columns: 1, ..Default::default() };
+        let mut node = BlockNode {
+            id,
+            width_in_columns: 1,
+            ..Default::default()
+        };
         // Optional shape-body.
         match self.peek_tok()? {
             Tok::NodeDStart(open) => {
@@ -885,9 +1066,12 @@ impl<'a> Parser<'a> {
                 // Expect a quoted label.
                 let label = match self.next_tok()? {
                     Tok::Str(s) => s,
-                    other => return Err(perr(format!(
-                        "block parser: expected quoted label inside shape; got {:?}", other
-                    ))),
+                    other => {
+                        return Err(perr(format!(
+                            "block parser: expected quoted label inside shape; got {:?}",
+                            other
+                        )))
+                    }
                 };
                 // Expect matching close.
                 let closers = close_sequences(&open);
@@ -901,9 +1085,12 @@ impl<'a> Parser<'a> {
                 self.next_tok()?;
                 let label = match self.next_tok()? {
                     Tok::Str(s) => s,
-                    other => return Err(perr(format!(
-                        "block parser: expected label in block arrow; got {:?}", other
-                    ))),
+                    other => {
+                        return Err(perr(format!(
+                            "block parser: expected label in block arrow; got {:?}",
+                            other
+                        )))
+                    }
                 };
                 // Expect `]>` immediately — our lexer didn't tokenize that, so scan raw.
                 // Consume until we see `]>`, then collect directions until `)`.
@@ -934,19 +1121,25 @@ impl<'a> Parser<'a> {
     /// After `<["label"` already consumed, read `]>` `(` dir (, dir)* `)`.
     fn read_block_arrow_tail(&mut self) -> Result<Vec<ArrowDir>> {
         // Skip spaces.
-        while matches!(self.lexer.peek(), Some(b' ' | b'\t')) { self.lexer.pos += 1; }
+        while matches!(self.lexer.peek(), Some(b' ' | b'\t')) {
+            self.lexer.pos += 1;
+        }
         if !self.lexer.starts_with("]>") {
             return Err(perr("block arrow: expected ']>'"));
         }
         self.lexer.pos += 2;
-        while matches!(self.lexer.peek(), Some(b' ' | b'\t')) { self.lexer.pos += 1; }
+        while matches!(self.lexer.peek(), Some(b' ' | b'\t')) {
+            self.lexer.pos += 1;
+        }
         if self.lexer.peek() != Some(b'(') {
             return Err(perr("block arrow: expected '('"));
         }
         self.lexer.pos += 1;
         let mut dirs = Vec::new();
         loop {
-            while matches!(self.lexer.peek(), Some(b' ' | b'\t' | b',')) { self.lexer.pos += 1; }
+            while matches!(self.lexer.peek(), Some(b' ' | b'\t' | b',')) {
+                self.lexer.pos += 1;
+            }
             if self.lexer.peek() == Some(b')') {
                 self.lexer.pos += 1;
                 break;
@@ -954,7 +1147,11 @@ impl<'a> Parser<'a> {
             // Direction token — letters only (so `x,` splits at `,`).
             let start = self.lexer.pos;
             while let Some(c) = self.lexer.peek() {
-                if c.is_ascii_alphabetic() { self.lexer.pos += 1; } else { break; }
+                if c.is_ascii_alphabetic() {
+                    self.lexer.pos += 1;
+                } else {
+                    break;
+                }
             }
             let w = std::str::from_utf8(&self.lexer.src[start..self.lexer.pos])
                 .unwrap_or("")
@@ -975,7 +1172,9 @@ impl<'a> Parser<'a> {
 }
 
 fn edge_str_to_edge_data(ts: &str) -> String {
-    let trimmed = ts.trim().trim_matches(|c: char| c == '-' || c == '=' || c == ' ');
+    let trimmed = ts
+        .trim()
+        .trim_matches(|c: char| c == '-' || c == '=' || c == ' ');
     match trimmed {
         "x" => "arrow_cross".into(),
         "o" => "arrow_circle".into(),
@@ -985,7 +1184,9 @@ fn edge_str_to_edge_data(ts: &str) -> String {
 }
 
 fn find_node_mut<'a>(root: &'a mut BlockNode, id: &str) -> Option<&'a mut BlockNode> {
-    if root.id == id { return Some(root); }
+    if root.id == id {
+        return Some(root);
+    }
     for child in &mut root.children {
         if let Some(n) = find_node_mut(child, id) {
             return Some(n);
@@ -1022,8 +1223,12 @@ mod tests {
     fn parse_space_expand() {
         let d = parse("block\n  columns 3\n  space:3\n  A\n").unwrap();
         // space:3 should expand to 3 siblings.
-        let space_count = d.root.children.iter()
-            .filter(|c| c.shape == BlockShape::Space).count();
+        let space_count = d
+            .root
+            .children
+            .iter()
+            .filter(|c| c.shape == BlockShape::Space)
+            .count();
         assert_eq!(space_count, 3);
     }
 
@@ -1038,7 +1243,8 @@ mod tests {
 
     #[test]
     fn parse_shapes() {
-        let d = parse("block\n  A[\"sq\"]\n  B(\"r\")\n  C((\"c\"))\n  D{\"d\"}\n  E{{\"h\"}}\n").unwrap();
+        let d = parse("block\n  A[\"sq\"]\n  B(\"r\")\n  C((\"c\"))\n  D{\"d\"}\n  E{{\"h\"}}\n")
+            .unwrap();
         assert_eq!(d.root.children[0].shape, BlockShape::Square);
         assert_eq!(d.root.children[1].shape, BlockShape::Round);
         assert_eq!(d.root.children[2].shape, BlockShape::Circle);

@@ -61,8 +61,13 @@ const FLOWCHART_PADDING: f64 = 15.0;
 /// Lay out a flowchart diagram. Uses dagre for the graph geometry.
 pub fn layout(d: &FlowchartDiagram, theme: &ThemeVariables) -> Result<FlowchartLayout> {
     let layout_data = build_layout_data(d);
-    let LayoutResult { nodes, edges, clusters, bounds, isolated_cluster_ids } =
-        unified::layout(&layout_data, "dagre", theme)?;
+    let LayoutResult {
+        nodes,
+        edges,
+        clusters,
+        bounds,
+        isolated_cluster_ids,
+    } = unified::layout(&layout_data, "dagre", theme)?;
 
     Ok(FlowchartLayout {
         nodes,
@@ -206,7 +211,10 @@ fn build_layout_data(d: &FlowchartDiagram) -> LayoutData {
     for e in &d.edges {
         let start = e.start.clone();
         let end = e.end.clone();
-        let counter = *pair_count.entry((start.clone(), end.clone())).and_modify(|c| *c += 1).or_insert(0);
+        let counter = *pair_count
+            .entry((start.clone(), end.clone()))
+            .and_modify(|c| *c += 1)
+            .or_insert(0);
         let mut ue = build_edge(e, d, counter);
         // Record original endpoints before retargeting so the isolation check
         // in dagre_bridge can test against the pre-retarget cluster IDs.
@@ -347,7 +355,11 @@ fn measure_vertex_box(v: &Vertex) -> (f64, f64) {
     let label = display_label(v);
     // For markdown labels, the `**bold**` syntax is rendered as HTML and
     // textContent strips the markers — measure the plain-text equivalent.
-    let is_markdown = v.label.as_ref().map(|l| l.kind == LabelKind::Markdown).unwrap_or(false);
+    let is_markdown = v
+        .label
+        .as_ref()
+        .map(|l| l.kind == LabelKind::Markdown)
+        .unwrap_or(false);
     let measure_label = if is_markdown {
         strip_markdown_for_measure(&label)
     } else {
@@ -394,8 +406,8 @@ fn measure_vertex_box(v: &Vertex) -> (f64, f64) {
         "stadium" | "pill" => (th + p * 2.0, p * 2.0),
         "cylinder" | "cyl" => (p * 2.0, p * 2.0 + 24.0),
         "subroutine" => (p * 4.0, p * 2.0),
-        "trapezoid" | "trap" | "inv_trapezoid" | "invertedTrapezoid" | "lean_left" | "lean-left"
-        | "lean_right" | "lean-right" => (p * 4.0, p * 2.0),
+        "trapezoid" | "trap" | "inv_trapezoid" | "invertedTrapezoid" | "lean_left"
+        | "lean-left" | "lean_right" | "lean-right" => (p * 4.0, p * 2.0),
         "round" | "rounded" => (p * 2.0, p * 2.0),
         _ => (p * 4.0, p * 2.0), // rect / squareRect: labelPaddingX = p*2, ×2 sides = p*4
     };
@@ -423,7 +435,8 @@ fn strip_fa_icons(text: &str) -> String {
             out.push_str(&rest[..pos]);
             // Skip past "prefix:fa-name" where name is [a-z0-9-]+.
             let icon_tail = &tail[prefix_end + 1 + 3..]; // after "fa-"
-            let icon_end = icon_tail.find(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+            let icon_end = icon_tail
+                .find(|c: char| !c.is_ascii_alphanumeric() && c != '-')
                 .unwrap_or(icon_tail.len());
             rest = &rest[pos + prefix_end + 1 + 3 + icon_end..];
         } else {
@@ -503,9 +516,12 @@ fn measure_text(label: &str) -> (f64, f64) {
     // and the original \n was converted to <br/> before measurement, we
     // treat the whole label as ONE line: sum all segment widths.
     let segments = strip_html_for_measure(&stripped);
-    let total_w: f64 = segments.iter().map(|(text, bold)| {
-        font_metrics::text_width(text, DEFAULT_FONT_FAMILY, LABEL_FONT_SIZE, *bold, false)
-    }).sum();
+    let total_w: f64 = segments
+        .iter()
+        .map(|(text, bold)| {
+            font_metrics::text_width(text, DEFAULT_FONT_FAMILY, LABEL_FONT_SIZE, *bold, false)
+        })
+        .sum();
     (total_w, lh)
 }
 
@@ -612,10 +628,7 @@ fn stroke_descriptor(s: EdgeStroke) -> (&'static str, &'static str) {
 
 /// Compose styles from classDef + inline styles. Returns `Vec<String>`
 /// of `"key:value"` entries.
-fn collect_styles<'a>(
-    v: &'a Vertex,
-    class_map: &BTreeMap<&'a str, &'a ClassDef>,
-) -> Vec<String> {
+fn collect_styles<'a>(v: &'a Vertex, class_map: &BTreeMap<&'a str, &'a ClassDef>) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     // Upstream: getCompiledStyles(["default", "node", ...vertex.classes])
     // So we look up the "default" and "node" classDefs in addition to the

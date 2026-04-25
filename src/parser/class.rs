@@ -34,9 +34,8 @@
 
 use crate::error::{MermaidError, Result};
 use crate::model::class::{
-    ClassDiagram, ClassInteractivity, ClassMember, ClassNode, ClassNote, ClassRelation,
-    Classifier, InteractivityKind, LineType, MemberKind, Namespace, RelationEnd, StyleClass,
-    Visibility,
+    ClassDiagram, ClassInteractivity, ClassMember, ClassNode, ClassNote, ClassRelation, Classifier,
+    InteractivityKind, LineType, MemberKind, Namespace, RelationEnd, StyleClass, Visibility,
 };
 use crate::preprocess;
 
@@ -456,7 +455,9 @@ fn parse_class_decl(
         }
         if t.starts_with("<<") && t.ends_with(">>") {
             let inner = &t[2..t.len() - 2];
-            d.class_mut(&name).annotations.push(inner.trim().to_string());
+            d.class_mut(&name)
+                .annotations
+                .push(inner.trim().to_string());
             continue;
         }
         add_member_text(d, &name, t);
@@ -814,7 +815,9 @@ fn tokenise_relation(body: &str) -> Vec<RelTok> {
         }
         if matches!(b, b'.' | b'-' | b'<' | b'>' | b'|' | b'*' | b'(' | b')') {
             let j = advance_rel(bytes, i);
-            let part = std::str::from_utf8(&bytes[i..j]).unwrap_or_default().to_string();
+            let part = std::str::from_utf8(&bytes[i..j])
+                .unwrap_or_default()
+                .to_string();
             out.push(RelTok::RelPart(part));
             i = j;
             continue;
@@ -822,7 +825,9 @@ fn tokenise_relation(body: &str) -> Vec<RelTok> {
         // `o` relation token when bordered by relation chars / whitespace.
         if b == b'o' && is_rel_o(bytes, i) {
             let j = advance_rel(bytes, i);
-            let part = std::str::from_utf8(&bytes[i..j]).unwrap_or_default().to_string();
+            let part = std::str::from_utf8(&bytes[i..j])
+                .unwrap_or_default()
+                .to_string();
             out.push(RelTok::RelPart(part));
             i = j;
             continue;
@@ -843,13 +848,18 @@ fn tokenise_relation(body: &str) -> Vec<RelTok> {
             }
             if c == b' '
                 || c == b'\t'
-                || matches!(c, b'.' | b'-' | b'<' | b'>' | b'|' | b'*' | b'(' | b')' | b'"')
+                || matches!(
+                    c,
+                    b'.' | b'-' | b'<' | b'>' | b'|' | b'*' | b'(' | b')' | b'"'
+                )
             {
                 break;
             }
             j += 1;
         }
-        let ident = std::str::from_utf8(&bytes[i..j]).unwrap_or_default().to_string();
+        let ident = std::str::from_utf8(&bytes[i..j])
+            .unwrap_or_default()
+            .to_string();
         out.push(RelTok::Ident(ident));
         i = j;
     }
@@ -863,10 +873,7 @@ fn is_rel_o(bytes: &[u8], i: usize) -> bool {
             b' ' | b'\t' | b'.' | b'-' | b'<' | b'>' | b'|' | b'*' | b'('
         );
     let next_ok = i + 1 < bytes.len()
-        && matches!(
-            bytes[i + 1],
-            b'.' | b'-' | b'<' | b'>' | b'|' | b'*' | b')'
-        );
+        && matches!(bytes[i + 1], b'.' | b'-' | b'<' | b'>' | b'|' | b'*' | b')');
     prev_ok && next_ok
 }
 
@@ -1038,7 +1045,10 @@ fn parse_method(input: &str, m: &mut ClassMember) {
             let ret_str = ret.trim();
             let (rt, cls) = if let Some(last) = ret_str.chars().last() {
                 if matches!(last, '*' | '$') {
-                    (ret_str[..ret_str.len() - last.len_utf8()].trim(), Some(last))
+                    (
+                        ret_str[..ret_str.len() - last.len_utf8()].trim(),
+                        Some(last),
+                    )
                 } else {
                     (ret_str, None)
                 }
@@ -1272,7 +1282,12 @@ mod tests {
         assert_eq!(d.namespaces.len(), 1);
         assert_eq!(d.namespaces[0].class_ids, vec!["A", "B"]);
         assert_eq!(
-            d.classes.iter().find(|c| c.id == "A").unwrap().parent.as_deref(),
+            d.classes
+                .iter()
+                .find(|c| c.id == "A")
+                .unwrap()
+                .parent
+                .as_deref(),
             Some("Outer")
         );
     }

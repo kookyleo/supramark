@@ -10,7 +10,11 @@ use crate::theme::ThemeVariables;
 
 pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
     let outer = node.width.unwrap_or(0.0) / 2.0;
-    let gap = if matches!(node.look.as_deref(), Some("neo")) { 12.0 } else { 5.0 };
+    let gap = if matches!(node.look.as_deref(), Some("neo")) {
+        12.0
+    } else {
+        5.0
+    };
     let inner = outer - gap;
     let classes = get_node_classes(node.look.as_deref(), node.css_classes.as_deref(), None);
     let id = node.dom_id.clone().unwrap_or_else(|| node.id.clone());

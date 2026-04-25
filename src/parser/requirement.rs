@@ -389,7 +389,9 @@ fn read_name_and_classes(input: &str) -> Result<(String, &str, Vec<String>)> {
         (stripped[..end].to_string(), &stripped[end + 1..])
     } else {
         let end = s
-            .find(|c: char| matches!(c, ':' | ',' | '<' | '>' | '-' | '=' | '{') || c.is_whitespace())
+            .find(|c: char| {
+                matches!(c, ':' | ',' | '<' | '>' | '-' | '=' | '{') || c.is_whitespace()
+            })
             .unwrap_or(s.len());
         (s[..end].trim().to_string(), &s[end..])
     };

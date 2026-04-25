@@ -144,7 +144,11 @@ impl Tree {
 /// * **Circle / doubleCircle / ellipse** take the circle element's own
 ///   bbox which is `(text_w + padding, text_w + padding)` for circles.
 /// * **BlockArrow** is handled separately.
-fn sized_dims(label: &str, shape: BlockShape, arrow_dirs: &[crate::model::block::ArrowDir]) -> (f64, f64, f64, f64) {
+fn sized_dims(
+    label: &str,
+    shape: BlockShape,
+    arrow_dirs: &[crate::model::block::ArrowDir],
+) -> (f64, f64, f64, f64) {
     // Empty labels still produce a label bbox with `height = LABEL_HEIGHT`
     // (jsdom's `measureTextBlock('')` returns `{width:0, height:lineHeight}`).
     // Width stays 0.
@@ -259,10 +263,14 @@ fn sized_dims(label: &str, shape: BlockShape, arrow_dirs: &[crate::model::block:
             // "x,y" means both X and Y dirs present → expands to right+left+up+down.
             // X alone = right+left, Y alone = up+down. X+Y = all 4.
             let has_all_four = {
-                let has_right = arrow_dirs.contains(&ArrowDir::Right) || arrow_dirs.contains(&ArrowDir::X);
-                let has_left = arrow_dirs.contains(&ArrowDir::Left) || arrow_dirs.contains(&ArrowDir::X);
-                let has_up = arrow_dirs.contains(&ArrowDir::Up) || arrow_dirs.contains(&ArrowDir::Y);
-                let has_down = arrow_dirs.contains(&ArrowDir::Down) || arrow_dirs.contains(&ArrowDir::Y);
+                let has_right =
+                    arrow_dirs.contains(&ArrowDir::Right) || arrow_dirs.contains(&ArrowDir::X);
+                let has_left =
+                    arrow_dirs.contains(&ArrowDir::Left) || arrow_dirs.contains(&ArrowDir::X);
+                let has_up =
+                    arrow_dirs.contains(&ArrowDir::Up) || arrow_dirs.contains(&ArrowDir::Y);
+                let has_down =
+                    arrow_dirs.contains(&ArrowDir::Down) || arrow_dirs.contains(&ArrowDir::Y);
                 has_right && has_left && has_up && has_down
             };
             // For "all 4 directions" (x+y), the polygon also extends in y:
@@ -273,8 +281,16 @@ fn sized_dims(label: &str, shape: BlockShape, arrow_dirs: &[crate::model::block:
             //   union y: -height2 to text_h. height = text_h + height2 = 2*text_h + 2*P.
             let height2 = text_h + 2.0 * PADDING;
             let width3 = text_w + height2 + PADDING;
-            let w = if has_all_four { width3 + 2.0 * PADDING } else { width3 };
-            let h = if has_all_four { 2.0 * text_h + 3.0 * PADDING } else { 2.0 * text_h + 2.0 * PADDING };
+            let w = if has_all_four {
+                width3 + 2.0 * PADDING
+            } else {
+                width3
+            };
+            let h = if has_all_four {
+                2.0 * text_h + 3.0 * PADDING
+            } else {
+                2.0 * text_h + 2.0 * PADDING
+            };
             (w, h)
         }
         _ => {
@@ -326,14 +342,19 @@ fn size_tree_with_sibling(node: &mut Tree, sibling_w: f64, sibling_h: f64) {
                 node.text_h = th;
             }
         }
-        let _ = sibling_w; let _ = sibling_h;
+        let _ = sibling_w;
+        let _ = sibling_h;
         return;
     }
     // 2. Composite: default size based on sibling envelope (if our own
     //    size hasn't been set yet). Recurse into children with
     //    siblingWidth/Height unset for the bottom-up pass.
     let cl = node.label.as_deref().unwrap_or("");
-    node.text_w = if cl.is_empty() { 0.0 } else { text_width(cl, "sans-serif", 14.0, false, false) };
+    node.text_w = if cl.is_empty() {
+        0.0
+    } else {
+        text_width(cl, "sans-serif", 14.0, false, false)
+    };
     node.text_h = LABEL_HEIGHT;
     if node.width == 0.0 {
         node.width = sibling_w;
@@ -345,10 +366,16 @@ fn size_tree_with_sibling(node: &mut Tree, sibling_w: f64, sibling_h: f64) {
     // 3. maxChildSize: excludes spaces.
     let (mut max_w, mut max_h) = (0.0f64, 0.0f64);
     for child in &node.children {
-        if child.is_space() { continue; }
+        if child.is_space() {
+            continue;
+        }
         let wic = child.width_in_columns.max(1) as f64;
-        if child.width > max_w { max_w = child.width / wic; }
-        if child.height > max_h { max_h = child.height; }
+        if child.width > max_w {
+            max_w = child.width / wic;
+        }
+        if child.height > max_h {
+            max_h = child.height;
+        }
     }
     // 4. Propagate to children: all children (including space) get the
     //    same row-height; widths multiply by widthInColumns + padding.
@@ -371,12 +398,18 @@ fn size_tree_with_sibling(node: &mut Tree, sibling_w: f64, sibling_h: f64) {
     //    slot overflow can inflate the row count even on a single
     //    visual row.
     let columns = node.columns;
-    let num_items: i64 = node.children.iter().map(|c| c.width_in_columns.max(1)).sum();
+    let num_items: i64 = node
+        .children
+        .iter()
+        .map(|c| c.width_in_columns.max(1))
+        .sum();
     let mut x_size = node.children.len() as i64;
     if columns > 0 && columns < num_items {
         x_size = columns;
     }
-    if x_size == 0 { x_size = 1; }
+    if x_size == 0 {
+        x_size = 1;
+    }
     let y_size = div_ceil(num_items, x_size);
     let mut width = x_size as f64 * (max_w + PADDING) + PADDING;
     let mut height = y_size as f64 * (max_h + PADDING) + PADDING;
@@ -425,7 +458,9 @@ fn size_tree_with_sibling(node: &mut Tree, sibling_w: f64, sibling_h: f64) {
 }
 
 fn div_ceil(a: i64, b: i64) -> i64 {
-    if b == 0 { return 0; }
+    if b == 0 {
+        return 0;
+    }
     (a + b - 1) / b
 }
 
@@ -443,7 +478,9 @@ fn calc_block_position(columns: i64, position: i64) -> (i64, i64) {
 fn position_tree(node: &mut Tree, px: f64, py: f64) {
     node.x = px;
     node.y = py;
-    if node.children.is_empty() { return; }
+    if node.children.is_empty() {
+        return;
+    }
     let columns = node.columns;
     // Pre-compute per-row max height.
     let mut row_heights: Vec<(i64, f64)> = Vec::new();
@@ -452,7 +489,9 @@ fn position_tree(node: &mut Tree, px: f64, py: f64) {
         let (_, row) = calc_block_position(columns, col_pos);
         match row_heights.iter_mut().find(|(r, _)| *r == row) {
             Some(entry) => {
-                if child.height > entry.1 { entry.1 = child.height; }
+                if child.height > entry.1 {
+                    entry.1 = child.height;
+                }
             }
             None => row_heights.push((row, child.height)),
         }
@@ -470,10 +509,18 @@ fn position_tree(node: &mut Tree, px: f64, py: f64) {
         offset += h + PADDING;
     }
     let row_max_h = |row: i64| -> f64 {
-        row_heights.iter().find(|(r, _)| *r == row).map(|(_, h)| *h).unwrap_or(0.0)
+        row_heights
+            .iter()
+            .find(|(r, _)| *r == row)
+            .map(|(_, h)| *h)
+            .unwrap_or(0.0)
     };
     let row_offset_y = |row: i64| -> f64 {
-        row_y_offsets.iter().find(|(r, _)| *r == row).map(|(_, o)| *o).unwrap_or(0.0)
+        row_y_offsets
+            .iter()
+            .find(|(r, _)| *r == row)
+            .map(|(_, o)| *o)
+            .unwrap_or(0.0)
     };
 
     // Iterate children and assign (x, y).
@@ -535,10 +582,18 @@ fn walk_bounds(node: &Tree, bx: &mut (f64, f64, f64, f64), init: &mut bool, is_r
         let y0 = node.y - node.height / 2.0;
         let x1 = node.x + node.width / 2.0;
         let y1 = node.y + node.height / 2.0;
-        if x0 < bx.0 { bx.0 = x0; }
-        if y0 < bx.1 { bx.1 = y0; }
-        if x1 > bx.2 { bx.2 = x1; }
-        if y1 > bx.3 { bx.3 = y1; }
+        if x0 < bx.0 {
+            bx.0 = x0;
+        }
+        if y0 < bx.1 {
+            bx.1 = y0;
+        }
+        if x1 > bx.2 {
+            bx.2 = x1;
+        }
+        if y1 > bx.3 {
+            bx.3 = y1;
+        }
     }
     for child in &node.children {
         walk_bounds(child, bx, init, false);
@@ -583,8 +638,16 @@ mod tests {
         let t = get_theme("default");
         let l = layout(&d, &t).unwrap();
         let a = l.nodes.iter().find(|n| n.id == "A").expect("A present");
-        assert!((a.width - 159.99267578125).abs() < 1e-6, "A.width={}", a.width);
-        assert!((a.height - 28.4453125).abs() < 1e-6, "A.height={}", a.height);
+        assert!(
+            (a.width - 159.99267578125).abs() < 1e-6,
+            "A.width={}",
+            a.width
+        );
+        assert!(
+            (a.height - 28.4453125).abs() < 1e-6,
+            "A.height={}",
+            a.height
+        );
         assert!((a.x - 79.996337890625).abs() < 1e-6, "A.x={}", a.x);
     }
 }

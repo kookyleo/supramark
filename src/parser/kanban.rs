@@ -207,8 +207,7 @@ fn split_top_level_commas(s: &str) -> Vec<&str> {
 fn strip_quotes(s: &str) -> &str {
     let s = s.trim();
     if s.len() >= 2
-        && ((s.starts_with('\'') && s.ends_with('\''))
-            || (s.starts_with('"') && s.ends_with('"')))
+        && ((s.starts_with('\'') && s.ends_with('\'')) || (s.starts_with('"') && s.ends_with('"')))
     {
         return &s[1..s.len() - 1];
     }

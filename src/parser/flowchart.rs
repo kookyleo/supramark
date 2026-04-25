@@ -10,12 +10,12 @@
 //! subgraph blocks. Within a line it uses a small char-cursor that
 //! can peek/pop tokens, matching upstream's lexer states loosely.
 
-use crate::config::frontmatter;
 use crate::config::directive;
+use crate::config::frontmatter;
 use crate::error::{MermaidError, Result};
 use crate::model::flowchart::{
-    ArrowType, ClassDef, Direction, Edge, EdgeStroke, FlowchartDiagram, Label, LinkStyle,
-    Subgraph, Vertex,
+    ArrowType, ClassDef, Direction, Edge, EdgeStroke, FlowchartDiagram, Label, LinkStyle, Subgraph,
+    Vertex,
 };
 
 /// Parse a flowchart / graph source.
@@ -331,7 +331,9 @@ impl<'a> LineParser<'a> {
                     // closed by `"
                     if c == '`' && chars.peek() == Some(&'"') {
                         in_md = false;
-                        if let Some(n) = chars.next() { out.push(n); }
+                        if let Some(n) = chars.next() {
+                            out.push(n);
+                        }
                     }
                     continue;
                 }
@@ -346,7 +348,9 @@ impl<'a> LineParser<'a> {
                         // Check for `"` opener
                         if chars.peek() == Some(&'`') {
                             in_md = true;
-                            if let Some(n) = chars.next() { out.push(n); }
+                            if let Some(n) = chars.next() {
+                                out.push(n);
+                            }
                         } else {
                             in_str = true;
                         }
@@ -502,7 +506,9 @@ impl<'a> LineParser<'a> {
         let indices: Vec<usize> = if is_default {
             Vec::new()
         } else {
-            head.split(',').filter_map(|s| s.trim().parse::<usize>().ok()).collect()
+            head.split(',')
+                .filter_map(|s| s.trim().parse::<usize>().ok())
+                .collect()
         };
         // Check for `interpolate X` sub-keyword
         let mut interpolate: Option<String> = None;
@@ -699,7 +705,11 @@ impl<'a> LineParser<'a> {
         loop {
             // Skip leading spaces
             let tail = &s[pos..];
-            let lead = tail.chars().take_while(|c| c.is_whitespace()).map(|c| c.len_utf8()).sum::<usize>();
+            let lead = tail
+                .chars()
+                .take_while(|c| c.is_whitespace())
+                .map(|c| c.len_utf8())
+                .sum::<usize>();
             pos += lead;
             let cur_tail = &s[pos..];
             if cur_tail.is_empty() {
@@ -726,7 +736,11 @@ impl<'a> LineParser<'a> {
             }
             ids.push(id);
             // Look for `&` joiner
-            let lead2 = s[pos..].chars().take_while(|c| c.is_whitespace()).map(|c| c.len_utf8()).sum::<usize>();
+            let lead2 = s[pos..]
+                .chars()
+                .take_while(|c| c.is_whitespace())
+                .map(|c| c.len_utf8())
+                .sum::<usize>();
             pos += lead2;
             if s[pos..].starts_with('&') {
                 pos += 1;
@@ -912,7 +926,9 @@ fn parse_link(s: &str) -> Option<(ParsedLink, usize)> {
     //   -- text -->
     //   == text ==>
     //   -. text .->
-    let first_non_ws = after_id.find(|c: char| !c.is_whitespace()).unwrap_or(after_id.len());
+    let first_non_ws = after_id
+        .find(|c: char| !c.is_whitespace())
+        .unwrap_or(after_id.len());
     let arrow_start = &after_id[first_non_ws..];
     if arrow_start.is_empty() {
         return None;
@@ -1070,11 +1086,15 @@ fn is_arrow_boundary_byte(b: u8) -> bool {
 }
 
 /// Classify an arrow span: returns (stroke, length, arrow_end, arrow_start, embedded_label).
-fn classify_arrow(
-    arrow: &str,
-) -> Option<(EdgeStroke, usize, ArrowType, ArrowType, Option<Label>)> {
+fn classify_arrow(arrow: &str) -> Option<(EdgeStroke, usize, ArrowType, ArrowType, Option<Label>)> {
     if arrow.chars().all(|c| c == '~') {
-        return Some((EdgeStroke::Invisible, 1, ArrowType::None, ArrowType::None, None));
+        return Some((
+            EdgeStroke::Invisible,
+            1,
+            ArrowType::None,
+            ArrowType::None,
+            None,
+        ));
     }
     // Extract optional start-arrow.
     let mut span = arrow;
@@ -1183,7 +1203,11 @@ fn classify_arrow(
     // Since we've already removed the arrow-end char when arrow_end != None,
     // we need to apply one more subtraction when there's no arrow end
     // (the trailing '-' or '=' plays the role of the "end char").
-    let extra = if arrow_end == ArrowType::None { 1usize } else { 0usize };
+    let extra = if arrow_end == ArrowType::None {
+        1usize
+    } else {
+        0usize
+    };
     let length = if stroke == EdgeStroke::Dotted {
         // For dotted: length = dot_count - extra (where extra accounts for no arrow)
         dot_chars.saturating_sub(extra)
@@ -1235,7 +1259,10 @@ fn parse_one_vertex(
             // For simplicity: allow `-` / `.` / `=` to continue id if
             // next char is alphanumeric.
             let next = bytes.get(i + 1).copied();
-            if matches!(next, Some(b'-' | b'=' | b'.' | b'>' | b'<' | b'o' | b'x' | b'~')) {
+            if matches!(
+                next,
+                Some(b'-' | b'=' | b'.' | b'>' | b'<' | b'o' | b'x' | b'~')
+            ) {
                 break;
             }
             if c == b'=' && matches!(next, Some(b'=')) {
@@ -1264,16 +1291,28 @@ fn parse_one_vertex(
     let (shape, label, remainder) = if let Some(after) = rest.strip_prefix("[[") {
         // subroutine
         let (text, r) = take_until(after, "]]")?;
-        (Some("subroutine".to_string()), Some(parse_label_text(text)), r)
+        (
+            Some("subroutine".to_string()),
+            Some(parse_label_text(text)),
+            r,
+        )
     } else if let Some(after) = rest.strip_prefix("[(") {
         let (text, r) = take_until(after, ")]")?;
-        (Some("cylinder".to_string()), Some(parse_label_text(text)), r)
+        (
+            Some("cylinder".to_string()),
+            Some(parse_label_text(text)),
+            r,
+        )
     } else if let Some(after) = rest.strip_prefix("([") {
         let (text, r) = take_until(after, "])")?;
         (Some("stadium".to_string()), Some(parse_label_text(text)), r)
     } else if let Some(after) = rest.strip_prefix("(((") {
         let (text, r) = take_until(after, ")))")?;
-        (Some("doublecircle".to_string()), Some(parse_label_text(text)), r)
+        (
+            Some("doublecircle".to_string()),
+            Some(parse_label_text(text)),
+            r,
+        )
     } else if let Some(after) = rest.strip_prefix("((") {
         let (text, r) = take_until(after, "))")?;
         (Some("circle".to_string()), Some(parse_label_text(text)), r)
@@ -1329,7 +1368,11 @@ fn parse_one_vertex(
         } else {
             text
         };
-        (Some("rect".to_string()), Some(parse_label_text(label_text)), r)
+        (
+            Some("rect".to_string()),
+            Some(parse_label_text(label_text)),
+            r,
+        )
     } else {
         (None, None, rest)
     };
@@ -1337,7 +1380,9 @@ fn parse_one_vertex(
     // Optional `:::className` suffix
     let (class_suffix, remainder) = if let Some(after) = remainder.strip_prefix(":::") {
         let end = after
-            .find(|c: char| c.is_whitespace() || c == '&' || c == '-' || c == '=' || c == '.' || c == ';')
+            .find(|c: char| {
+                c.is_whitespace() || c == '&' || c == '-' || c == '=' || c == '.' || c == ';'
+            })
             .unwrap_or(after.len());
         (Some(after[..end].to_string()), &after[end..])
     } else {
@@ -1390,16 +1435,22 @@ fn renumber_auto_subgraph_ids(diag: &mut FlowchartDiagram) {
     };
 
     // Build a map from id → index for quick lookup.
-    let id_to_idx: HashMap<String, usize> = diag.subgraphs.iter()
+    let id_to_idx: HashMap<String, usize> = diag
+        .subgraphs
+        .iter()
         .enumerate()
         .map(|(i, sg)| (sg.id.clone(), i))
         .collect();
 
     // Find roots (subgraphs not listed as children of any other subgraph).
-    let all_children: std::collections::HashSet<String> = diag.subgraphs.iter()
+    let all_children: std::collections::HashSet<String> = diag
+        .subgraphs
+        .iter()
         .flat_map(|sg| sg.children.iter().cloned())
         .collect();
-    let roots: Vec<usize> = diag.subgraphs.iter()
+    let roots: Vec<usize> = diag
+        .subgraphs
+        .iter()
         .enumerate()
         .filter(|(_, sg)| !all_children.contains(&sg.id))
         .map(|(i, _)| i)
@@ -1418,7 +1469,9 @@ fn renumber_auto_subgraph_ids(diag: &mut FlowchartDiagram) {
         } else {
             stack.push((idx, true));
             // Push children in reverse order so first child is processed first.
-            let children: Vec<usize> = diag.subgraphs[idx].children.iter()
+            let children: Vec<usize> = diag.subgraphs[idx]
+                .children
+                .iter()
                 .filter_map(|cid| id_to_idx.get(cid).copied())
                 .collect();
             for &ci in children.iter().rev() {
@@ -1447,7 +1500,9 @@ fn renumber_auto_subgraph_ids(diag: &mut FlowchartDiagram) {
             full_post_order.push(idx);
         } else {
             stack2.push((idx, true));
-            let children: Vec<usize> = diag.subgraphs[idx].children.iter()
+            let children: Vec<usize> = diag.subgraphs[idx]
+                .children
+                .iter()
                 .filter_map(|cid| id_to_idx.get(cid).copied())
                 .collect();
             for &ci in children.iter().rev() {
@@ -1472,7 +1527,8 @@ fn renumber_auto_subgraph_ids(diag: &mut FlowchartDiagram) {
     }
 
     // Build old→new id mapping.
-    let id_remap: HashMap<String, String> = new_ids.iter()
+    let id_remap: HashMap<String, String> = new_ids
+        .iter()
         .map(|(&idx, new_id)| (diag.subgraphs[idx].id.clone(), new_id.clone()))
         .collect();
 
@@ -1591,7 +1647,8 @@ mod tests {
 
     #[test]
     fn parses_linkstyle() {
-        let src = "flowchart LR\nA-->B\nA-->C\nlinkStyle 0 stroke:red\nlinkStyle default stroke:blue\n";
+        let src =
+            "flowchart LR\nA-->B\nA-->C\nlinkStyle 0 stroke:red\nlinkStyle default stroke:blue\n";
         let d = parse(src).unwrap();
         assert_eq!(d.link_styles.len(), 2);
         assert_eq!(d.link_styles[0].indices, vec![0]);

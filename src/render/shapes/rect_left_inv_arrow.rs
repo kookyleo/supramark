@@ -18,7 +18,7 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
     let x = -w / 2.0;
     let y = -h / 2.0;
     let notch = y / 2.0; // upstream keeps sign; y is negative
-    // Upstream's pre-translation pts, then apply translate(-notch/2, 0).
+                         // Upstream's pre-translation pts, then apply translate(-notch/2, 0).
     let dx = -notch / 2.0;
     let pts = [
         (x + notch + dx, y),

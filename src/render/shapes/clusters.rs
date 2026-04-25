@@ -124,16 +124,8 @@ fn emit_rect(opts: &ClusterEmit<'_>) -> ClusterSvg {
     let rx = node.rx.unwrap_or(0.0);
     let ry = node.ry.unwrap_or(0.0);
 
-    let fill = opts
-        .theme
-        .cluster_bkg
-        .as_deref()
-        .unwrap_or("#ffffff");
-    let stroke = opts
-        .theme
-        .cluster_border
-        .as_deref()
-        .unwrap_or("#aaaaaa");
+    let fill = opts.theme.cluster_bkg.as_deref().unwrap_or("#ffffff");
+    let stroke = opts.theme.cluster_border.as_deref().unwrap_or("#aaaaaa");
 
     let dom_id = node.dom_id.as_deref().unwrap_or(&node.id);
     let css_classes = node.css_classes.as_deref().unwrap_or("");
@@ -175,7 +167,12 @@ style="fill:{fill};stroke:{stroke}"/>"#,
 
     ClusterSvg {
         svg,
-        bounds: Bounds { x, y, width, height },
+        bounds: Bounds {
+            x,
+            y,
+            width,
+            height,
+        },
         label_bbox: opts.label_bbox,
     }
 }
@@ -249,7 +246,12 @@ fn emit_rounded_with_title(opts: &ClusterEmit<'_>) -> ClusterSvg {
 
     ClusterSvg {
         svg,
-        bounds: Bounds { x, y, width, height },
+        bounds: Bounds {
+            x,
+            y,
+            width,
+            height,
+        },
         label_bbox: opts.label_bbox,
     }
 }
@@ -406,7 +408,9 @@ mod tests {
             title_top_margin: 4.0,
         });
         assert!(out.svg.starts_with(r#"<g class="cluster cluster""#));
-        assert!(out.svg.contains(r#"<rect x="40" y="10" width="120" height="80""#));
+        assert!(out
+            .svg
+            .contains(r#"<rect x="40" y="10" width="120" height="80""#));
         assert!(out.svg.contains("translate(70,14)"));
         assert!(out.svg.contains("<text>A</text>"));
         assert!(out.svg.ends_with("</g>"));

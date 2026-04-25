@@ -297,32 +297,32 @@ pub struct ThemeVariables {
     pub quadrant_x_axis_text_fill: Option<String>, // quadrantXAxisTextFill
     pub quadrant_y_axis_text_fill: Option<String>, // quadrantYAxisTextFill
 
-    pub radius: Option<i64>,                       // radius
-    pub relation_color: Option<String>,            // relationColor
-    pub relation_label_background: Option<String>, // relationLabelBackground
-    pub relation_label_color: Option<String>,      // relationLabelColor
-    pub requirement_background: Option<String>,              // requirementBackground
-    pub requirement_border_color: Option<String>,            // requirementBorderColor
-    pub requirement_border_size: Option<String>,             // requirementBorderSize
-    pub requirement_edge_label_background: Option<String>,   // requirementEdgeLabelBackground
-    pub requirement_text_color: Option<String>,              // requirementTextColor
-    pub row_even: Option<String>,                  // rowEven
-    pub row_odd: Option<String>,                   // rowOdd
-    pub scale_label_color: Option<String>,         // scaleLabelColor
-    pub second_bkg: Option<String>,                // secondBkg
-    pub secondary_border_color: Option<String>,    // secondaryBorderColor
-    pub secondary_color: Option<String>,           // secondaryColor
-    pub secondary_text_color: Option<String>,      // secondaryTextColor
-    pub section_bkg_color: Option<String>,         // sectionBkgColor
-    pub section_bkg_color2: Option<String>,        // sectionBkgColor2
-    pub sequence_number_color: Option<String>,     // sequenceNumberColor
-    pub signal_color: Option<String>,              // signalColor
-    pub signal_text_color: Option<String>,         // signalTextColor
-    pub special_state_color: Option<String>,       // specialStateColor
-    pub state_bkg: Option<String>,                 // stateBkg
-    pub state_border: Option<String>,              // stateBorder
-    pub state_label_color: Option<String>,         // stateLabelColor
-    pub stroke_width: Option<i64>,                 // strokeWidth
+    pub radius: Option<i64>,                               // radius
+    pub relation_color: Option<String>,                    // relationColor
+    pub relation_label_background: Option<String>,         // relationLabelBackground
+    pub relation_label_color: Option<String>,              // relationLabelColor
+    pub requirement_background: Option<String>,            // requirementBackground
+    pub requirement_border_color: Option<String>,          // requirementBorderColor
+    pub requirement_border_size: Option<String>,           // requirementBorderSize
+    pub requirement_edge_label_background: Option<String>, // requirementEdgeLabelBackground
+    pub requirement_text_color: Option<String>,            // requirementTextColor
+    pub row_even: Option<String>,                          // rowEven
+    pub row_odd: Option<String>,                           // rowOdd
+    pub scale_label_color: Option<String>,                 // scaleLabelColor
+    pub second_bkg: Option<String>,                        // secondBkg
+    pub secondary_border_color: Option<String>,            // secondaryBorderColor
+    pub secondary_color: Option<String>,                   // secondaryColor
+    pub secondary_text_color: Option<String>,              // secondaryTextColor
+    pub section_bkg_color: Option<String>,                 // sectionBkgColor
+    pub section_bkg_color2: Option<String>,                // sectionBkgColor2
+    pub sequence_number_color: Option<String>,             // sequenceNumberColor
+    pub signal_color: Option<String>,                      // signalColor
+    pub signal_text_color: Option<String>,                 // signalTextColor
+    pub special_state_color: Option<String>,               // specialStateColor
+    pub state_bkg: Option<String>,                         // stateBkg
+    pub state_border: Option<String>,                      // stateBorder
+    pub state_label_color: Option<String>,                 // stateLabelColor
+    pub stroke_width: Option<i64>,                         // strokeWidth
 
     pub surface0: Option<String>,      // surface0
     pub surface1: Option<String>,      // surface1

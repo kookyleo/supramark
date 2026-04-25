@@ -12,7 +12,7 @@
 
 use crate::error::{MermaidError, Result};
 use crate::model::er::{
-    Attribute, Cardinality, ErDiagram, EntityClass, Identification, Relationship,
+    Attribute, Cardinality, EntityClass, ErDiagram, Identification, Relationship,
 };
 use crate::preprocess::preprocess;
 
@@ -28,12 +28,10 @@ pub fn parse(source: &str) -> Result<ErDiagram> {
     // Skip past the `erDiagram` header keyword. The header may be alone
     // on a line, or immediately followed by content (rare). We find it
     // case-insensitively — upstream's jison `%options case-insensitive`.
-    let body = strip_header(cleaned).ok_or_else(|| {
-        MermaidError::Parse {
-            line: 0,
-            col: 0,
-            message: "ER diagram missing 'erDiagram' header".to_string(),
-        }
+    let body = strip_header(cleaned).ok_or_else(|| MermaidError::Parse {
+        line: 0,
+        col: 0,
+        message: "ER diagram missing 'erDiagram' header".to_string(),
     })?;
 
     parse_body(&mut diagram, body)?;
@@ -74,7 +72,8 @@ fn parse_body(d: &mut ErDiagram, body: &str) -> Result<()> {
 
         // Accessibility directives are handled in preprocess so we just
         // ignore stray accTitle/accDescr here too.
-        if starts_with_ci(line, "acctitle") || starts_with_ci(line, "accdescr")
+        if starts_with_ci(line, "acctitle")
+            || starts_with_ci(line, "accdescr")
             || starts_with_ci(line, "title")
         {
             // best-effort: pull ':' value.
@@ -339,7 +338,11 @@ fn split_head(head: &str) -> (String, String, String) {
             }
         }
     }
-    (strip_entity_quotes(main).to_string(), String::new(), classes)
+    (
+        strip_entity_quotes(main).to_string(),
+        String::new(),
+        classes,
+    )
 }
 
 fn strip_entity_quotes(s: &str) -> &str {
@@ -416,20 +419,20 @@ fn parse_statement_line(d: &mut ErDiagram, line: &str) -> Result<()> {
         let a_name_head = entity_a_raw.trim();
         let (a_name, _a_alias, a_classes) = split_head(a_name_head);
 
-        let (card_b, after_card_b) = take_cardinality(rel_start.trim_start())
-            .ok_or_else(|| MermaidError::Parse {
+        let (card_b, after_card_b) =
+            take_cardinality(rel_start.trim_start()).ok_or_else(|| MermaidError::Parse {
                 line: 0,
                 col: 0,
                 message: format!("bad cardinality near '{}'", rel_start),
             })?;
-        let (rel_type, after_rel) = take_rel_type(after_card_b.trim_start())
-            .ok_or_else(|| MermaidError::Parse {
+        let (rel_type, after_rel) =
+            take_rel_type(after_card_b.trim_start()).ok_or_else(|| MermaidError::Parse {
                 line: 0,
                 col: 0,
                 message: format!("bad relType near '{}'", after_card_b),
             })?;
-        let (card_a, after_card_a) = take_cardinality(after_rel.trim_start())
-            .ok_or_else(|| MermaidError::Parse {
+        let (card_a, after_card_a) =
+            take_cardinality(after_rel.trim_start()).ok_or_else(|| MermaidError::Parse {
                 line: 0,
                 col: 0,
                 message: format!("bad cardinality 2 near '{}'", after_rel),
@@ -560,7 +563,8 @@ fn take_cardinality(s: &str) -> Option<(Cardinality, &str)> {
         ("0+", Cardinality::ZeroOrMore),
     ];
     for (kw, c) in TEXT {
-        if s.len() >= kw.len() && s.is_char_boundary(kw.len())
+        if s.len() >= kw.len()
+            && s.is_char_boundary(kw.len())
             && s[..kw.len()].eq_ignore_ascii_case(kw)
         {
             let after = &s[kw.len()..];
@@ -594,8 +598,7 @@ fn take_cardinality(s: &str) -> Option<(Cardinality, &str)> {
     // Digit-only `1` form (acts as ONLY_ONE when followed by relop/alphanumeric).
     if s.starts_with('1') {
         let after = &s[1..];
-        if after.starts_with(|c: char| c == '-' || c == '.' || c == ' ')
-        {
+        if after.starts_with(|c: char| c == '-' || c == '.' || c == ' ') {
             return Some((Cardinality::OnlyOne, after));
         }
     }
@@ -613,10 +616,7 @@ fn take_rel_type(s: &str) -> Option<(Identification, &str)> {
             _ => {}
         }
     }
-    if s.len() >= 14
-        && s.is_char_boundary(14)
-        && s[..14].eq_ignore_ascii_case("optionally to ")
-    {
+    if s.len() >= 14 && s.is_char_boundary(14) && s[..14].eq_ignore_ascii_case("optionally to ") {
         return Some((Identification::NonIdentifying, &s[14..]));
     }
     if s.len() >= 3 && s.is_char_boundary(3) && s[..3].eq_ignore_ascii_case("to ") {
@@ -654,7 +654,10 @@ mod tests {
     fn simple_one_to_many() {
         let src = "erDiagram\n    CUSTOMER ||--o{ ORDER : places\n";
         let d = parse(src).unwrap();
-        assert_eq!(d.entity_keys, vec!["CUSTOMER".to_string(), "ORDER".to_string()]);
+        assert_eq!(
+            d.entity_keys,
+            vec!["CUSTOMER".to_string(), "ORDER".to_string()]
+        );
         assert_eq!(d.relationships.len(), 1);
         let r = &d.relationships[0];
         assert_eq!(r.card_a, Cardinality::ZeroOrMore);

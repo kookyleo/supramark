@@ -231,12 +231,7 @@ pub fn parse(source: &str) -> Result<GanttDiagram> {
 /// - 1 field:  `[duration_or_end]` — start = prev task end
 /// - 2 fields: `[start, duration_or_end]` — auto ID
 /// - 3 fields: `[id, start, duration_or_end]`
-fn parse_task(
-    name: &str,
-    data: &str,
-    section_idx: usize,
-    auto_id_counter: &mut usize,
-) -> Task {
+fn parse_task(name: &str, data: &str, section_idx: usize, auto_id_counter: &mut usize) -> Task {
     // Split on commas, trim whitespace.
     let mut parts: Vec<&str> = data.split(',').map(|s| s.trim()).collect();
 
@@ -275,11 +270,7 @@ fn parse_task(
         0 => {
             // No data at all — just a task name with empty data.
             *auto_id_counter += 1;
-            (
-                Some(format!("task{}", auto_id_counter)),
-                None,
-                None,
-            )
+            (Some(format!("task{}", auto_id_counter)), None, None)
         }
         1 => {
             // [duration_or_end]

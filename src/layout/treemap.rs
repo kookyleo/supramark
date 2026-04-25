@@ -232,12 +232,7 @@ pub fn layout(d: &TreemapDiagram, _theme: &ThemeVariables) -> Result<TreemapLayo
                 }
             }
         }
-        each_before_leaves(
-            &arena,
-            root_idx,
-            &mut counter,
-            &mut leaf_index_by_arena,
-        );
+        each_before_leaves(&arena, root_idx, &mut counter, &mut leaf_index_by_arena);
     }
 
     // Emit sections first in BFS order, then leaves in pre-order —

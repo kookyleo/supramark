@@ -96,11 +96,7 @@ pub fn open_unified_svg_with_a11y(
 /// opening the `<svg>` tag. Call this right after `open_unified_svg_with_a11y`
 /// when `acc_title` or `acc_descr` are present.
 #[must_use]
-pub fn emit_a11y_elements(
-    id: &str,
-    acc_title: Option<&str>,
-    acc_descr: Option<&str>,
-) -> String {
+pub fn emit_a11y_elements(id: &str, acc_title: Option<&str>, acc_descr: Option<&str>) -> String {
     let mut out = String::new();
     if let Some(t) = acc_title {
         out.push_str(&format!(

@@ -291,11 +291,26 @@ mod tests {
         assert_eq!(markdown_text_content("*italic*"), "italic");
         assert_eq!(markdown_text_content("_italic_"), "italic");
         assert_eq!(markdown_text_content("`code`"), "code");
-        assert_eq!(markdown_text_content("__my bolded name__"), "my bolded name");
-        assert_eq!(markdown_text_content("*my italicized name*"), "my italicized name");
-        assert_eq!(markdown_text_content("Text: **Bolded text** _italicized text_"), "Text: Bolded text italicized text");
-        assert_eq!(markdown_text_content("Doc Ref: *Italicized* __Bolded__"), "Doc Ref: Italicized Bolded");
-        assert_eq!(markdown_text_content("&lt;&lt;Requirement&gt;&gt;"), "&lt;&lt;Requirement&gt;&gt;");
+        assert_eq!(
+            markdown_text_content("__my bolded name__"),
+            "my bolded name"
+        );
+        assert_eq!(
+            markdown_text_content("*my italicized name*"),
+            "my italicized name"
+        );
+        assert_eq!(
+            markdown_text_content("Text: **Bolded text** _italicized text_"),
+            "Text: Bolded text italicized text"
+        );
+        assert_eq!(
+            markdown_text_content("Doc Ref: *Italicized* __Bolded__"),
+            "Doc Ref: Italicized Bolded"
+        );
+        assert_eq!(
+            markdown_text_content("&lt;&lt;Requirement&gt;&gt;"),
+            "&lt;&lt;Requirement&gt;&gt;"
+        );
         assert_eq!(markdown_text_content("plain text"), "plain text");
     }
 
@@ -310,15 +325,27 @@ mod tests {
         // Standalone `_word_` at start of string is processed
         assert_eq!(markdown_text_content("_italic_"), "italic");
         // `_italic_` preceded by space is processed
-        assert_eq!(markdown_text_content("prefix _italic_ suffix"), "prefix italic suffix");
+        assert_eq!(
+            markdown_text_content("prefix _italic_ suffix"),
+            "prefix italic suffix"
+        );
         // `_italic_` preceded by non-alphanumeric (colon) — should process
-        assert_eq!(markdown_text_content("Text: _italicized text_"), "Text: italicized text");
+        assert_eq!(
+            markdown_text_content("Text: _italicized text_"),
+            "Text: italicized text"
+        );
         // word_underscore_word — NOT processed (underscore between alphanumerics)
-        assert_eq!(markdown_text_content("word_italic_word"), "word_italic_word");
+        assert_eq!(
+            markdown_text_content("word_italic_word"),
+            "word_italic_word"
+        );
         // `__bold__` at start of string is processed
         assert_eq!(markdown_text_content("__bold text__"), "bold text");
         // word__bold__word — NOT processed
-        assert_eq!(markdown_text_content("word__bold__word"), "word__bold__word");
+        assert_eq!(
+            markdown_text_content("word__bold__word"),
+            "word__bold__word"
+        );
     }
 
     #[test]

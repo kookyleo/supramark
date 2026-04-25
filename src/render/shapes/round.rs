@@ -9,7 +9,10 @@
 //! take `node.rx` if set, otherwise default to `5` (matching the
 //! stable-v11 default when no theme override is supplied).
 
-use super::types::{build_div_style_prefix, build_inline_style, build_label_style, fmt_num, get_node_classes, xml_escape};
+use super::types::{
+    build_div_style_prefix, build_inline_style, build_label_style, fmt_num, get_node_classes,
+    xml_escape,
+};
 use crate::error::Result;
 use crate::layout::unified::types::Node;
 use crate::theme::ThemeVariables;
@@ -80,14 +83,33 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
         );
         let div_prefix = build_div_style_prefix(css);
         let opts = crate::render::foreign_object::LabelOpts {
-            extra_span_classes: if is_markdown { "markdown-node-label" } else { "" },
-            group_style: if eff_label_style.is_empty() { Some("") } else { Some(&eff_label_style) },
-            label_style: if css_label_style.is_empty() { None } else { Some(&css_label_style) },
-            div_style_prefix: if div_prefix.is_empty() { None } else { Some(&div_prefix) },
+            extra_span_classes: if is_markdown {
+                "markdown-node-label"
+            } else {
+                ""
+            },
+            group_style: if eff_label_style.is_empty() {
+                Some("")
+            } else {
+                Some(&eff_label_style)
+            },
+            label_style: if css_label_style.is_empty() {
+                None
+            } else {
+                Some(&css_label_style)
+            },
+            div_style_prefix: if div_prefix.is_empty() {
+                None
+            } else {
+                Some(&div_prefix)
+            },
             ..crate::render::foreign_object::LabelOpts::default()
         };
         out.push_str(&crate::render::foreign_object::render_node_label(
-            &for_measure, lw, lh, &opts,
+            &for_measure,
+            lw,
+            lh,
+            &opts,
         ));
     }
     out.push_str("</g>");

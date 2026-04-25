@@ -151,7 +151,10 @@ pub fn self_loop_points(node: &Node, quadrant: SelfLoopQuadrant) -> Vec<Point> {
 
     match quadrant {
         SelfLoopQuadrant::TopRight => {
-            let start = Point { x: cx + hw * 0.4, y: cy - hh };
+            let start = Point {
+                x: cx + hw * 0.4,
+                y: cy - hh,
+            };
             let apex1 = Point {
                 x: cx + hw * 0.4,
                 y: cy - hh - loop_h,
@@ -164,11 +167,17 @@ pub fn self_loop_points(node: &Node, quadrant: SelfLoopQuadrant) -> Vec<Point> {
                 x: cx + hw + loop_w,
                 y: cy - hh * 0.4,
             };
-            let end = Point { x: cx + hw, y: cy - hh * 0.4 };
+            let end = Point {
+                x: cx + hw,
+                y: cy - hh * 0.4,
+            };
             vec![start, apex1, apex2, apex3, end]
         }
         SelfLoopQuadrant::BottomRight => {
-            let start = Point { x: cx + hw, y: cy + hh * 0.4 };
+            let start = Point {
+                x: cx + hw,
+                y: cy + hh * 0.4,
+            };
             let apex1 = Point {
                 x: cx + hw + loop_w,
                 y: cy + hh * 0.4,
@@ -181,11 +190,17 @@ pub fn self_loop_points(node: &Node, quadrant: SelfLoopQuadrant) -> Vec<Point> {
                 x: cx + hw * 0.4,
                 y: cy + hh + loop_h,
             };
-            let end = Point { x: cx + hw * 0.4, y: cy + hh };
+            let end = Point {
+                x: cx + hw * 0.4,
+                y: cy + hh,
+            };
             vec![start, apex1, apex2, apex3, end]
         }
         SelfLoopQuadrant::BottomLeft => {
-            let start = Point { x: cx - hw * 0.4, y: cy + hh };
+            let start = Point {
+                x: cx - hw * 0.4,
+                y: cy + hh,
+            };
             let apex1 = Point {
                 x: cx - hw * 0.4,
                 y: cy + hh + loop_h,
@@ -198,11 +213,17 @@ pub fn self_loop_points(node: &Node, quadrant: SelfLoopQuadrant) -> Vec<Point> {
                 x: cx - hw - loop_w,
                 y: cy + hh * 0.4,
             };
-            let end = Point { x: cx - hw, y: cy + hh * 0.4 };
+            let end = Point {
+                x: cx - hw,
+                y: cy + hh * 0.4,
+            };
             vec![start, apex1, apex2, apex3, end]
         }
         SelfLoopQuadrant::TopLeft => {
-            let start = Point { x: cx - hw, y: cy - hh * 0.4 };
+            let start = Point {
+                x: cx - hw,
+                y: cy - hh * 0.4,
+            };
             let apex1 = Point {
                 x: cx - hw - loop_w,
                 y: cy - hh * 0.4,
@@ -215,7 +236,10 @@ pub fn self_loop_points(node: &Node, quadrant: SelfLoopQuadrant) -> Vec<Point> {
                 x: cx - hw * 0.4,
                 y: cy - hh - loop_h,
             };
-            let end = Point { x: cx - hw * 0.4, y: cy - hh };
+            let end = Point {
+                x: cx - hw * 0.4,
+                y: cy - hh,
+            };
             vec![start, apex1, apex2, apex3, end]
         }
     }
@@ -396,7 +420,11 @@ fn truncate_polyline(points: &[Point], target_len: f64) -> Vec<Point> {
     for i in 1..points.len() {
         let seg = seg_len(points[i - 1], points[i]);
         if acc + seg >= target_len {
-            let f = if seg > 0.0 { (target_len - acc) / seg } else { 0.0 };
+            let f = if seg > 0.0 {
+                (target_len - acc) / seg
+            } else {
+                0.0
+            };
             let a = points[i - 1];
             let b = points[i];
             out.push(Point {
@@ -419,7 +447,11 @@ fn tail_polyline(points: &[Point], start_len: f64) -> Vec<Point> {
     for i in 1..points.len() {
         let seg = seg_len(points[i - 1], points[i]);
         if acc + seg >= start_len {
-            let f = if seg > 0.0 { (start_len - acc) / seg } else { 0.0 };
+            let f = if seg > 0.0 {
+                (start_len - acc) / seg
+            } else {
+                0.0
+            };
             let a = points[i - 1];
             let b = points[i];
             let mut out = vec![Point {
@@ -588,12 +620,9 @@ mod tests {
             width: 10.0,
             height: 10.0,
         };
-        let hit = segment_aabb_intersection(
-            Point { x: -5.0, y: 5.0 },
-            Point { x: 5.0, y: 5.0 },
-            &rect,
-        )
-        .unwrap();
+        let hit =
+            segment_aabb_intersection(Point { x: -5.0, y: 5.0 }, Point { x: 5.0, y: 5.0 }, &rect)
+                .unwrap();
         assert!((hit.x - 0.0).abs() < 1e-9);
         assert!((hit.y - 5.0).abs() < 1e-9);
     }

@@ -173,14 +173,7 @@ pub fn layout(d: &RequirementDiagram, theme: &ThemeVariables) -> Result<Requirem
         e.labelpos = Some("c".into());
         e.thickness = Some("normal".into());
         e.kind = Some("normal".into());
-        e.pattern = Some(
-            if is_contains {
-                "normal"
-            } else {
-                "dashed"
-            }
-            .into(),
-        );
+        e.pattern = Some(if is_contains { "normal" } else { "dashed" }.into());
         e.arrow_type_start = Some(
             if is_contains {
                 "requirement_contains"
@@ -189,14 +182,7 @@ pub fn layout(d: &RequirementDiagram, theme: &ThemeVariables) -> Result<Requirem
             }
             .into(),
         );
-        e.arrow_type_end = Some(
-            if is_contains {
-                ""
-            } else {
-                "requirement_arrow"
-            }
-            .into(),
-        );
+        e.arrow_type_end = Some(if is_contains { "" } else { "requirement_arrow" }.into());
         e.label_type = Some("markdown".into());
         // Pass label dimensions to dagre so it reserves rank space for the
         // edge label (dagre adds label height to ranksep when routing).
@@ -241,8 +227,7 @@ pub fn layout(d: &RequirementDiagram, theme: &ThemeVariables) -> Result<Requirem
 fn is_bold(css_styles: &[String]) -> bool {
     css_styles.iter().any(|s| {
         let s_lower = s.to_lowercase();
-        s_lower.contains("font-weight")
-            && (s_lower.contains("bold") || s_lower.contains("bolder"))
+        s_lower.contains("font-weight") && (s_lower.contains("bold") || s_lower.contains("bolder"))
     })
 }
 
@@ -390,8 +375,7 @@ fn box_size(labels: &NodeLabels) -> (f64, f64) {
     let (kind_fo_w, kind_fo_h) =
         measure_html_label(&labels.kind_header, &kind_font, f64::INFINITY, false);
     let name_plain = markdown_text_content(&labels.name);
-    let (name_fo_w, _) =
-        measure_html_label(&name_plain, &name_font, f64::INFINITY, false);
+    let (name_fo_w, _) = measure_html_label(&name_plain, &name_font, f64::INFINITY, false);
     let mut max_fo_w = kind_fo_w.max(name_fo_w);
     for row in &labels.body {
         let row_plain = markdown_text_content(row);
@@ -413,7 +397,7 @@ fn edge_text(rel: &Relationship) -> String {
 mod tests {
     use super::*;
     use crate::model::requirement::{
-        Element, Relation, Requirement, RequirementDiagram, Relationship, RequirementKind,
+        Element, Relation, Relationship, Requirement, RequirementDiagram, RequirementKind,
         RiskLevel, VerifyMethod,
     };
 

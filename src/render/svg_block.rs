@@ -130,13 +130,34 @@ fn render_leaf(out: &mut String, diagram_id: &str, n: &NodeGeom) {
                 h = fmt_num(h),
             ));
         }
-        BlockShape::LeanRight => { let (p, w, h) = lean_right_points(n); render_polygon(out, &p, w, h, &node_style); }
-        BlockShape::LeanLeft  => { let (p, w, h) = lean_left_points(n); render_polygon(out, &p, w, h, &node_style); }
-        BlockShape::Trapezoid => { let (p, w, h) = trapezoid_points(n); render_polygon(out, &p, w, h, &node_style); }
-        BlockShape::InvTrapezoid => { let (p, w, h) = inv_trapezoid_points(n); render_polygon(out, &p, w, h, &node_style); }
-        BlockShape::Diamond    => { let (p, w, h) = diamond_points(n); render_polygon(out, &p, w, h, &node_style); }
-        BlockShape::Hexagon    => { let (p, w, h) = hexagon_points(n); render_polygon(out, &p, w, h, &node_style); }
-        BlockShape::RectLeftInvArrow => { let (p, w, h) = rect_left_inv_arrow_points(n); render_polygon(out, &p, w, h, &node_style); }
+        BlockShape::LeanRight => {
+            let (p, w, h) = lean_right_points(n);
+            render_polygon(out, &p, w, h, &node_style);
+        }
+        BlockShape::LeanLeft => {
+            let (p, w, h) = lean_left_points(n);
+            render_polygon(out, &p, w, h, &node_style);
+        }
+        BlockShape::Trapezoid => {
+            let (p, w, h) = trapezoid_points(n);
+            render_polygon(out, &p, w, h, &node_style);
+        }
+        BlockShape::InvTrapezoid => {
+            let (p, w, h) = inv_trapezoid_points(n);
+            render_polygon(out, &p, w, h, &node_style);
+        }
+        BlockShape::Diamond => {
+            let (p, w, h) = diamond_points(n);
+            render_polygon(out, &p, w, h, &node_style);
+        }
+        BlockShape::Hexagon => {
+            let (p, w, h) = hexagon_points(n);
+            render_polygon(out, &p, w, h, &node_style);
+        }
+        BlockShape::RectLeftInvArrow => {
+            let (p, w, h) = rect_left_inv_arrow_points(n);
+            render_polygon(out, &p, w, h, &node_style);
+        }
         _ => {
             // Plain rect using POSITIONED dimensions (n.width, n.height = sibling-normalised).
             // For rect2 (positioned=true): x=-totalWidth/2, y=-totalHeight/2.
@@ -288,97 +309,132 @@ fn render_polygon(out: &mut String, pts: &[(f64, f64)], insert_w: f64, insert_h:
 /// Returns (points, insert_w, insert_h) for lean_right2.
 /// `insertPolygonShape2(shapeSvg, w4, h3, points)` → transform `translate(-w4/2, h3/2)`.
 fn lean_right_points(n: &NodeGeom) -> (Vec<(f64, f64)>, f64, f64) {
-    let tw = n.text_width; let th = n.text_height;
+    let tw = n.text_width;
+    let th = n.text_height;
     let h3 = th + crate::layout::block::PADDING;
     let w4 = tw + crate::layout::block::PADDING;
-    (vec![
-        (-2.0 * h3 / 6.0, 0.0),
-        (w4 - h3 / 6.0, 0.0),
-        (w4 + 2.0 * h3 / 6.0, -h3),
-        (h3 / 6.0, -h3),
-    ], w4, h3)
+    (
+        vec![
+            (-2.0 * h3 / 6.0, 0.0),
+            (w4 - h3 / 6.0, 0.0),
+            (w4 + 2.0 * h3 / 6.0, -h3),
+            (h3 / 6.0, -h3),
+        ],
+        w4,
+        h3,
+    )
 }
 
 fn lean_left_points(n: &NodeGeom) -> (Vec<(f64, f64)>, f64, f64) {
-    let tw = n.text_width; let th = n.text_height;
+    let tw = n.text_width;
+    let th = n.text_height;
     let h3 = th + crate::layout::block::PADDING;
     let w4 = tw + crate::layout::block::PADDING;
-    (vec![
-        (2.0 * h3 / 6.0, 0.0),
-        (w4 + h3 / 6.0, 0.0),
-        (w4 - 2.0 * h3 / 6.0, -h3),
-        (-h3 / 6.0, -h3),
-    ], w4, h3)
+    (
+        vec![
+            (2.0 * h3 / 6.0, 0.0),
+            (w4 + h3 / 6.0, 0.0),
+            (w4 - 2.0 * h3 / 6.0, -h3),
+            (-h3 / 6.0, -h3),
+        ],
+        w4,
+        h3,
+    )
 }
 
 fn trapezoid_points(n: &NodeGeom) -> (Vec<(f64, f64)>, f64, f64) {
-    let tw = n.text_width; let th = n.text_height;
+    let tw = n.text_width;
+    let th = n.text_height;
     let h3 = th + crate::layout::block::PADDING;
     let w4 = tw + crate::layout::block::PADDING;
-    (vec![
-        (-2.0 * h3 / 6.0, 0.0),
-        (w4 + 2.0 * h3 / 6.0, 0.0),
-        (w4 - h3 / 6.0, -h3),
-        (h3 / 6.0, -h3),
-    ], w4, h3)
+    (
+        vec![
+            (-2.0 * h3 / 6.0, 0.0),
+            (w4 + 2.0 * h3 / 6.0, 0.0),
+            (w4 - h3 / 6.0, -h3),
+            (h3 / 6.0, -h3),
+        ],
+        w4,
+        h3,
+    )
 }
 
 fn inv_trapezoid_points(n: &NodeGeom) -> (Vec<(f64, f64)>, f64, f64) {
-    let tw = n.text_width; let th = n.text_height;
+    let tw = n.text_width;
+    let th = n.text_height;
     let h3 = th + crate::layout::block::PADDING;
     let w4 = tw + crate::layout::block::PADDING;
-    (vec![
-        (h3 / 6.0, 0.0),
-        (w4 - h3 / 6.0, 0.0),
-        (w4 + 2.0 * h3 / 6.0, -h3),
-        (-2.0 * h3 / 6.0, -h3),
-    ], w4, h3)
+    (
+        vec![
+            (h3 / 6.0, 0.0),
+            (w4 - h3 / 6.0, 0.0),
+            (w4 + 2.0 * h3 / 6.0, -h3),
+            (-2.0 * h3 / 6.0, -h3),
+        ],
+        w4,
+        h3,
+    )
 }
 
 /// question2 (diamond): `insertPolygonShape2(shapeSvg, s2, s2, ...)` where s2 = w4 + h3.
 fn diamond_points(n: &NodeGeom) -> (Vec<(f64, f64)>, f64, f64) {
-    let tw = n.text_width; let th = n.text_height;
+    let tw = n.text_width;
+    let th = n.text_height;
     let h3 = th + crate::layout::block::PADDING;
     let w4 = tw + crate::layout::block::PADDING;
     let s2 = w4 + h3;
-    (vec![
-        (s2 / 2.0, 0.0),
-        (s2, -s2 / 2.0),
-        (s2 / 2.0, -s2),
-        (0.0, -s2 / 2.0),
-    ], s2, s2)
+    (
+        vec![
+            (s2 / 2.0, 0.0),
+            (s2, -s2 / 2.0),
+            (s2 / 2.0, -s2),
+            (0.0, -s2 / 2.0),
+        ],
+        s2,
+        s2,
+    )
 }
 
 /// hexagon2: `h3=text_h+P, m3=h3/4, w4=text_w+2*m3+P`.
 /// `insertPolygonShape2(shapeSvg, w4, h3, ...)`.
 fn hexagon_points(n: &NodeGeom) -> (Vec<(f64, f64)>, f64, f64) {
-    let tw = n.text_width; let th = n.text_height;
+    let tw = n.text_width;
+    let th = n.text_height;
     let h3 = th + crate::layout::block::PADDING;
     let m3 = h3 / 4.0;
     let w4 = tw + 2.0 * m3 + crate::layout::block::PADDING;
-    (vec![
-        (m3, 0.0),
-        (w4 - m3, 0.0),
-        (w4, -h3 / 2.0),
-        (w4 - m3, -h3),
-        (m3, -h3),
-        (0.0, -h3 / 2.0),
-    ], w4, h3)
+    (
+        vec![
+            (m3, 0.0),
+            (w4 - m3, 0.0),
+            (w4, -h3 / 2.0),
+            (w4 - m3, -h3),
+            (m3, -h3),
+            (0.0, -h3 / 2.0),
+        ],
+        w4,
+        h3,
+    )
 }
 
 /// rect_left_inv_arrow2: `h3=text_h+P, w4=text_w+P`.
 /// `insertPolygonShape2(shapeSvg, w4, h3, ...)`.
 fn rect_left_inv_arrow_points(n: &NodeGeom) -> (Vec<(f64, f64)>, f64, f64) {
-    let tw = n.text_width; let th = n.text_height;
+    let tw = n.text_width;
+    let th = n.text_height;
     let h3 = th + crate::layout::block::PADDING;
     let w4 = tw + crate::layout::block::PADDING;
-    (vec![
-        (-h3 / 2.0, 0.0),
-        (w4, 0.0),
-        (w4, -h3),
-        (-h3 / 2.0, -h3),
-        (0.0, -h3 / 2.0),
-    ], w4, h3)
+    (
+        vec![
+            (-h3 / 2.0, 0.0),
+            (w4, 0.0),
+            (w4, -h3),
+            (-h3 / 2.0, -h3),
+            (0.0, -h3 / 2.0),
+        ],
+        w4,
+        h3,
+    )
 }
 
 /// block_arrow: `height2 = text_h + 2*P, midpoint3 = height2/2, width3 = text_w + height2 + P`.
@@ -386,7 +442,8 @@ fn rect_left_inv_arrow_points(n: &NodeGeom) -> (Vec<(f64, f64)>, f64, f64) {
 /// Returns (points, insert_w, insert_h).
 fn block_arrow_points(n: &NodeGeom) -> (Vec<(f64, f64)>, f64, f64) {
     use crate::model::block::ArrowDir;
-    let tw = n.text_width; let th = n.text_height;
+    let tw = n.text_width;
+    let th = n.text_height;
     let p = crate::layout::block::PADDING;
     let height2 = th + 2.0 * p;
     let midpoint3 = height2 / 2.0;
@@ -396,9 +453,9 @@ fn block_arrow_points(n: &NodeGeom) -> (Vec<(f64, f64)>, f64, f64) {
 
     // Expand X → Right + Left, Y → Up + Down.
     let has_right = dirs.contains(&ArrowDir::Right) || dirs.contains(&ArrowDir::X);
-    let has_left  = dirs.contains(&ArrowDir::Left)  || dirs.contains(&ArrowDir::X);
-    let has_up    = dirs.contains(&ArrowDir::Up)    || dirs.contains(&ArrowDir::Y);
-    let has_down  = dirs.contains(&ArrowDir::Down)  || dirs.contains(&ArrowDir::Y);
+    let has_left = dirs.contains(&ArrowDir::Left) || dirs.contains(&ArrowDir::X);
+    let has_up = dirs.contains(&ArrowDir::Up) || dirs.contains(&ArrowDir::Y);
+    let has_down = dirs.contains(&ArrowDir::Down) || dirs.contains(&ArrowDir::Y);
 
     let pts: Vec<(f64, f64)> = if has_right && has_left && has_up && has_down {
         vec![
@@ -476,29 +533,13 @@ fn block_arrow_points(n: &NodeGeom) -> (Vec<(f64, f64)>, f64, f64) {
             (width3, -padding2),
         ]
     } else if has_right && has_up {
-        vec![
-            (0.0, 0.0),
-            (width3, -midpoint3),
-            (0.0, -height2),
-        ]
+        vec![(0.0, 0.0), (width3, -midpoint3), (0.0, -height2)]
     } else if has_right && has_down {
-        vec![
-            (0.0, 0.0),
-            (width3, 0.0),
-            (0.0, -height2),
-        ]
+        vec![(0.0, 0.0), (width3, 0.0), (0.0, -height2)]
     } else if has_left && has_up {
-        vec![
-            (width3, 0.0),
-            (0.0, -midpoint3),
-            (width3, -height2),
-        ]
+        vec![(width3, 0.0), (0.0, -midpoint3), (width3, -height2)]
     } else if has_left && has_down {
-        vec![
-            (width3, 0.0),
-            (0.0, 0.0),
-            (width3, -height2),
-        ]
+        vec![(width3, 0.0), (0.0, 0.0), (width3, -height2)]
     } else if has_right {
         vec![
             (midpoint3, -padding2),
@@ -723,11 +764,7 @@ fn apply_marker_offset_end(
 ///   lineEnd    → bezierCurveTo((2P1+P2)/3,(P1+2P2)/3,(P1+5P2)/6); lineTo(P2)
 ///
 /// Result: `M{P0} L{L1} C{C1},{C2},{C3} C{C4},{C5},{C6} L{P2}`
-fn curve_basis_path(
-    p0x: f64, p0y: f64,
-    p1x: f64, p1y: f64,
-    p2x: f64, p2y: f64,
-) -> String {
+fn curve_basis_path(p0x: f64, p0y: f64, p1x: f64, p1y: f64, p2x: f64, p2y: f64) -> String {
     // L1 = (5*P0 + P1) / 6
     let l1x = (5.0 * p0x + p1x) / 6.0;
     let l1y = (5.0 * p0y + p1y) / 6.0;
@@ -1125,13 +1162,22 @@ mod tests {
             let refp = format!("tests/reference/ext_fixtures/cypress/block/{}.svg", num);
             let expected = std::fs::read_to_string(&refp).expect("read ref");
             let expected = expected.trim_end_matches('\n');
-            let at = got.bytes().zip(expected.bytes()).enumerate()
-                .find(|(_, (a, b))| a != b).map(|(i, _)| i).unwrap_or(got.len().min(expected.len()));
+            let at = got
+                .bytes()
+                .zip(expected.bytes())
+                .enumerate()
+                .find(|(_, (a, b))| a != b)
+                .map(|(i, _)| i)
+                .unwrap_or(got.len().min(expected.len()));
             let ctx = 200;
             let g_end = (at + ctx).min(got.len());
             let e_end = (at + ctx).min(expected.len());
             eprintln!("=== fixture {num} ===");
-            eprintln!("mismatch at {at}: got_len={} ref_len={}", got.len(), expected.len());
+            eprintln!(
+                "mismatch at {at}: got_len={} ref_len={}",
+                got.len(),
+                expected.len()
+            );
             if at < got.len() && at < expected.len() {
                 eprintln!("GOT[{at}..]: {}", &got[at..g_end]);
                 eprintln!("REF[{at}..]: {}", &expected[at..e_end]);

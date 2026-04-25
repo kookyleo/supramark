@@ -43,20 +43,38 @@ use crate::theme::ThemeVariables;
 ///
 /// `viewBox = "${union.x - p} ${union.y - p} ${union.w + 2p} ${union.h + 2p}"`
 fn compute_viewbox(l: &FlowchartLayout, padding: f64) -> (f64, f64, f64, f64) {
-    use crate::render::foreign_object::{measure_html_label, measure_html_markup_label, HtmlLabelFont};
+    use crate::render::foreign_object::{
+        measure_html_label, measure_html_markup_label, HtmlLabelFont,
+    };
 
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
     let mut max_y = f64::NEG_INFINITY;
 
-    let expand = |min_x: &mut f64, min_y: &mut f64, max_x: &mut f64, max_y: &mut f64,
-                  bx: f64, by: f64, bw: f64, bh: f64| {
-        if bw == 0.0 && bh == 0.0 { return; }
-        if bx < *min_x { *min_x = bx; }
-        if by < *min_y { *min_y = by; }
-        if bx + bw > *max_x { *max_x = bx + bw; }
-        if by + bh > *max_y { *max_y = by + bh; }
+    let expand = |min_x: &mut f64,
+                  min_y: &mut f64,
+                  max_x: &mut f64,
+                  max_y: &mut f64,
+                  bx: f64,
+                  by: f64,
+                  bw: f64,
+                  bh: f64| {
+        if bw == 0.0 && bh == 0.0 {
+            return;
+        }
+        if bx < *min_x {
+            *min_x = bx;
+        }
+        if by < *min_y {
+            *min_y = by;
+        }
+        if bx + bw > *max_x {
+            *max_x = bx + bw;
+        }
+        if by + bh > *max_y {
+            *max_y = by + bh;
+        }
     };
 
     // Font for foreignObject label measurement.
@@ -82,7 +100,9 @@ fn compute_viewbox(l: &FlowchartLayout, padding: f64) -> (f64, f64, f64, f64) {
             if !label_text.is_empty() {
                 let processed = crate::render::foreign_object::replace_fa_icons(label_text);
                 let (lw, lh) = measure_html_markup_label(&processed, &font, 200.0, true);
-                expand(&mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, 0.0, lw, lh);
+                expand(
+                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, 0.0, lw, lh,
+                );
             }
             continue;
         }
@@ -94,18 +114,38 @@ fn compute_viewbox(l: &FlowchartLayout, padding: f64) -> (f64, f64, f64, f64) {
                 // polygon has its own transform="translate(-s/2+0.5, s/2)" which is ignored.
                 // polyBBox of points = {x:0, y:-s, w:s, h:s}
                 let s = w; // w == h == s for diamond
-                expand(&mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, -s, s, s);
+                expand(
+                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, -s, s, s,
+                );
             }
             "circle" | "circ" => {
                 // Upstream circle.ts: r = w/2 (with corrected sizing: d = label_w + padding).
                 // The <circle r> in local coords → bbox {x:-r, y:-r, w:2r, h:2r}.
                 // jsdom shim ignores transform, uses this local bbox.
                 let r = w / 2.0;
-                expand(&mut min_x, &mut min_y, &mut max_x, &mut max_y, -r, -r, 2.0 * r, 2.0 * r);
+                expand(
+                    &mut min_x,
+                    &mut min_y,
+                    &mut max_x,
+                    &mut max_y,
+                    -r,
+                    -r,
+                    2.0 * r,
+                    2.0 * r,
+                );
             }
             _ => {
                 // rect/round/stadium/etc.: rect x=-w/2, y=-h/2
-                expand(&mut min_x, &mut min_y, &mut max_x, &mut max_y, -w / 2.0, -h / 2.0, w, h);
+                expand(
+                    &mut min_x,
+                    &mut min_y,
+                    &mut max_x,
+                    &mut max_y,
+                    -w / 2.0,
+                    -h / 2.0,
+                    w,
+                    h,
+                );
             }
         }
         // Node label foreignObject: at (0,0) in local coords (label <g> transform ignored).
@@ -120,7 +160,9 @@ fn compute_viewbox(l: &FlowchartLayout, padding: f64) -> (f64, f64, f64, f64) {
             };
             let processed = crate::render::foreign_object::replace_fa_icons(&label_escaped);
             let (lw, lh) = measure_html_markup_label(&processed, &font, 200.0, true);
-            expand(&mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, 0.0, lw, lh);
+            expand(
+                &mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, 0.0, lw, lh,
+            );
         }
     }
 
@@ -142,13 +184,23 @@ fn compute_viewbox(l: &FlowchartLayout, padding: f64) -> (f64, f64, f64, f64) {
     for e in &l.edges {
         let Some(points) = &e.points else { continue };
         let n = points.len();
-        if n == 0 { continue }
+        if n == 0 {
+            continue;
+        }
 
         let arrow_end = e.arrow_type_end.as_deref().unwrap_or("none");
         let arrow_start = e.arrow_type_start.as_deref().unwrap_or("none");
         // Only arrow_point carries a non-zero offset in upstream's markerOffsets.
-        let end_offset = if arrow_end == "arrow_point" { ARROW_POINT_OFFSET } else { 0.0 };
-        let start_offset = if arrow_start == "arrow_point" { ARROW_POINT_OFFSET } else { 0.0 };
+        let end_offset = if arrow_end == "arrow_point" {
+            ARROW_POINT_OFFSET
+        } else {
+            0.0
+        };
+        let start_offset = if arrow_start == "arrow_point" {
+            ARROW_POINT_OFFSET
+        } else {
+            0.0
+        };
 
         for (i, p) in points.iter().enumerate() {
             let (mut px, mut py) = (p.x, p.y);
@@ -187,10 +239,18 @@ fn compute_viewbox(l: &FlowchartLayout, padding: f64) -> (f64, f64, f64, f64) {
 
             let rx = (px * 1000.0).round() / 1000.0;
             let ry = (py * 1000.0).round() / 1000.0;
-            if rx < min_x { min_x = rx; }
-            if ry < min_y { min_y = ry; }
-            if rx > max_x { max_x = rx; }
-            if ry > max_y { max_y = ry; }
+            if rx < min_x {
+                min_x = rx;
+            }
+            if ry < min_y {
+                min_y = ry;
+            }
+            if rx > max_x {
+                max_x = rx;
+            }
+            if ry > max_y {
+                max_y = ry;
+            }
         }
     }
 
@@ -211,7 +271,9 @@ fn compute_viewbox(l: &FlowchartLayout, padding: f64) -> (f64, f64, f64, f64) {
             measure_html_markup_label(&processed, &font, 200.0, true)
         };
         // foreignObject x=0, y=0 (no transform applied)
-        expand(&mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, 0.0, lw, lh);
+        expand(
+            &mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, 0.0, lw, lh,
+        );
     }
 
     if !min_x.is_finite() {
@@ -239,10 +301,11 @@ pub fn render(
 
     // Build cluster bounds map for cluster-endpoint edge clipping.
     // Keys are the original cluster IDs; values are the AABB bounds.
-    let cluster_bounds: std::collections::HashMap<String, crate::layout::unified::Bounds> =
-        l.clusters.iter()
-            .filter_map(|c| c.bounds.as_ref().map(|b| (c.id.clone(), b.clone())))
-            .collect();
+    let cluster_bounds: std::collections::HashMap<String, crate::layout::unified::Bounds> = l
+        .clusters
+        .iter()
+        .filter_map(|c| c.bounds.as_ref().map(|b| (c.id.clone(), b.clone())))
+        .collect();
 
     // ── Render inner content first (markers + root group) ──────────
     // We need the rendered content to compute the viewBox accurately,
@@ -317,7 +380,9 @@ pub fn render(
     for cluster_id in &l.isolated_cluster_ids {
         if let Some(cnode) = l.nodes.iter().find(|n| &n.id == cluster_id && n.is_group) {
             // Skip if parent is also an isolated cluster (nested, handled recursively).
-            let parent_also_isolated = cnode.parent_id.as_deref()
+            let parent_also_isolated = cnode
+                .parent_id
+                .as_deref()
                 .map(|p| l.isolated_cluster_ids.contains(p))
                 .unwrap_or(false);
             if parent_also_isolated {
@@ -406,8 +471,15 @@ pub fn render(
     Ok(out)
 }
 
-fn render_cluster(node: &UNode, _cluster: &Cluster, _theme: &ThemeVariables, svg_id: &str) -> String {
-    use crate::render::foreign_object::{measure_html_label, measure_html_markup_label, HtmlLabelFont};
+fn render_cluster(
+    node: &UNode,
+    _cluster: &Cluster,
+    _theme: &ThemeVariables,
+    svg_id: &str,
+) -> String {
+    use crate::render::foreign_object::{
+        measure_html_label, measure_html_markup_label, HtmlLabelFont,
+    };
 
     let w = node.width.unwrap_or(0.0);
     let h = node.height.unwrap_or(0.0);
@@ -555,20 +627,24 @@ fn render_isolated_cluster_inner_root(
     svg_id: &str,
 ) -> String {
     // Retrieve pre-computed outer translate from the layout engine.
-    let tx = cnode.extra.get("outer_tx")
+    let tx = cnode
+        .extra
+        .get("outer_tx")
         .and_then(|s| s.parse::<f64>().ok())
         .unwrap_or_else(|| {
             // Fallback: classic formula using inner dagre coords.
             let cx = cnode.x.unwrap_or(0.0);
-            let w  = cnode.width.unwrap_or(0.0);
+            let w = cnode.width.unwrap_or(0.0);
             let padding = cnode.padding.unwrap_or(8.0);
             cx - padding - w / 2.0
         });
-    let ty = cnode.extra.get("outer_ty")
+    let ty = cnode
+        .extra
+        .get("outer_ty")
         .and_then(|s| s.parse::<f64>().ok())
         .unwrap_or_else(|| {
             let cy = cnode.y.unwrap_or(0.0);
-            let h  = cnode.height.unwrap_or(0.0);
+            let h = cnode.height.unwrap_or(0.0);
             let padding = cnode.padding.unwrap_or(8.0);
             cy - h / 2.0 - padding
         });
@@ -614,8 +690,14 @@ fn render_isolated_cluster_inner_root(
     // cluster, excluding edges between descendants of isolated sub-clusters.
     out.push_str(&unified_shell::open_layer("edgePaths"));
     for (i, e) in l.edges.iter().enumerate() {
-        let src = match e.start.as_deref() { Some(s) => s, None => continue };
-        let dst = match e.end.as_deref() { Some(s) => s, None => continue };
+        let src = match e.start.as_deref() {
+            Some(s) => s,
+            None => continue,
+        };
+        let dst = match e.end.as_deref() {
+            Some(s) => s,
+            None => continue,
+        };
         // Both endpoints must be descendants of this cluster.
         if !is_descendant_of(src, &cnode.id, l) || !is_descendant_of(dst, &cnode.id, l) {
             continue;
@@ -623,34 +705,58 @@ fn render_isolated_cluster_inner_root(
         // Skip if BOTH endpoints are inside the same isolated sub-cluster
         // (those edges are handled in the sub-cluster's inner root).
         // cnode.id is itself isolated, so exclude it from the "sub-isolated" check.
-        let src_in_sub_iso = l.nodes.iter().find(|n| n.id == src)
+        let src_in_sub_iso = l
+            .nodes
+            .iter()
+            .find(|n| n.id == src)
             .and_then(|n| n.parent_id.as_deref())
             .map(|p| p != cnode.id.as_str() && l.isolated_cluster_ids.contains(p))
             .unwrap_or(false);
-        let dst_in_sub_iso = l.nodes.iter().find(|n| n.id == dst)
+        let dst_in_sub_iso = l
+            .nodes
+            .iter()
+            .find(|n| n.id == dst)
             .and_then(|n| n.parent_id.as_deref())
             .map(|p| p != cnode.id.as_str() && l.isolated_cluster_ids.contains(p))
             .unwrap_or(false);
         if src_in_sub_iso || dst_in_sub_iso {
             continue;
         }
-        out.push_str(&render_edge_path(e, i, svg_id, &l.aria_kind, &std::collections::HashMap::new()));
+        out.push_str(&render_edge_path(
+            e,
+            i,
+            svg_id,
+            &l.aria_kind,
+            &std::collections::HashMap::new(),
+        ));
     }
     out.push_str(unified_shell::close_layer());
 
     // Inner <g class="edgeLabels">.
     out.push_str(&unified_shell::open_layer("edgeLabels"));
     for e in l.edges.iter() {
-        let src = match e.start.as_deref() { Some(s) => s, None => continue };
-        let dst = match e.end.as_deref() { Some(s) => s, None => continue };
+        let src = match e.start.as_deref() {
+            Some(s) => s,
+            None => continue,
+        };
+        let dst = match e.end.as_deref() {
+            Some(s) => s,
+            None => continue,
+        };
         if !is_descendant_of(src, &cnode.id, l) || !is_descendant_of(dst, &cnode.id, l) {
             continue;
         }
-        let src_in_sub_iso = l.nodes.iter().find(|n| n.id == src)
+        let src_in_sub_iso = l
+            .nodes
+            .iter()
+            .find(|n| n.id == src)
             .and_then(|n| n.parent_id.as_deref())
             .map(|p| p != cnode.id.as_str() && l.isolated_cluster_ids.contains(p))
             .unwrap_or(false);
-        let dst_in_sub_iso = l.nodes.iter().find(|n| n.id == dst)
+        let dst_in_sub_iso = l
+            .nodes
+            .iter()
+            .find(|n| n.id == dst)
             .and_then(|n| n.parent_id.as_deref())
             .map(|p| p != cnode.id.as_str() && l.isolated_cluster_ids.contains(p))
             .unwrap_or(false);
@@ -696,7 +802,9 @@ fn render_isolated_cluster_inner_root(
         // (those are handled recursively in sub-cluster's inner root).
         // Note: cnode.id itself is in isolated_cluster_ids, so we must
         // exclude it from the "sub-isolated" check.
-        let in_sub_isolated = n.parent_id.as_deref()
+        let in_sub_isolated = n
+            .parent_id
+            .as_deref()
             .map(|p| p != cnode.id.as_str() && l.isolated_cluster_ids.contains(p))
             .unwrap_or(false);
         if in_sub_isolated {
@@ -751,7 +859,9 @@ fn apply_marker_offsets(pts: &mut Vec<Point>, arrow_end: &str, arrow_start: &str
     }
 
     let n = pts.len();
-    if n < 2 { return; }
+    if n < 2 {
+        return;
+    }
 
     // End offset: applied to last point.
     // Upstream calculateDeltaAndAngle(last, prev): deltaX = prev.x - last.x.
@@ -814,9 +924,15 @@ fn render_edge_path(
     // but the visual `d=` path is clipped to the cluster border.
     // Upstream renders the edge path stopping at the cluster rect boundary.
     use crate::layout::routing::clip_to_cluster_border;
-    let orig_dst = e.extra.get("orig_end").map(|s| s.as_str())
+    let orig_dst = e
+        .extra
+        .get("orig_end")
+        .map(|s| s.as_str())
         .unwrap_or_else(|| e.end.as_deref().unwrap_or(""));
-    let orig_src = e.extra.get("orig_start").map(|s| s.as_str())
+    let orig_src = e
+        .extra
+        .get("orig_start")
+        .map(|s| s.as_str())
         .unwrap_or_else(|| e.start.as_deref().unwrap_or(""));
     if let Some(bounds) = cluster_bounds.get(orig_dst) {
         pts = clip_to_cluster_border(&pts, bounds);
@@ -925,7 +1041,8 @@ fn render_edge_path(
 
 fn render_edge_label(e: &UEdge) -> String {
     use crate::render::foreign_object::{
-        measure_html_label, measure_html_markup_label, render_edge_label as fo_edge, replace_fa_icons, HtmlLabelFont, LabelOpts,
+        measure_html_label, measure_html_markup_label, render_edge_label as fo_edge,
+        replace_fa_icons, HtmlLabelFont, LabelOpts,
     };
     let label_text = e.label.clone().unwrap_or_default();
     // Apply FA icon substitution (fa:fa-car → <i class="fa fa-car"></i>) before
@@ -997,12 +1114,24 @@ fn flowchart_class_def_css(id: &str, d: &FlowchartDiagram) -> String {
         }
         let all_css: String = all_props.join("");
         // >* and span rules use all styles
-        out.push_str(&format!("#{id} .{name}>*{{{css}}}", name = def.name, css = all_css));
-        out.push_str(&format!("#{id} .{name} span{{{css}}}", name = def.name, css = all_css));
+        out.push_str(&format!(
+            "#{id} .{name}>*{{{css}}}",
+            name = def.name,
+            css = all_css
+        ));
+        out.push_str(&format!(
+            "#{id} .{name} span{{{css}}}",
+            name = def.name,
+            css = all_css
+        ));
         // tspan rule uses only text (color) styles
         if !text_props.is_empty() {
             let text_css: String = text_props.join("");
-            out.push_str(&format!("#{id} .{name} tspan{{{css}}}", name = def.name, css = text_css));
+            out.push_str(&format!(
+                "#{id} .{name} tspan{{{css}}}",
+                name = def.name,
+                css = text_css
+            ));
         }
     }
     out
@@ -1029,10 +1158,7 @@ fn flowchart_specific_css(id: &str, theme: &ThemeVariables) -> String {
     let node_border = theme.node_border.as_deref().unwrap_or("#9370DB");
     let stroke_width = theme.stroke_width.unwrap_or(1);
     let line_color = theme.line_color.as_deref().unwrap_or("#333333");
-    let arrowhead_color = theme
-        .arrowhead_color
-        .as_deref()
-        .unwrap_or("#333333");
+    let arrowhead_color = theme.arrowhead_color.as_deref().unwrap_or("#333333");
     let edge_label_bg = theme
         .edge_label_background
         .as_deref()
@@ -1108,9 +1234,7 @@ fn flowchart_specific_css(id: &str, theme: &ThemeVariables) -> String {
     ));
 
     // .node.clickable { cursor: pointer; }
-    css.push_str(&format!(
-        "#{id} .node.clickable{{cursor:pointer;}}",
-    ));
+    css.push_str(&format!("#{id} .node.clickable{{cursor:pointer;}}",));
 
     // .root .anchor path { fill: lineColor !important; stroke-width: 0; stroke: lineColor; }
     css.push_str(&format!(
@@ -1195,9 +1319,7 @@ fn flowchart_specific_css(id: &str, theme: &ThemeVariables) -> String {
     ));
 
     // rect.text { fill: none; stroke-width: 0; }
-    css.push_str(&format!(
-        "#{id} rect.text{{fill:none;stroke-width:0;}}",
-    ));
+    css.push_str(&format!("#{id} rect.text{{fill:none;stroke-width:0;}}",));
 
     // .icon-shape, .image-shape { background-color: edgeLabelBackground; text-align: center; }
     css.push_str(&format!(
@@ -1305,27 +1427,72 @@ mod tests {
         let css = flowchart_specific_css("test", &th);
         // Verify all major CSS rules from upstream styles.ts are present.
         assert!(css.contains("#test .label{"), "missing .label rule");
-        assert!(css.contains("#test .cluster-label text{"), "missing .cluster-label text");
-        assert!(css.contains("#test .cluster-label span{"), "missing .cluster-label span");
-        assert!(css.contains("#test .cluster-label span p{"), "missing .cluster-label span p");
-        assert!(css.contains("#test .label text,#test span{"), "missing .label text,span");
+        assert!(
+            css.contains("#test .cluster-label text{"),
+            "missing .cluster-label text"
+        );
+        assert!(
+            css.contains("#test .cluster-label span{"),
+            "missing .cluster-label span"
+        );
+        assert!(
+            css.contains("#test .cluster-label span p{"),
+            "missing .cluster-label span p"
+        );
+        assert!(
+            css.contains("#test .label text,#test span{"),
+            "missing .label text,span"
+        );
         assert!(css.contains("#test .node rect,"), "missing .node rect");
-        assert!(css.contains("#test .arrowheadPath{"), "missing .arrowheadPath");
-        assert!(css.contains("#test .edgePath .path{"), "missing .edgePath .path");
-        assert!(css.contains("#test .flowchart-link{"), "missing .flowchart-link");
+        assert!(
+            css.contains("#test .arrowheadPath{"),
+            "missing .arrowheadPath"
+        );
+        assert!(
+            css.contains("#test .edgePath .path{"),
+            "missing .edgePath .path"
+        );
+        assert!(
+            css.contains("#test .flowchart-link{"),
+            "missing .flowchart-link"
+        );
         assert!(css.contains("#test .edgeLabel{"), "missing .edgeLabel");
         assert!(css.contains("#test .edgeLabel p{"), "missing .edgeLabel p");
-        assert!(css.contains("#test .edgeLabel rect{"), "missing .edgeLabel rect");
+        assert!(
+            css.contains("#test .edgeLabel rect{"),
+            "missing .edgeLabel rect"
+        );
         assert!(css.contains("#test .labelBkg{"), "missing .labelBkg");
-        assert!(css.contains("#test .cluster rect{"), "missing .cluster rect");
-        assert!(css.contains("#test .cluster text{"), "missing .cluster text");
-        assert!(css.contains("#test .cluster span{"), "missing .cluster span");
-        assert!(css.contains("#test div.mermaidTooltip{"), "missing div.mermaidTooltip");
-        assert!(css.contains("#test .flowchartTitleText{"), "missing .flowchartTitleText");
+        assert!(
+            css.contains("#test .cluster rect{"),
+            "missing .cluster rect"
+        );
+        assert!(
+            css.contains("#test .cluster text{"),
+            "missing .cluster text"
+        );
+        assert!(
+            css.contains("#test .cluster span{"),
+            "missing .cluster span"
+        );
+        assert!(
+            css.contains("#test div.mermaidTooltip{"),
+            "missing div.mermaidTooltip"
+        );
+        assert!(
+            css.contains("#test .flowchartTitleText{"),
+            "missing .flowchartTitleText"
+        );
         assert!(css.contains("#test rect.text{"), "missing rect.text");
-        assert!(css.contains("#test .icon-shape,#test .image-shape{"), "missing icon/image-shape");
+        assert!(
+            css.contains("#test .icon-shape,#test .image-shape{"),
+            "missing icon/image-shape"
+        );
         assert!(css.contains("#test .label-icon{"), "missing .label-icon");
-        assert!(css.contains("#test .node .label-icon path{"), "missing .node .label-icon path");
+        assert!(
+            css.contains("#test .node .label-icon path{"),
+            "missing .node .label-icon path"
+        );
     }
 
     #[test]
@@ -1457,12 +1624,9 @@ mod tests {
     fn diff_probe_02() {
         let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let rel = "ext_fixtures/cypress/flowchart/02";
-        let source = std::fs::read_to_string(
-            base.join(format!("tests/{}.mmd", rel)),
-        ).unwrap();
-        let expected = std::fs::read_to_string(
-            base.join(format!("tests/reference/{}.svg", rel)),
-        ).unwrap();
+        let source = std::fs::read_to_string(base.join(format!("tests/{}.mmd", rel))).unwrap();
+        let expected =
+            std::fs::read_to_string(base.join(format!("tests/reference/{}.svg", rel))).unwrap();
         let d = fcp::parse(&source).unwrap();
         let theme = theme::get_theme("default");
         let l = fcl::layout(&d, &theme).unwrap();
@@ -1472,7 +1636,9 @@ mod tests {
         let b = expected.as_bytes();
         let n = a.len().min(b.len());
         let mut i = 0;
-        while i < n && a[i] == b[i] { i += 1; }
+        while i < n && a[i] == b[i] {
+            i += 1;
+        }
         if i >= n && a.len() == b.len() {
             eprintln!("BYTE EXACT!");
             return;
@@ -1481,7 +1647,15 @@ mod tests {
         let ctx_hi_a = (i + 200).min(a.len());
         let ctx_hi_b = (i + 200).min(b.len());
         eprintln!("Diverge at byte {} (got={}, want={})", i, a.len(), b.len());
-        eprintln!("got [{}..]: {}", ctx_lo, String::from_utf8_lossy(&a[ctx_lo..ctx_hi_a]));
-        eprintln!("want[{}..]: {}", ctx_lo, String::from_utf8_lossy(&b[ctx_lo..ctx_hi_b]));
+        eprintln!(
+            "got [{}..]: {}",
+            ctx_lo,
+            String::from_utf8_lossy(&a[ctx_lo..ctx_hi_a])
+        );
+        eprintln!(
+            "want[{}..]: {}",
+            ctx_lo,
+            String::from_utf8_lossy(&b[ctx_lo..ctx_hi_b])
+        );
     }
 }

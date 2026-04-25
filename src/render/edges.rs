@@ -400,9 +400,8 @@ fn intersect_node_boundary(node: &Node, probe: Point) -> Point {
 
     let shape = node.shape.as_deref().unwrap_or("rect");
     match shape {
-        "circle" | "ellipse" | "doublecircle" | "stadium"
-        | "stateStart" | "state_start" | "start"
-        | "stateEnd" | "state_end" | "end" => {
+        "circle" | "ellipse" | "doublecircle" | "stadium" | "stateStart" | "state_start"
+        | "start" | "stateEnd" | "state_end" | "end" => {
             let rx = (w / 2.0) as f32;
             let ry = (h / 2.0) as f32;
             if let Some((x, y)) = ray_ellipse_intersection(centre, dir, centre, rx, ry) {
@@ -478,12 +477,7 @@ fn diamond_polygon(cx: f64, cy: f64, w: f64, h: f64) -> Vec<(f32, f32)> {
     let hh = (h / 2.0) as f32;
     let cx = cx as f32;
     let cy = cy as f32;
-    vec![
-        (cx, cy - hh),
-        (cx + hw, cy),
-        (cx, cy + hh),
-        (cx - hw, cy),
-    ]
+    vec![(cx, cy - hh), (cx + hw, cy), (cx, cy + hh), (cx - hw, cy)]
 }
 
 fn hexagon_polygon(cx: f64, cy: f64, w: f64, h: f64) -> Vec<(f32, f32)> {
@@ -551,7 +545,11 @@ pub fn label_position(points: &[Point]) -> Option<LabelPlacement> {
         if lens[i] >= target {
             let prev_len = lens[i - 1];
             let seg = lens[i] - prev_len;
-            let f = if seg > 0.0 { (target - prev_len) / seg } else { 0.0 };
+            let f = if seg > 0.0 {
+                (target - prev_len) / seg
+            } else {
+                0.0
+            };
             let a = points[i - 1];
             let b = points[i];
             return Some(LabelPlacement {
@@ -561,7 +559,10 @@ pub fn label_position(points: &[Point]) -> Option<LabelPlacement> {
         }
     }
     let last = *points.last().expect("non-empty");
-    Some(LabelPlacement { x: last.x, y: last.y })
+    Some(LabelPlacement {
+        x: last.x,
+        y: last.y,
+    })
 }
 
 // ── marker URL wiring ───────────────────────────────────────────────
@@ -623,14 +624,8 @@ mod tests {
     #[test]
     fn curve_type_resolve_falls_back_to_basis() {
         assert_eq!(CurveType::resolve(None, None), CurveType::Basis);
-        assert_eq!(
-            CurveType::resolve(Some("linear"), None),
-            CurveType::Linear
-        );
-        assert_eq!(
-            CurveType::resolve(None, Some("step")),
-            CurveType::Step
-        );
+        assert_eq!(CurveType::resolve(Some("linear"), None), CurveType::Linear);
+        assert_eq!(CurveType::resolve(None, Some("step")), CurveType::Step);
     }
 
     #[test]

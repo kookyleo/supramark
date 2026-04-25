@@ -22,8 +22,7 @@
 use crate::config::{directive, frontmatter};
 use crate::error::{MermaidError, Result};
 use crate::model::state::{
-    ClassApply, ClassDef, Note, NotePosition, ParseItem, State, StateDiagram, StateKind,
-    Transition,
+    ClassApply, ClassDef, Note, NotePosition, ParseItem, State, StateDiagram, StateKind, Transition,
 };
 
 /// Public entry.
@@ -248,7 +247,9 @@ pub fn parse(source: &str) -> Result<StateDiagram> {
         }
 
         // --- Transition ---------------------------------------------------
-        if let Some(tr) = parse_transition(line, &mut diagram, &mut next_start_end_idx, &parent_stack) {
+        if let Some(tr) =
+            parse_transition(line, &mut diagram, &mut next_start_end_idx, &parent_stack)
+        {
             let idx = diagram.transitions.len();
             diagram.transitions.push(tr);
             diagram.items.push(ParseItem::Relation(idx));
@@ -458,7 +459,11 @@ fn parse_transition(
     };
     // Merge labels: label from ` : label` takes priority over label from class suffix.
     let label = label.or(label_from_class_suffix);
-    let rhs_class: Option<String> = if rhs_class_token.is_empty() { None } else { Some(rhs_class_token.to_string()) };
+    let rhs_class: Option<String> = if rhs_class_token.is_empty() {
+        None
+    } else {
+        Some(rhs_class_token.to_string())
+    };
 
     // Strip `:::className` decoration from LHS (done above); derive rhs_id.
     let rhs_id = rhs;
@@ -497,7 +502,14 @@ fn split_class_suffix(s: &str) -> (&str, Option<String>) {
     if let Some(i) = s.find(":::") {
         let id = s[..i].trim();
         let cn = s[i + 3..].trim();
-        (id, if cn.is_empty() { None } else { Some(cn.to_string()) })
+        (
+            id,
+            if cn.is_empty() {
+                None
+            } else {
+                Some(cn.to_string())
+            },
+        )
     } else {
         (s, None)
     }
@@ -555,7 +567,11 @@ fn resolve_endpoint(
         let id = format!("root_{}", role);
         // Reuse existing start/end node within the same parent scope,
         // matching upstream where [*] always maps to a single node per scope.
-        if !diagram.states.iter().any(|s| s.id == id && s.parent == *parent) {
+        if !diagram
+            .states
+            .iter()
+            .any(|s| s.id == id && s.parent == *parent)
+        {
             diagram.states.push(State {
                 id: id.clone(),
                 kind: StateKind::StartEnd,
@@ -609,7 +625,12 @@ fn ingest_state_decl(diagram: &mut StateDiagram, decl: &str, parent: Option<Stri
             if let Some(after_as) = tail.strip_prefix("as ") {
                 // after_as may be "S1" or "S1: The description" or "S1 { ... }".
                 // Split on whitespace to get the id token (trim trailing '{').
-                let raw_token = after_as.split_whitespace().next().unwrap_or("").trim_end_matches('{').trim();
+                let raw_token = after_as
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .trim_end_matches('{')
+                    .trim();
                 // Strip trailing ':' from the id (happens when `as S1: desc`
                 // is parsed by split_whitespace — the `: desc` is not separated).
                 let (id, maybe_desc) = if let Some((tok, desc_rest)) = split_once_colon(raw_token) {
@@ -626,12 +647,17 @@ fn ingest_state_decl(diagram: &mut StateDiagram, decl: &str, parent: Option<Stri
                     // after_as looks like "S1: The description" or "S1" or "S1 { ..."
                     // Find the id, skip it, then check for ": desc".
                     if let Some(pos) = after_as.find(id) {
-                        let rest_after_id = after_as[pos + id.len()..].trim_start_matches('{').trim();
+                        let rest_after_id =
+                            after_as[pos + id.len()..].trim_start_matches('{').trim();
                         if let Some((_, desc_text)) = split_once_colon(rest_after_id) {
                             // Preserve leading space — upstream Jison grammar captures
                             // the text after `:` verbatim, including the leading space.
                             let desc_text = desc_text.trim_end();
-                            if !desc_text.trim().is_empty() { Some(desc_text) } else { None }
+                            if !desc_text.trim().is_empty() {
+                                Some(desc_text)
+                            } else {
+                                None
+                            }
                         } else {
                             None
                         }
@@ -823,9 +849,14 @@ mod tests {
         let d = parse(src).unwrap();
         let s = d.states.iter().find(|s| s.id == "Yswsii").unwrap();
         eprintln!("Yswsii label={:?} desc={:?}", s.label, s.description);
-        assert_eq!(s.label.as_deref(), Some("Your state with spaces in it"),
-            "colon-desc should become the display label");
-        assert!(s.description.is_none(),
-            "description should be None when colon-desc became label");
+        assert_eq!(
+            s.label.as_deref(),
+            Some("Your state with spaces in it"),
+            "colon-desc should become the display label"
+        );
+        assert!(
+            s.description.is_none(),
+            "description should be None when colon-desc became label"
+        );
     }
 }

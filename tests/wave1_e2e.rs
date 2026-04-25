@@ -75,8 +75,12 @@ fn approx_byte_exact(a: &str, b: &str, rel_tol: f64) -> bool {
         match (ta, tb) {
             (Tok::Struct(x), Tok::Struct(y)) if x == y => {}
             (Tok::Num(x_raw), Tok::Num(y_raw)) => {
-                let Ok(x) = x_raw.parse::<f64>() else { return false };
-                let Ok(y) = y_raw.parse::<f64>() else { return false };
+                let Ok(x) = x_raw.parse::<f64>() else {
+                    return false;
+                };
+                let Ok(y) = y_raw.parse::<f64>() else {
+                    return false;
+                };
                 if x == y {
                     continue;
                 }
@@ -145,7 +149,9 @@ fn tokenise(s: &str) -> Vec<Tok<'_>> {
 /// (ident, number) pairs — those are counter-suffix ids, not
 /// floating-point values.
 fn looks_like_number_start(bytes: &[u8], i: usize) -> bool {
-    if !bytes[i].is_ascii_digit() && !(bytes[i] == b'-' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit()) {
+    if !bytes[i].is_ascii_digit()
+        && !(bytes[i] == b'-' && i + 1 < bytes.len() && bytes[i + 1].is_ascii_digit())
+    {
         return false;
     }
     if i == 0 {
@@ -156,10 +162,39 @@ fn looks_like_number_start(bytes: &[u8], i: usize) -> bool {
     // delimiters, whitespace, commas, parentheses, arithmetic ops.
     matches!(
         prev,
-        b'"' | b'\'' | b'(' | b')' | b',' | b' ' | b'\t' | b'\n' | b':'
-            | b';' | b'=' | b'>' | b'<' | b'/' | b'M' | b'L' | b'C' | b'S'
-            | b'Q' | b'T' | b'A' | b'H' | b'V' | b'Z' | b'm' | b'l' | b'c'
-            | b's' | b'q' | b't' | b'a' | b'h' | b'v' | b'z'
+        b'"' | b'\''
+            | b'('
+            | b')'
+            | b','
+            | b' '
+            | b'\t'
+            | b'\n'
+            | b':'
+            | b';'
+            | b'='
+            | b'>'
+            | b'<'
+            | b'/'
+            | b'M'
+            | b'L'
+            | b'C'
+            | b'S'
+            | b'Q'
+            | b'T'
+            | b'A'
+            | b'H'
+            | b'V'
+            | b'Z'
+            | b'm'
+            | b'l'
+            | b'c'
+            | b's'
+            | b'q'
+            | b't'
+            | b'a'
+            | b'h'
+            | b'v'
+            | b'z'
     )
 }
 
@@ -211,22 +246,74 @@ fn sweep(dirs: &[&str]) -> usize {
         }
     }
     assert!(count > 0, "no fixtures found under {:?}", dirs);
-    eprintln!("swept {} fixtures, skipped {} known-partial across {:?}", count, skipped, dirs);
+    eprintln!(
+        "swept {} fixtures, skipped {} known-partial across {:?}",
+        count, skipped, dirs
+    );
     count
 }
 
-#[test] fn pie_all_fixtures()      { sweep(&["fixtures/pie", "ext_fixtures/demos/pie", "ext_fixtures/cypress/pie"]); }
-#[test] fn packet_all_fixtures()   { sweep(&["ext_fixtures/cypress/packet"]); }
-#[test] fn radar_all_fixtures()    { sweep(&["ext_fixtures/cypress/radar", "ext_fixtures/demos/radar"]); }
-#[test] fn ishikawa_all_fixtures() { sweep(&["ext_fixtures/cypress/ishikawa", "ext_fixtures/demos/ishikawa"]); }
-#[test] fn journey_all_fixtures()  { sweep(&["ext_fixtures/cypress/journey", "ext_fixtures/demos/journey"]); }
+#[test]
+fn pie_all_fixtures() {
+    sweep(&[
+        "fixtures/pie",
+        "ext_fixtures/demos/pie",
+        "ext_fixtures/cypress/pie",
+    ]);
+}
+#[test]
+fn packet_all_fixtures() {
+    sweep(&["ext_fixtures/cypress/packet"]);
+}
+#[test]
+fn radar_all_fixtures() {
+    sweep(&["ext_fixtures/cypress/radar", "ext_fixtures/demos/radar"]);
+}
+#[test]
+fn ishikawa_all_fixtures() {
+    sweep(&[
+        "ext_fixtures/cypress/ishikawa",
+        "ext_fixtures/demos/ishikawa",
+    ]);
+}
+#[test]
+fn journey_all_fixtures() {
+    sweep(&["ext_fixtures/cypress/journey", "ext_fixtures/demos/journey"]);
+}
 // Timeline: structural divergence (non-numeric) in the <style>
 // block — approx_byte_exact won't save it. Tracked in PROGRESS.md.
 //#[test] fn timeline_all_fixtures() { sweep(&["ext_fixtures/cypress/timeline", "ext_fixtures/demos/timeline"]); }
-#[test] fn quadrant_all_fixtures() { sweep(&["ext_fixtures/cypress/quadrant", "ext_fixtures/demos/quadrant"]); }
-#[test] fn timeline_all_fixtures() { sweep(&["ext_fixtures/cypress/timeline", "ext_fixtures/demos/timeline"]); }
-#[test] fn xychart_all_fixtures()  { sweep(&["ext_fixtures/cypress/xychart", "ext_fixtures/demos/xychart"]); }
-#[test] fn wardley_all_fixtures()  { sweep(&["ext_fixtures/cypress/wardley", "ext_fixtures/demos/wardley"]); }
-#[test] fn sankey_all_fixtures()   { sweep(&["ext_fixtures/cypress/sankey", "ext_fixtures/demos/sankey"]); }
-#[test] fn treemap_all_fixtures()  { sweep(&["ext_fixtures/cypress/treemap", "ext_fixtures/demos/treemap"]); }
-#[test] fn kanban_all_fixtures()   { sweep(&["ext_fixtures/cypress/kanban"]); }
+#[test]
+fn quadrant_all_fixtures() {
+    sweep(&[
+        "ext_fixtures/cypress/quadrant",
+        "ext_fixtures/demos/quadrant",
+    ]);
+}
+#[test]
+fn timeline_all_fixtures() {
+    sweep(&[
+        "ext_fixtures/cypress/timeline",
+        "ext_fixtures/demos/timeline",
+    ]);
+}
+#[test]
+fn xychart_all_fixtures() {
+    sweep(&["ext_fixtures/cypress/xychart", "ext_fixtures/demos/xychart"]);
+}
+#[test]
+fn wardley_all_fixtures() {
+    sweep(&["ext_fixtures/cypress/wardley", "ext_fixtures/demos/wardley"]);
+}
+#[test]
+fn sankey_all_fixtures() {
+    sweep(&["ext_fixtures/cypress/sankey", "ext_fixtures/demos/sankey"]);
+}
+#[test]
+fn treemap_all_fixtures() {
+    sweep(&["ext_fixtures/cypress/treemap", "ext_fixtures/demos/treemap"]);
+}
+#[test]
+fn kanban_all_fixtures() {
+    sweep(&["ext_fixtures/cypress/kanban"]);
+}

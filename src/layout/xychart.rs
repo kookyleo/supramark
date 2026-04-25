@@ -245,7 +245,11 @@ pub fn layout(d: &XychartDiagram, theme: &ThemeVariables) -> Result<XychartLayou
         .collect();
     let palette_color = |idx: usize| -> String {
         palette
-            .get(if idx == 0 { 0 } else { idx % palette.len().max(1) })
+            .get(if idx == 0 {
+                0
+            } else {
+                idx % palette.len().max(1)
+            })
             .cloned()
             .unwrap_or_default()
     };
