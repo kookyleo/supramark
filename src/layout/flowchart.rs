@@ -77,6 +77,13 @@ pub fn layout(d: &FlowchartDiagram, theme: &ThemeVariables) -> Result<FlowchartL
     // here so the rendered path matches upstream byte-for-byte.
     let mut edges = edges;
     fix_diamond_edge_endpoints(&mut edges, &nodes);
+    // Fallback: when an edge whose both endpoints sit inside the same
+    // (isolated) cluster ends up without dagre-computed spline points,
+    // synthesize a 3-point straight-line path from src boundary, midpoint,
+    // dst boundary.  Upstream emits these short intra-cluster edges via
+    // a basis spline through exactly those three points, so the renderer
+    // can rebuild the byte-exact `d=` once we provide the raw waypoints.
+    synthesize_missing_intra_cluster_edge_points(&mut edges, &nodes);
 
     Ok(FlowchartLayout {
         nodes,
@@ -126,10 +133,10 @@ fn fix_diamond_edge_endpoints(edges: &mut [unified::Edge], nodes: &[unified::Nod
     let polygon_for = |cx: f64, cy: f64, s: f64| -> [(f64, f64); 4] {
         let half = s / 2.0;
         [
-            (cx, cy + half),         // bottom
-            (cx + half, cy),         // right
-            (cx, cy - half),         // top
-            (cx - half, cy),         // left
+            (cx, cy + half), // bottom
+            (cx + half, cy), // right
+            (cx, cy - half), // top
+            (cx - half, cy), // left
         ]
     };
 
@@ -149,7 +156,10 @@ fn fix_diamond_edge_endpoints(edges: &mut [unified::Edge], nodes: &[unified::Nod
                 if let Some(p) = polygon_intersection((cx, cy), (next.x, next.y), &poly) {
                     // Upstream `question.ts::calcIntersect` subtracts (0.5, 0.5)
                     // from the raw polygon intersection ("Adjusted result").
-                    points[0] = Point { x: p.0 - 0.5, y: p.1 - 0.5 };
+                    points[0] = Point {
+                        x: p.0 - 0.5,
+                        y: p.1 - 0.5,
+                    };
                 }
             }
         }
@@ -159,7 +169,10 @@ fn fix_diamond_edge_endpoints(edges: &mut [unified::Edge], nodes: &[unified::Nod
                 let n = points.len();
                 let prev = points[n - 2];
                 if let Some(p) = polygon_intersection((cx, cy), (prev.x, prev.y), &poly) {
-                    points[n - 1] = Point { x: p.0 - 0.5, y: p.1 - 0.5 };
+                    points[n - 1] = Point {
+                        x: p.0 - 0.5,
+                        y: p.1 - 0.5,
+                    };
                 }
             }
         }
@@ -246,6 +259,112 @@ fn intersect_line(
         (num_y + offset) / denom
     };
     Some((x, y))
+}
+
+/// Synthesize a 3-point spline (src boundary → midpoint → dst boundary) for
+/// edges whose dagre-bridge output left `points = None`.  This happens when
+/// both endpoints sit inside an isolated cluster whose inner-graph dagre
+/// pass does not surface the spline (e.g. the simple `subgraph S; a-->b; end`
+/// case).  Without these waypoints the renderer skips the edge `<path>`,
+/// breaking byte-exactness.
+///
+/// We reconstruct the same three points dagre would have placed:
+///   - src boundary along the line (src_center → dst_center)
+///   - midpoint of the two centres
+///   - dst boundary along the line (dst_center → src_center)
+///
+/// For axis-aligned pairs (same x or same y, the dominant intra-cluster
+/// case) this matches upstream byte-for-byte; for diagonal pairs the
+/// fallback still produces a valid renderable path even if not byte-exact.
+fn synthesize_missing_intra_cluster_edge_points(
+    edges: &mut [unified::Edge],
+    nodes: &[unified::Node],
+) {
+    use crate::layout::unified::types::Point;
+    // node-id → (cx, cy, w, h, parent)
+    let mut info: BTreeMap<&str, (f64, f64, f64, f64, Option<&str>)> = BTreeMap::new();
+    for n in nodes {
+        if n.is_group {
+            continue;
+        }
+        let (Some(cx), Some(cy), Some(w), Some(h)) = (n.x, n.y, n.width, n.height) else {
+            continue;
+        };
+        info.insert(n.id.as_str(), (cx, cy, w, h, n.parent_id.as_deref()));
+    }
+
+    for e in edges.iter_mut() {
+        if e.points.is_some() {
+            continue;
+        }
+        let (Some(s_id), Some(t_id)) = (e.start.as_deref(), e.end.as_deref()) else {
+            continue;
+        };
+        let Some(&(sx, sy, sw, sh, sp)) = info.get(s_id) else {
+            continue;
+        };
+        let Some(&(tx, ty, tw, th, tp)) = info.get(t_id) else {
+            continue;
+        };
+        // Only act when both endpoints share a parent cluster — these are
+        // the cases the inner-cluster dagre pass occasionally leaves
+        // routeless.  Edges with leaf-leaf pairs at the root will already
+        // have spline points from the outer dagre pass.
+        if sp.is_none() || sp != tp {
+            continue;
+        }
+        // Compute boundary points using axis-aligned rectangle intersection
+        // along the centre-to-centre line. Mirrors dagre's `intersectRect`
+        // with center=(cx,cy) and target=(other_cx, other_cy).
+        let s_pt = intersect_rect((sx, sy, sw, sh), (tx, ty));
+        let t_pt = intersect_rect((tx, ty, tw, th), (sx, sy));
+        let mid = ((sx + tx) / 2.0, (sy + ty) / 2.0);
+        e.points = Some(vec![
+            Point {
+                x: s_pt.0,
+                y: s_pt.1,
+            },
+            Point { x: mid.0, y: mid.1 },
+            Point {
+                x: t_pt.0,
+                y: t_pt.1,
+            },
+        ]);
+        log::debug!(
+            "flowchart layout: synthesized 3-point spline for intra-cluster edge {} ({} → {})",
+            e.id,
+            s_id,
+            t_id
+        );
+    }
+}
+
+/// Mirror of dagre's `intersectRect`: clip the line from `target` to the
+/// rectangle centre at the rectangle border.  `(cx, cy, w, h)` is the
+/// rectangle (centre + size); `(tx, ty)` is the external target point.
+fn intersect_rect(rect: (f64, f64, f64, f64), target: (f64, f64)) -> (f64, f64) {
+    let (cx, cy, w, h) = rect;
+    let dx = target.0 - cx;
+    let dy = target.1 - cy;
+    if dx == 0.0 && dy == 0.0 {
+        return (cx, cy);
+    }
+    let half_w = w / 2.0;
+    let half_h = h / 2.0;
+    // Same algorithm as dagre's util.intersectRect.
+    let (sx, sy);
+    if dy.abs() * half_w > dx.abs() * half_h {
+        // intersection is on top/bottom edge
+        let s = if dy < 0.0 { -half_h } else { half_h };
+        sx = s * dx / dy;
+        sy = s;
+    } else {
+        // intersection is on left/right edge
+        let s = if dx < 0.0 { -half_w } else { half_w };
+        sx = s;
+        sy = s * dy / dx;
+    }
+    (cx + sx, cy + sy)
 }
 
 /// Build a unified `LayoutData` from a flowchart AST.
@@ -401,8 +520,8 @@ fn build_layout_data(d: &FlowchartDiagram) -> LayoutData {
         // in dagre_bridge can test against the pre-retarget cluster IDs.
         ue.extra.insert("orig_start".into(), e.start.clone());
         ue.extra.insert("orig_end".into(), e.end.clone());
-        let touched_cluster = d.find_subgraph(&e.start).is_some()
-            || d.find_subgraph(&e.end).is_some();
+        let touched_cluster =
+            d.find_subgraph(&e.start).is_some() || d.find_subgraph(&e.end).is_some();
         retarget_cluster_endpoints(&mut ue, d);
         if touched_cluster {
             cluster_edges.push(ue);
@@ -979,7 +1098,13 @@ fn collect_styles<'a>(v: &'a Vertex, class_map: &BTreeMap<&'a str, &'a ClassDef>
     order
         .into_iter()
         .filter_map(|k| by_key.remove(&k))
-        .map(|(k, v)| if v.is_empty() { k } else { format!("{}:{}", k, v) })
+        .map(|(k, v)| {
+            if v.is_empty() {
+                k
+            } else {
+                format!("{}:{}", k, v)
+            }
+        })
         .collect()
 }
 
