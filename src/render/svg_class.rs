@@ -275,19 +275,42 @@ fn displayed_member_text_local(text: &str) -> String {
 /// The inner foreignObject layout matches upstream `addText()` for a
 /// single-line html label (`numberOfLines = 1` → translate(0, -bbox_h/2)).
 fn render_class_text_row(m: &crate::model::class::ClassMember) -> String {
+    render_class_text_row_indexed(m, 0, 1)
+}
+
+/// Emit one `<g class="label">` for member/method row `index` of `total`.
+/// Per upstream `addText.ts`, single-line html labels use the
+/// `(i - n/2 + 0.5) * line_h` offset so multi-row groups stack. The
+/// `max-width` is computed on the *raw* `m.text` (entity-escaped) — this
+/// mirrors `shapeUtil.ts` calling `calculateTextWidth(textContent, ...)`
+/// before HTML decoding.
+fn render_class_text_row_indexed(
+    m: &crate::model::class::ClassMember,
+    index: usize,
+    total: usize,
+) -> String {
     let family = "trebuchet ms,verdana,arial,sans-serif";
     let font = 14.0_f64;
     let line_h = 16.296875_f64;
     let display = displayed_member_text_local(&m.text);
     let display_w = crate::font_metrics::text_width(&display, family, font, false, false);
+    // span_max_w is calculated against m.text (raw entity-escaped form),
+    // not the decoded display string, mirroring upstream shapeUtil.ts.
     let span_max_w =
-        crate::font_metrics::text_width(&display, family, 16.0, false, false).round() + 50.0;
+        crate::font_metrics::text_width(&m.text, family, 16.0, false, false).round() + 50.0;
     let escaped = html_escape(&display);
     let style = m.css_style.clone();
+    let _ = total;
+    // Upstream `addText.ts`: `transform = translate(0, -bbox.height/(2*n) + yOffset)`.
+    // For html single-line (numberOfLines=1, bbox.height=line_h), the
+    // offset is `-line_h/2 + i*line_h` since yOffset accumulates by
+    // `line_h + 0` for each prior row (TEXT_PADDING=0 with HTML).
+    let i = index as f64;
+    let ty = -line_h / 2.0 + i * line_h;
     format!(
         r#"<g class="label" style="{cls}" transform="translate(0,{ty})"><foreignObject width="{w}" height="{h}"><div style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: {mw}px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span class="nodeLabel markdown-node-label" style=""><p>{txt}</p></span></div></foreignObject></g>"#,
         cls = style,
-        ty = fmt_num(-line_h / 2.0),
+        ty = fmt_num(ty),
         w = fmt_num(display_w),
         h = fmt_num(line_h),
         mw = fmt_num(span_max_w),
@@ -546,8 +569,9 @@ fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables, d: &ClassDiagra
         my = fmt_num(members_translate_y),
     ));
     if let Some(c) = class_node {
-        for (m, _w) in c.members.iter().zip(member_widths.iter()) {
-            out.push_str(&render_class_text_row(m));
+        let total = c.members.len();
+        for (i, (m, _w)) in c.members.iter().zip(member_widths.iter()).enumerate() {
+            out.push_str(&render_class_text_row_indexed(m, i, total));
         }
     }
     out.push_str("</g>");
@@ -559,8 +583,9 @@ fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables, d: &ClassDiagra
         my = fmt_num(methods_translate_y),
     ));
     if let Some(c) = class_node {
-        for (m, _w) in c.methods.iter().zip(method_widths.iter()) {
-            out.push_str(&render_class_text_row(m));
+        let total = c.methods.len();
+        for (i, (m, _w)) in c.methods.iter().zip(method_widths.iter()).enumerate() {
+            out.push_str(&render_class_text_row_indexed(m, i, total));
         }
     }
     out.push_str("</g>");
