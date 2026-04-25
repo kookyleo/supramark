@@ -502,7 +502,12 @@ fn build_layout_data(d: &FlowchartDiagram) -> LayoutData {
     }
 
     // Subgraph cluster nodes.
-    for sg in &d.subgraphs {
+    //
+    // Upstream `flowDb.getData()` iterates subgraphs in REVERSE
+    // declaration order (`for i = subGraphs.length - 1; i >= 0; i--`)
+    // when pushing them to the nodes array. Match that to align our
+    // dagre-input node insertion order with the reference.
+    for sg in d.subgraphs.iter().rev() {
         let (w, h) = measure_subgraph_title_box(sg.title.as_ref());
         let mut node = unified::Node::default();
         node.id = sg.id.clone();

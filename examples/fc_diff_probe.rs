@@ -23,7 +23,10 @@ fn main() {
     if args.is_empty() {
         names.push(("ext_fixtures/cypress/flowchart".into(), "134".into()));
     } else if args[0] == "all" {
-        for dir in ["ext_fixtures/cypress/flowchart", "ext_fixtures/demos/flowchart"] {
+        for dir in [
+            "ext_fixtures/cypress/flowchart",
+            "ext_fixtures/demos/flowchart",
+        ] {
             let mut entries: Vec<String> = std::fs::read_dir(format!("tests/{}", dir))
                 .unwrap()
                 .filter_map(|e| e.ok())
@@ -43,7 +46,12 @@ fn main() {
         }
     } else {
         for n in args {
-            names.push(("ext_fixtures/cypress/flowchart".into(), n));
+            // Allow "demos/<stem>" prefix to switch directory.
+            if let Some(stem) = n.strip_prefix("demos/") {
+                names.push(("ext_fixtures/demos/flowchart".into(), stem.into()));
+            } else {
+                names.push(("ext_fixtures/cypress/flowchart".into(), n));
+            }
         }
     }
     for (dir, name) in &names {
@@ -60,24 +68,37 @@ fn main() {
             Ok(s) => s,
             Err(_) => continue,
         };
-        let d = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| parser_fc::parse(&source))) {
+        let d = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            parser_fc::parse(&source)
+        })) {
             Ok(Ok(d)) => d,
-            _ => { println!("FC{} parse fail", name); continue; }
+            _ => {
+                println!("FC{} parse fail", name);
+                continue;
+            }
         };
         // Mirror lib.rs::convert_with_id so `%%{init: { theme,
         // themeVariables }}%%` directives propagate to layout & render.
         let pre = match preprocess::preprocess(&source) {
             Ok(p) => p,
-            Err(_) => { let _ = get_theme; continue; }
+            Err(_) => {
+                let _ = get_theme;
+                continue;
+            }
         };
         let theme_name = pre.config.theme.as_deref().unwrap_or("default");
         let mut theme = theme::get_theme(theme_name);
         if let Some(tv) = pre.config.theme_variables.as_ref() {
             theme::apply_theme_variables(&mut theme, tv);
         }
-        let l = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| layout_fc::layout(&d, &theme))) {
+        let l = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            layout_fc::layout(&d, &theme)
+        })) {
             Ok(Ok(l)) => l,
-            _ => { println!("FC{} layout fail", name); continue; }
+            _ => {
+                println!("FC{} layout fail", name);
+                continue;
+            }
         };
         let mut id = String::from("ref-");
         let mut last_was_sep = false;
@@ -93,16 +114,27 @@ fn main() {
         if id.ends_with('-') {
             id.pop();
         }
-        let got = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| svg_flowchart::render(&d, &l, &theme, &id))) {
+        let got = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            svg_flowchart::render(&d, &l, &theme, &id)
+        })) {
             Ok(Ok(s)) => s,
-            _ => { println!("FC{} render fail", name); continue; }
+            _ => {
+                println!("FC{} render fail", name);
+                continue;
+            }
         };
         if dump {
             let outp = format!("/tmp/fc_{}_got.svg", name);
             let outwant = format!("/tmp/fc_{}_want.svg", name);
             std::fs::write(&outp, &got).unwrap();
             std::fs::write(&outwant, &expected).unwrap();
-            println!("dumped {} (got, {} bytes) and {} (want, {} bytes)", outp, got.len(), outwant, expected.len());
+            println!(
+                "dumped {} (got, {} bytes) and {} (want, {} bytes)",
+                outp,
+                got.len(),
+                outwant,
+                expected.len()
+            );
         }
         if detail {
             println!("nodes: {}", l.nodes.len());
@@ -112,10 +144,19 @@ fn main() {
             }
             println!("edges: {}", l.edges.len());
             for e in &l.edges {
-                println!("  edge id={} src={:?} dst={:?} extra={:?} pts_len={:?}",
-                    e.id, e.start, e.end, e.extra, e.points.as_ref().map(|p| p.len()));
+                println!(
+                    "  edge id={} src={:?} dst={:?} extra={:?} pts_len={:?}",
+                    e.id,
+                    e.start,
+                    e.end,
+                    e.extra,
+                    e.points.as_ref().map(|p| p.len())
+                );
                 if let Some(pts) = &e.points {
-                    let s: Vec<String> = pts.iter().map(|p| format!("({:.3},{:.3})", p.x, p.y)).collect();
+                    let s: Vec<String> = pts
+                        .iter()
+                        .map(|p| format!("({:.3},{:.3})", p.x, p.y))
+                        .collect();
                     println!("    pts: {}", s.join(" "));
                 }
             }
@@ -138,9 +179,19 @@ fn main() {
         let ctx_hi_b = (i + 100).min(b.len());
         println!(
             "FC {}/{} byte={} got_len={} want_len={}",
-            dir, name, i, a.len(), b.len()
+            dir,
+            name,
+            i,
+            a.len(),
+            b.len()
         );
-        println!("  got : {}", String::from_utf8_lossy(&a[ctx_lo..ctx_hi_a]).replace('\n', "\\n"));
-        println!("  want: {}", String::from_utf8_lossy(&b[ctx_lo..ctx_hi_b]).replace('\n', "\\n"));
+        println!(
+            "  got : {}",
+            String::from_utf8_lossy(&a[ctx_lo..ctx_hi_a]).replace('\n', "\\n")
+        );
+        println!(
+            "  want: {}",
+            String::from_utf8_lossy(&b[ctx_lo..ctx_hi_b]).replace('\n', "\\n")
+        );
     }
 }
