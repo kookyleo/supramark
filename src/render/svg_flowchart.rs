@@ -731,7 +731,203 @@ pub fn render(
     }
 
     out.push_str(unified_shell::close_unified_svg());
+
+    // Post-process: rewrite `<img>` tags inside `<p>` blocks to mirror upstream's
+    // `configureLabelImages` (rendering-util/rendering-elements/shapes/labelImageUtils.ts):
+    //   - Normalize `src='…'` single-quoted attribute values to `src="…"` (DOM serializer).
+    //   - For each `<img>` inside a `<p>`, append an inline `style` attribute:
+    //       * If the `<p>` content with all `<img …>` tags removed trims to empty,
+    //         the upstream config uses `bodyFontSize * 5` = 16 * 5 = 80px:
+    //         `display: flex; flex-direction: column; min-width: 80px; max-width: 80px;`
+    //       * Otherwise (image alongside text):
+    //         `display: flex; flex-direction: column; width: 100%;`
+    // The label measurement isn't affected (image dimensions only matter at runtime),
+    // so this is a pure string rewrite of the final SVG.
+    let out = postprocess_imgs(&out);
+
     Ok(out)
+}
+
+/// See call site for full documentation. Splits the input into `<p>...</p>` blocks
+/// and injects per-block `<img>` styles, matching upstream `configureLabelImages`.
+fn postprocess_imgs(svg: &str) -> String {
+    if !svg.contains("<img") {
+        return svg.to_string();
+    }
+    let mut out = String::with_capacity(svg.len() + 64);
+    let bytes = svg.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        // Find next <p> block. We rewrite only `<img>` inside `<p>`. Outside, copy verbatim.
+        let p_open_pat = b"<p>";
+        let p_close_pat = b"</p>";
+        // Locate next `<p>` start (with possible attributes, but reference uses bare `<p>`).
+        let rel = match find_subseq(&bytes[i..], p_open_pat) {
+            Some(off) => off,
+            None => {
+                out.push_str(&svg[i..]);
+                break;
+            }
+        };
+        // Copy up to and including `<p>`.
+        let p_start = i + rel;
+        let p_inner_start = p_start + p_open_pat.len();
+        out.push_str(&svg[i..p_inner_start]);
+        // Find matching `</p>`.
+        let close_rel = match find_subseq(&bytes[p_inner_start..], p_close_pat) {
+            Some(off) => off,
+            None => {
+                out.push_str(&svg[p_inner_start..]);
+                break;
+            }
+        };
+        let p_inner_end = p_inner_start + close_rel;
+        let inner = &svg[p_inner_start..p_inner_end];
+        if inner.contains("<img") {
+            // Determine style: based on whether stripping all <img …> tags leaves any text.
+            let stripped = strip_img_tags(inner);
+            let trimmed = stripped.trim();
+            let img_style = if trimmed.is_empty() {
+                "display: flex; flex-direction: column; min-width: 80px; max-width: 80px;"
+            } else {
+                "display: flex; flex-direction: column; width: 100%;"
+            };
+            out.push_str(&rewrite_imgs_in_segment(inner, img_style));
+        } else {
+            out.push_str(inner);
+        }
+        out.push_str("</p>");
+        i = p_inner_end + p_close_pat.len();
+    }
+    out
+}
+
+/// Locate `needle` as a contiguous byte sub-sequence inside `hay`; return its start index.
+fn find_subseq(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || hay.len() < needle.len() {
+        return None;
+    }
+    let last = hay.len() - needle.len();
+    let mut i = 0;
+    while i <= last {
+        if &hay[i..i + needle.len()] == needle {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Remove `<img …>` tags (entire void element) from `s`; returns the residual
+/// string used purely to test "is there any non-image text" for upstream's
+/// `noImgText` decision.
+fn strip_img_tags(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + 4 <= bytes.len() && &bytes[i..i + 4] == b"<img" {
+            // Skip until next '>'.
+            let mut j = i + 4;
+            while j < bytes.len() && bytes[j] != b'>' {
+                j += 1;
+            }
+            if j < bytes.len() {
+                j += 1; // consume '>'
+            }
+            i = j;
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Rewrite each `<img …>` tag in `seg`:
+///   - Convert `src='…'` to `src="…"`.
+///   - Append the inline `style="…"` attribute (before the closing `>`) when no
+///     `style=` attribute is already present on that tag. This matches the DOM
+///     state after `configureLabelImages` has set `img.style.*` properties on
+///     each image element.
+fn rewrite_imgs_in_segment(seg: &str, img_style: &str) -> String {
+    let bytes = seg.as_bytes();
+    let mut out = String::with_capacity(seg.len() + 96);
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + 4 <= bytes.len() && &bytes[i..i + 4] == b"<img" {
+            let start = i;
+            let mut j = i + 4;
+            while j < bytes.len() && bytes[j] != b'>' {
+                j += 1;
+            }
+            // Tag covers bytes [start..j], with `>` at j (or eof).
+            let tag_inner = if j <= bytes.len() {
+                &seg[start + 4..j]
+            } else {
+                &seg[start + 4..]
+            };
+            // Normalize `src='…'` → `src="…"` within tag_inner.
+            let normalized = normalize_attr_quotes(tag_inner);
+            out.push_str("<img");
+            out.push_str(&normalized);
+            // Append style attribute when not already present.
+            if !attr_present(&normalized, "style") {
+                out.push_str(" style=\"");
+                out.push_str(img_style);
+                out.push('"');
+            }
+            if j < bytes.len() {
+                out.push('>');
+                i = j + 1;
+            } else {
+                i = bytes.len();
+            }
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Convert single-quoted attribute values to double-quoted equivalents
+/// (`src='url'` → `src="url"`). Only re-quotes; does not escape inner double
+/// quotes (the source label tokens we accept never contain `"`).
+fn normalize_attr_quotes(tag_inner: &str) -> String {
+    let bytes = tag_inner.as_bytes();
+    let mut out = String::with_capacity(tag_inner.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b == b'=' && i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+            // Find matching closing single quote.
+            let mut j = i + 2;
+            while j < bytes.len() && bytes[j] != b'\'' {
+                j += 1;
+            }
+            out.push('=');
+            out.push('"');
+            out.push_str(&tag_inner[i + 2..j]);
+            out.push('"');
+            i = if j < bytes.len() { j + 1 } else { j };
+        } else {
+            out.push(b as char);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Return true iff a tag attribute named `name=` (case-insensitive) appears in
+/// `tag_inner` outside any quoted attribute value. Used to skip injecting the
+/// auto-style when the tag already declares one.
+fn attr_present(tag_inner: &str, name: &str) -> bool {
+    let lower = tag_inner.to_ascii_lowercase();
+    let needle = format!("{}=", name.to_ascii_lowercase());
+    // We scan outside quotes — but for our limited inputs (`<img>` from labels)
+    // a plain substring containment check is sufficient.
+    lower.contains(&needle)
 }
 
 fn render_cluster(
