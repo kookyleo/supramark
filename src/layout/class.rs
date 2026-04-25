@@ -135,6 +135,18 @@ fn build_layout_data(d: &ClassDiagram, _theme: &ThemeVariables) -> LayoutData {
     }
 
     // Relation edges.
+    //
+    // Edge label width/height feed into dagre's rank packing — when a
+    // relation has a textual label upstream's `insertEdgeLabel` measures
+    // the label's foreignObject and stores `edge.width = bbox.width;
+    // edge.height = bbox.height;` BEFORE dagre lays out. dagre then
+    // reserves an extra `labelHeight + 10` (default `edgeLabelOffset`)
+    // band in the rank gap so the label fits between rows. We mirror
+    // that by stuffing `label_width` / `label_height` into `Edge::extra`
+    // — `make_edge_label` in the dagre bridge picks these up.
+    let label_family = "trebuchet ms,verdana,arial,sans-serif";
+    let label_font = 14.0_f64;
+    let label_line_h = 16.296875_f64;
     for (i, r) in d.relations.iter().enumerate() {
         let mut e = Edge::default();
         e.id = format!("id_{}_{}_{}", r.id1, r.id2, i + 1);
@@ -165,6 +177,14 @@ fn build_layout_data(d: &ClassDiagram, _theme: &ThemeVariables) -> LayoutData {
         };
         e.curve = Some("basis".into());
         e.look = Some("classic".into());
+        e.labelpos = Some("c".into());
+        // Surface label bbox so dagre packs an extra rank for it.
+        if !r.title.is_empty() {
+            let lw = font_metrics::text_width(&r.title, label_family, label_font, false, false);
+            e.extra.insert("label_width".into(), lw.to_string());
+            e.extra
+                .insert("label_height".into(), label_line_h.to_string());
+        }
         data.edges.push(e);
     }
 

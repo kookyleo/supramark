@@ -774,40 +774,65 @@ fn emit_state_end(id: &str, n: &Node, theme: &ThemeVariables) -> Option<String> 
     ))
 }
 
+/// Rough.js-generated outline path for a 70x10 horizontal fork/join bar.
+/// Path coordinates are local (centred at 0,0). The seed is the upstream
+/// default; the bar's two-edge sketchy stroke is identical across all
+/// fork/join nodes that share dimensions.
+const FORK_JOIN_HORIZONTAL_FILL: &str = "M-35 -5 L35 -5 L35 5 L-35 5";
+const FORK_JOIN_HORIZONTAL_STROKE: &str = "M-35 -5 C-20.999685308896005 -5, -6.99937061779201 -5, 35 -5 M-35 -5 C-19.5053675705567 -5, -4.010735141113397 -5, 35 -5 M35 -5 C35 -2.8249769369140267, 35 -0.6499538738280535, 35 5 M35 -5 C35 -2.316042452119291, 35 0.36791509576141834, 35 5 M35 5 C19.902926645241678 5, 4.8058532904833555 5, -35 5 M35 5 C8.686119192279875 5, -17.62776161544025 5, -35 5 M-35 5 C-35 2.1319068232551213, -35 -0.7361863534897575, -35 -5 M-35 5 C-35 1.362337320111692, -35 -2.275325359776616, -35 -5";
+
 fn emit_fork_join(id: &str, n: &Node, theme: &ThemeVariables) -> Option<String> {
     let dir = n.dir.as_deref();
-    let (w, h) = if matches!(dir, Some("LR")) {
-        (
-            n.width.unwrap_or(10.0).max(10.0),
-            n.height.unwrap_or(70.0).max(70.0),
-        )
-    } else {
-        (
-            n.width.unwrap_or(70.0).max(70.0),
-            n.height.unwrap_or(10.0).max(10.0),
-        )
-    };
-    let x = -w / 2.0;
-    let y = -h / 2.0;
+    let horizontal = !matches!(dir, Some("LR") | Some("RL"));
     let classes =
         shapes::types::get_node_classes(n.look.as_deref(), n.css_classes.as_deref(), None);
     let nid = n.dom_id.clone().unwrap_or_else(|| n.id.clone());
     let tx = n.x.unwrap_or(0.0);
     let ty = n.y.unwrap_or(0.0);
     let line = theme.line_color.as_deref().unwrap_or("black");
-    Some(format!(
-        r#"<g class="{classes}" id="{id}-{nid}" data-look="classic" transform="translate({tx}, {ty})"><rect class="fork-join" x="{x}" y="{y}" width="{w}" height="{h}" style="fill:{line};stroke:{line}"></rect></g>"#,
-        classes = classes,
-        id = id,
-        nid = xml_escape(&nid),
-        tx = fmt_num(tx),
-        ty = fmt_num(ty),
-        x = fmt_num(x),
-        y = fmt_num(y),
-        w = fmt_num(w),
-        h = fmt_num(h),
-        line = line,
-    ))
+    if horizontal {
+        // Horizontal 70x10 bar — emit pre-baked rough.js paths so we match
+        // upstream's <g><path/><path/></g> shape instead of a flat <rect>.
+        Some(format!(
+            concat!(
+                r#"<g class="{classes}" id="{id}-{nid}" data-look="classic" transform="translate({tx}, {ty})">"#,
+                r#"<g>"#,
+                r#"<path d="{fill}" stroke="none" stroke-width="0" fill="{line}" style=""></path>"#,
+                r#"<path d="{stroke_d}" stroke="{line}" stroke-width="1.3" fill="none" stroke-dasharray="0 0" style=""></path>"#,
+                r#"</g>"#,
+                r#"</g>"#,
+            ),
+            classes = classes,
+            id = id,
+            nid = xml_escape(&nid),
+            tx = fmt_num(tx),
+            ty = fmt_num(ty),
+            fill = FORK_JOIN_HORIZONTAL_FILL,
+            stroke_d = FORK_JOIN_HORIZONTAL_STROKE,
+            line = line,
+        ))
+    } else {
+        // Vertical (LR/RL) bar — fall back to the legacy flat-rect emission
+        // until a pre-baked LR rough.js path is captured. Current state
+        // fixtures don't exercise this branch, so the placeholder keeps
+        // existing behaviour stable.
+        let (w, h) = (10.0, 70.0);
+        let x = -w / 2.0;
+        let y = -h / 2.0;
+        Some(format!(
+            r#"<g class="{classes}" id="{id}-{nid}" data-look="classic" transform="translate({tx}, {ty})"><rect class="fork-join" x="{x}" y="{y}" width="{w}" height="{h}" style="fill:{line};stroke:{line}"></rect></g>"#,
+            classes = classes,
+            id = id,
+            nid = xml_escape(&nid),
+            tx = fmt_num(tx),
+            ty = fmt_num(ty),
+            x = fmt_num(x),
+            y = fmt_num(y),
+            w = fmt_num(w),
+            h = fmt_num(h),
+            line = line,
+        ))
+    }
 }
 
 /// Emit a normal state node (rounded rect + label).

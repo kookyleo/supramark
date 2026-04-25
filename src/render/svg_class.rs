@@ -799,7 +799,20 @@ fn render_edge_label(e: &crate::layout::unified::types::Edge) -> String {
     // Calculate label dimensions. When the edge has no label text
     // upstream's `bbox.width` from `getBBox()` collapses to 0, which
     // makes the inner `<g class="label">` translate to `(0, -h/2)`.
-    let label_w = if label_text.is_empty() { 0.0 } else { 1.0 };
+    // When the label is non-empty, upstream measures the foreignObject's
+    // text width (HTML labels) — mirror that with `font_metrics::text_width`
+    // at 14 px regular weight, the edgeLabel font.
+    let label_w = if label_text.is_empty() {
+        0.0
+    } else {
+        crate::font_metrics::text_width(
+            label_text,
+            "trebuchet ms,verdana,arial,sans-serif",
+            14.0,
+            false,
+            false,
+        )
+    };
     let label_h = 16.296875; // Default line height
 
     let opts = LabelOpts {

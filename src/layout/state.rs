@@ -154,12 +154,16 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
             StateKind::Fork | StateKind::Join => {
                 n.shape = Some("forkJoin".into());
                 // Bar is horizontal for TB/BT, vertical for LR/RL.
+                // Thickness = 14 to match the bbox upstream's insertNode
+                // pipeline reports to dagre: a 70x10 rect plus stroke and
+                // outer padding rounds out to 14. Using 8 here would shrink
+                // each fork/join rank gap by 3 and underflow the viewBox.
                 let horizontal = matches!(direction.as_str(), "TB" | "BT");
                 if horizontal {
                     n.width = Some(70.0);
-                    n.height = Some(8.0);
+                    n.height = Some(14.0);
                 } else {
-                    n.width = Some(8.0);
+                    n.width = Some(14.0);
                     n.height = Some(70.0);
                 }
                 n.label = None;
