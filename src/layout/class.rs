@@ -104,7 +104,7 @@ fn build_layout_data(d: &ClassDiagram, _theme: &ThemeVariables) -> LayoutData {
         data.nodes.push(cluster_node(ns));
     }
     for c in &d.classes {
-        data.nodes.push(class_to_node(c));
+        data.nodes.push(class_to_node(c, d));
     }
     // Notes become their own nodes with a dashed border — upstream's
     // `getData` emits them with `shape: 'note'` and wires a special
@@ -202,7 +202,7 @@ fn cluster_node(ns: &crate::model::class::Namespace) -> Node {
     n
 }
 
-fn class_to_node(c: &ClassNode) -> Node {
+fn class_to_node(c: &ClassNode, d: &ClassDiagram) -> Node {
     let mut n = Node::default();
     n.id = c.id.clone();
     n.dom_id = Some(c.dom_id.clone());
@@ -216,6 +216,33 @@ fn class_to_node(c: &ClassNode) -> Node {
     );
     n.parent_id = c.parent.clone();
     n.look = Some("classic".into());
+
+    // Resolve compiled inline styles: classDef styles (in css_classes
+    // application order) followed by any direct `style ID …` directive.
+    // This mirrors upstream `addClass` / `getCompiledStyles` behaviour
+    // — the result feeds both the per-class CSS rule
+    // (`.<id>>* { … !important }`) and the path-level `style="…"` /
+    // `fill` / `stroke` / `stroke-width` overrides.
+    let mut compiled: Vec<String> = Vec::new();
+    for cc in &c.css_classes {
+        if let Some(sc) = d.style_classes.iter().find(|s| s.id == *cc) {
+            for st in &sc.styles {
+                let s = st.trim();
+                if !s.is_empty() {
+                    compiled.push(s.to_string());
+                }
+            }
+        }
+    }
+    for st in &c.styles {
+        let s = st.trim();
+        if !s.is_empty() {
+            compiled.push(s.to_string());
+        }
+    }
+    if !compiled.is_empty() {
+        n.css_compiled_styles = Some(compiled);
+    }
 
     // Width/height — approximate by summing member-line widths.
     let (w, h) = estimate_classbox_dimensions(c);

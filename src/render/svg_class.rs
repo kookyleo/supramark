@@ -112,7 +112,7 @@ pub fn render(
     ));
 
     // ── 3. <style> block ───────────────────────────────────────────
-    out.push_str(&style_block(id, theme));
+    out.push_str(&style_block(id, d, theme));
 
     // ── 4. Top-level seed <g> ──────────────────────────────────────
     out.push_str("<g>");
@@ -276,6 +276,12 @@ fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables) -> String {
     let x0 = -drawn_w / 2.0;
     let y0 = -drawn_h / 2.0;
 
+    // Resolve user inline styles (joined w/ no `!important`) and pull
+    // the fill/stroke/stroke-width attribute overrides off the same
+    // dictionary. Mirrors upstream `userNodeOverrides` in
+    // `rendering-elements/shapes/util.ts`.
+    let style_overrides = resolve_node_style_overrides(n);
+
     let mut out = String::with_capacity(2048);
     out.push_str(&format!(
         r#"<g class="node {cls} " id="{sid}-{did}" data-look="classic" transform="translate({tx}, {ty})">"#,
@@ -287,17 +293,34 @@ fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables) -> String {
     ));
 
     // basic label-container outer-path: rough.js rectangle (two paths).
+    let fill_attr = style_overrides
+        .fill
+        .as_deref()
+        .unwrap_or("#ECECFF");
+    let stroke_attr = style_overrides
+        .stroke
+        .as_deref()
+        .unwrap_or("#9370DB");
+    let stroke_w_attr = style_overrides
+        .stroke_width
+        .as_deref()
+        .unwrap_or("1.3");
     out.push_str(r#"<g class="basic label-container outer-path">"#);
     out.push_str(&format!(
-        r##"<path d="M{x0} {y0} L{x1} {y0} L{x1} {y1} L{x0} {y1}" stroke="none" stroke-width="0" fill="#ECECFF" style=""></path>"##,
+        r##"<path d="M{x0} {y0} L{x1} {y0} L{x1} {y1} L{x0} {y1}" stroke="none" stroke-width="0" fill="{fill}" style="{st}"></path>"##,
         x0 = fmt_num(x0),
         x1 = fmt_num(-x0),
         y0 = fmt_num(y0),
         y1 = fmt_num(-y0),
+        fill = fill_attr,
+        st = style_overrides.style_str,
     ));
     out.push_str(&format!(
-        r##"<path d="{d}" stroke="#9370DB" stroke-width="1.3" fill="none" stroke-dasharray="0 0" style=""></path>"##,
+        r##"<path d="{d}" stroke="{stroke}" stroke-width="{sw}" fill="none" stroke-dasharray="0 0" style="{st}"></path>"##,
         d = rough_rect_outline_path(x0, y0, drawn_w, drawn_h),
+        stroke = stroke_attr,
+        sw = stroke_w_attr,
+        st = style_overrides.style_str,
     ));
     out.push_str("</g>");
 
@@ -348,11 +371,12 @@ fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables) -> String {
         crate::font_metrics::text_width(label, label_family, 16.0, false, false).round() + 50.0;
     let escaped = html_escape(label);
     out.push_str(&format!(
-        r#"<foreignObject width="{w}" height="{h}"><div style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: {mw}px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span class="nodeLabel markdown-node-label" style=""><p>{txt}</p></span></div></foreignObject>"#,
+        r#"<foreignObject width="{w}" height="{h}"><div style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: {mw}px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span class="nodeLabel markdown-node-label" style="{ls}"><p>{txt}</p></span></div></foreignObject>"#,
         w = fmt_num(label_w),
         h = fmt_num(label_h),
         mw = fmt_num(span_max_w),
         txt = escaped,
+        ls = style_overrides.style_str,
     ));
     out.push_str("</g>");
     out.push_str("</g>");
@@ -394,13 +418,29 @@ fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables) -> String {
     let second_line_y =
         annotation_h + label_group_h + members_group_h + y_internal + 2.0 * padding + padding;
 
-    out.push_str(r#"<g class="divider" style=""><path d=""#);
+    out.push_str(&format!(
+        r#"<g class="divider" style="{gs}"><path d=""#,
+        gs = style_overrides.style_str,
+    ));
     out.push_str(&rough_line_path(x0, first_line_y, -x0, first_line_y + 0.001));
-    out.push_str(r##"" stroke="#9370DB" stroke-width="1.3" fill="none" stroke-dasharray="0 0" style=""></path></g>"##);
+    out.push_str(&format!(
+        r##"" stroke="{stroke}" stroke-width="{sw}" fill="none" stroke-dasharray="0 0" style="{st}"></path></g>"##,
+        stroke = stroke_attr,
+        sw = stroke_w_attr,
+        st = style_overrides.style_str,
+    ));
 
-    out.push_str(r#"<g class="divider" style=""><path d=""#);
+    out.push_str(&format!(
+        r#"<g class="divider" style="{gs}"><path d=""#,
+        gs = style_overrides.style_str,
+    ));
     out.push_str(&rough_line_path(x0, second_line_y, -x0, second_line_y + 0.001));
-    out.push_str(r##"" stroke="#9370DB" stroke-width="1.3" fill="none" stroke-dasharray="0 0" style=""></path></g>"##);
+    out.push_str(&format!(
+        r##"" stroke="{stroke}" stroke-width="{sw}" fill="none" stroke-dasharray="0 0" style="{st}"></path></g>"##,
+        stroke = stroke_attr,
+        sw = stroke_w_attr,
+        st = style_overrides.style_str,
+    ));
 
     out.push_str("</g>");
     out
@@ -873,14 +913,86 @@ fn render_edge_label(e: &crate::layout::unified::types::Edge) -> String {
 // and the trailing neo-look block with every other Stratum-3 renderer.
 // The middle section is class-specific.
 // ──────────────────────────────────────────────────────────────────────
-fn style_block(id: &str, theme: &ThemeVariables) -> String {
+fn style_block(id: &str, d: &ClassDiagram, theme: &ThemeVariables) -> String {
     let mut css = String::with_capacity(8000);
     css.push_str("<style>");
     css.push_str(&theme_css::base_preamble(id, theme));
     css.push_str(&class_specific_css(id, theme));
     css.push_str(&theme_css::neo_look_block(id, theme));
+    css.push_str(&class_inline_style_css(id, d));
     css.push_str("</style>");
     css
+}
+
+/// Per-class inline-style CSS. Mirrors upstream `utils.insertClass`
+/// invoked from the class-renderer: for every class that ends up with
+/// any inline `style ID …` directive *or* gathered `classDef` styles
+/// (via `:::name` or `cssClass`), emit
+///
+/// ```text
+/// #<diag-id> .<class-id>>*{<all>!important;}
+/// #<diag-id> .<class-id> span{<all>!important;}
+/// ```
+///
+/// Unlike the flowchart variant, the class diagram does not emit the
+/// auxiliary `tspan` (color→fill) rule — the reference SVGs never carry
+/// it for class fixtures.
+fn class_inline_style_css(id: &str, d: &ClassDiagram) -> String {
+    let mut out = String::new();
+    // Index classDef name → styles for quick lookup. Last wins on
+    // duplicate ids (matches upstream `addStyleClass` behaviour).
+    use std::collections::HashMap;
+    let mut defs: HashMap<&str, &Vec<String>> = HashMap::new();
+    for sc in &d.style_classes {
+        defs.insert(sc.id.as_str(), &sc.styles);
+    }
+
+    for c in &d.classes {
+        // Merge styles in order: classDef styles (per css_classes order)
+        // then any inline `style` directive styles. This matches the
+        // ordering observed in upstream reference SVGs (e.g. cypress/46
+        // which applies `pink` then `bold`).
+        let mut all_props: Vec<String> = Vec::new();
+        for cc in &c.css_classes {
+            if let Some(styles) = defs.get(cc.as_str()) {
+                for st in *styles {
+                    push_style_prop(&mut all_props, st);
+                }
+            }
+        }
+        for st in &c.styles {
+            push_style_prop(&mut all_props, st);
+        }
+        if all_props.is_empty() {
+            continue;
+        }
+        let css: String = all_props.join("");
+        out.push_str(&format!(
+            "#{id} .{name}>*{{{css}}}",
+            name = c.id,
+            css = css,
+        ));
+        out.push_str(&format!(
+            "#{id} .{name} span{{{css}}}",
+            name = c.id,
+            css = css,
+        ));
+    }
+    out
+}
+
+fn push_style_prop(out: &mut Vec<String>, raw: &str) {
+    let s = raw.trim().trim_end_matches(';');
+    if s.is_empty() {
+        return;
+    }
+    if let Some(colon) = s.find(':') {
+        let key = s[..colon].trim();
+        let val = s[colon + 1..].trim();
+        out.push(format!("{}:{}!important;", key, val));
+    } else {
+        out.push(format!("{}!important;", s));
+    }
 }
 
 /// The class-diagram slice of upstream `class/styles.js` — sandwiched
@@ -1125,6 +1237,69 @@ fn fmt_num(v: f64) -> String {
     } else {
         format!("{}", v)
     }
+}
+
+struct NodeStyleOverrides {
+    fill: Option<String>,
+    stroke: Option<String>,
+    stroke_width: Option<String>,
+    /// Joined `key:value;…` string used as the literal `style="…"` attr.
+    style_str: String,
+}
+
+/// Parse `n.css_compiled_styles` into the per-shape overrides upstream
+/// derives in `userNodeOverrides`. Each style entry of the form
+/// `"prop:value"` contributes both to the joined `style="…"` attribute
+/// and — for the shape-relevant subset — pulls a value out for the
+/// matching `<path>` attribute. The numeric `stroke-width:4px` is fed
+/// to `stroke-width` *without* the unit (matches reference SVGs).
+fn resolve_node_style_overrides(n: &LayoutNode) -> NodeStyleOverrides {
+    let mut out = NodeStyleOverrides {
+        fill: None,
+        stroke: None,
+        stroke_width: None,
+        style_str: String::new(),
+    };
+    let styles = match n.css_compiled_styles.as_deref() {
+        Some(s) if !s.is_empty() => s,
+        _ => return out,
+    };
+    let mut joined = String::new();
+    for raw in styles {
+        let s = raw.trim().trim_end_matches(';');
+        if s.is_empty() {
+            continue;
+        }
+        joined.push_str(s);
+        joined.push(';');
+        if let Some(colon) = s.find(':') {
+            let key = s[..colon].trim();
+            let val = s[colon + 1..].trim().to_string();
+            match key {
+                "fill" => out.fill = Some(val),
+                "stroke" => out.stroke = Some(val),
+                "stroke-width" => {
+                    // upstream attribute strips the trailing `px`/unit
+                    // suffix when assigning to the `stroke-width` attr,
+                    // keeping the bare number.
+                    let n_only: String = val
+                        .chars()
+                        .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
+                        .collect();
+                    out.stroke_width = Some(if n_only.is_empty() { val } else { n_only });
+                }
+                _ => {}
+            }
+        }
+    }
+    // Trim trailing `;` to match upstream `style.cssText` serialisation
+    // — references use `style="fill:#f9f;stroke:#333;stroke-width:4px"`
+    // (no trailing semicolon).
+    if joined.ends_with(';') {
+        joined.pop();
+    }
+    out.style_str = joined;
+    out
 }
 
 fn html_escape(s: &str) -> String {
