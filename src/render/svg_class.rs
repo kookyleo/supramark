@@ -1500,6 +1500,97 @@ fn round5(v: f64) -> f64 {
     (v * 1e5).round() / 1e5
 }
 
+/// V8 / fdlibm-compatible `atan2`.
+///
+/// Rust's `f64::atan2` defers to the platform `libm`, which on glibc
+/// can disagree with V8's `Math.atan2` by a single ULP on awkward
+/// inputs (e.g. nearly-vertical class-diagram edges where `dx` is on
+/// the order of 10⁻⁶). The reference SVGs are produced by V8 in JSDOM,
+/// so to stay byte-exact we implement Sun's `e_atan2.c` algorithm — the
+/// same routine V8 inlines for Linux x64 builds. The structure mirrors
+/// fdlibm: route through `atan(|y/x|)` and apply a `± π_lo` correction
+/// per sign quadrant so the cancellation error vanishes at exactly the
+/// bit V8 uses.
+fn js_atan2(y: f64, x: f64) -> f64 {
+    if x.is_nan() || y.is_nan() {
+        return f64::NAN;
+    }
+    const PI_LO: f64 = 1.224_646_799_147_353_177_2E-16;
+    let pi = std::f64::consts::PI;
+
+    let xb = x.to_bits();
+    let yb = y.to_bits();
+    let hx = ((xb >> 32) & 0xffff_ffff) as u32;
+    let lx = (xb & 0xffff_ffff) as u32;
+    let ix = hx & 0x7fff_ffff;
+    let hy = ((yb >> 32) & 0xffff_ffff) as u32;
+    let ly = (yb & 0xffff_ffff) as u32;
+    let iy = hy & 0x7fff_ffff;
+
+    // Quadrant index `m`: bit 0 = sign(y), bit 1 = sign(x).
+    let m = ((hy >> 31) & 1) | ((hx >> 30) & 2);
+
+    // y == 0
+    if iy == 0 && ly == 0 {
+        return match m & 3 {
+            0 => y,         // +x, +0  →  +0
+            1 => -y,        // +x, -0  →  -0
+            2 => pi,        // -x, +0  →  +π
+            _ => -pi,       // -x, -0  →  -π
+            #[allow(unreachable_patterns)]
+            _ => 0.0,
+        };
+    }
+    // x == 0
+    if ix == 0 && lx == 0 {
+        return if (hy >> 31) != 0 { -pi / 2.0 } else { pi / 2.0 };
+    }
+    // x is INF
+    if ix == 0x7ff0_0000 {
+        if iy == 0x7ff0_0000 {
+            return match m & 3 {
+                0 => pi / 4.0,
+                1 => -pi / 4.0,
+                2 => 3.0 * pi / 4.0,
+                _ => -3.0 * pi / 4.0,
+                #[allow(unreachable_patterns)]
+                _ => 0.0,
+            };
+        }
+        return match m & 3 {
+            0 => 0.0,
+            1 => -0.0,
+            2 => pi,
+            _ => -pi,
+            #[allow(unreachable_patterns)]
+            _ => 0.0,
+        };
+    }
+    // y is INF
+    if iy == 0x7ff0_0000 {
+        return if (hy >> 31) != 0 { -pi / 2.0 } else { pi / 2.0 };
+    }
+
+    // |y/x| classification — the magic that fixes the ULP drift.
+    let k = (iy as i32 - ix as i32) >> 20;
+    let z = if k > 60 {
+        pi / 2.0 + 0.5 * PI_LO
+    } else if (hx >> 31) != 0 && k < -60 {
+        0.0
+    } else {
+        (y / x).abs().atan()
+    };
+
+    match m & 3 {
+        0 => z,
+        1 => -z,
+        2 => pi - (z - PI_LO),
+        _ => (z - PI_LO) - pi,
+        #[allow(unreachable_patterns)]
+        _ => 0.0,
+    }
+}
+
 /// Port of upstream `utils.calcTerminalLabelPosition`. Returns the
 /// translate (x,y) for the `<g class="edgeTerminals">` wrapper.
 fn calc_terminal_pos(
@@ -1519,7 +1610,7 @@ fn calc_terminal_pos(
     let dist = 25.0 + terminal_marker_size;
     let center = calc_point_along(&pts, dist)?;
     let d = 10.0 + terminal_marker_size * 0.5;
-    let angle = (pts[0].y - center.y).atan2(pts[0].x - center.x);
+    let angle = js_atan2(pts[0].y - center.y, pts[0].x - center.x);
 
     let (x, y) = match side {
         TerminalSide::StartRight => {
