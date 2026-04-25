@@ -667,6 +667,12 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
     // by adjusting the last edge endpoint after layout.
     let mut result = result;
     fix_state_end_edge_endpoints(&mut result, 7.0088621440762111);
+    // The vendored dagre version falls back to intersectRect for every
+    // shape, which leaves the first edge point at the rect-clip of a
+    // stateStart node. Re-clip with the proper ellipse formula
+    // (rx=ry=7) so outgoing edges of a stateStart match upstream
+    // mermaid-js (which routes through dagre's `intersectEllipse`).
+    fix_state_start_edge_endpoints(&mut result, 7.0);
 
     // Upstream updateNodeBounds() updates node.width to the rendered getBBox
     // AFTER dagre layout.  For stateEnd the rough circle getBBox width is
@@ -729,6 +735,62 @@ fn fix_state_end_edge_endpoints(
         let last = &mut pts[n - 1];
         last.x = cx + dx * effective_r / dist;
         last.y = cy + dy * effective_r / dist;
+    }
+}
+
+/// Re-clip the first point of every edge whose source is a stateStart
+/// node, using a proper circle intersection (rx = ry = `effective_r`).
+///
+/// The vendored dagre crate currently dispatches all shapes to
+/// `intersect_rect`, so dagre returns rect-clipped endpoints even for
+/// circular nodes. Upstream mermaid-js uses dagre's `intersectEllipse`,
+/// so the first point of an edge leaving a stateStart sits on the
+/// circle (radius 7), not on the surrounding 14×14 axis-aligned rect.
+fn fix_state_start_edge_endpoints(
+    result: &mut crate::layout::unified::types::LayoutResult,
+    effective_r: f64,
+) {
+    let start_nodes: Vec<(String, f64, f64)> = result
+        .nodes
+        .iter()
+        .filter(|n| {
+            matches!(
+                n.shape.as_deref(),
+                Some("stateStart" | "state_start" | "start")
+            )
+        })
+        .map(|n| (n.id.clone(), n.x.unwrap_or(0.0), n.y.unwrap_or(0.0)))
+        .collect();
+
+    if start_nodes.is_empty() {
+        return;
+    }
+
+    for edge in result.edges.iter_mut() {
+        let source_id = match &edge.start {
+            Some(id) => id.clone(),
+            None => continue,
+        };
+        let Some((_, cx, cy)) = start_nodes.iter().find(|(id, _, _)| id == &source_id) else {
+            continue;
+        };
+        let pts = match &mut edge.points {
+            Some(pts) if pts.len() >= 2 => pts,
+            _ => continue,
+        };
+        // Second point is the first interior waypoint produced by dagre.
+        // Use the ray from node centre toward that probe, clipped to the
+        // circle of radius `effective_r`.
+        let probe = pts[1];
+        let dx = probe.x - cx;
+        let dy = probe.y - cy;
+        let dist = (dx * dx + dy * dy).sqrt();
+        if dist < 1e-12 {
+            continue;
+        }
+        let first = &mut pts[0];
+        first.x = cx + dx * effective_r / dist;
+        first.y = cy + dy * effective_r / dist;
     }
 }
 
