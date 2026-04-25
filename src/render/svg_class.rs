@@ -693,6 +693,15 @@ fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables, d: &ClassDiagra
     // y to `translateY + y_internal`. When annotations are non-empty,
     // `annotationGroupHeight = label_h` shifts the whole label-group
     // (and downstream members/methods) down by one line.
+    //
+    // Multi-line label support (`class A["foo\nbar"]`):
+    //   * jsdom's `\n` has zero advance, so `text_width(label)` agrees
+    //     with measuring the joined string — that's foreignObject width.
+    //   * markdown converts `\n` to `<br/>`; upstream's
+    //     `numberOfLines = div.innerHTML.split('<br>').length` lifts the
+    //     denominator in `inner translate y = -bbox.height / (2*N)`.
+    //   * `calculateTextWidth` (used for `max-width`) splits on
+    //     `lineBreakRegex` and rounds per line, taking the max.
     let label_w = crate::font_metrics::text_width(label, label_family, label_font, true, false);
     let label_x = -label_w / 2.0;
     let label_y = y_internal + raw_annotation_h;
@@ -701,11 +710,17 @@ fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables, d: &ClassDiagra
         lx = fmt_num(label_x),
         ly = fmt_num(label_y),
     ));
-    // Inner <g class="label">: translate(0, -label_h/2) — text is
-    // centered vertically by addText() inside the label-group local frame.
+    // Inner <g class="label">: translate(0, -bbox.height/(2*numberOfLines)).
+    // When the label contains literal newlines, markdown emits
+    // `<p>line1<br/>line2…</p>`, and `numberOfLines` jumps to the
+    // `<br>` count + 1. bbox.height stays single-line because the
+    // jsdom shim measures `textContent` (which strips `<br>`).
+    let label_lines: Vec<&str> = label.split('\n').collect();
+    let num_lines = label_lines.len() as f64;
+    let inner_label_y = -label_h / (2.0 * num_lines);
     out.push_str(&format!(
         r#"<g class="label" style="font-weight: bolder" transform="translate(0,{ly})">"#,
-        ly = fmt_num(-label_h / 2.0),
+        ly = fmt_num(inner_label_y),
     ));
     // Upstream `createText` calls `addHtmlSpan(label, node, calculateTextWidth(text)+50)`
     // and emits the foreignObject block manually, with attribute order
@@ -720,13 +735,29 @@ fn render_node(id: &str, n: &LayoutNode, theme: &ThemeVariables, d: &ClassDiagra
     //     — literal angle brackets, no escaping of label content.
     // jsdom's `<text>.textContent` never decodes entities, so the raw
     // bytes go straight into `text_width`.
-    let escaped = html_escape(label);
+    //
+    // For inline `\n` we emit `<br/>` between lines so markdown
+    // renders into `<p>line1<br/>line2</p>`.
+    let escaped = if label.contains('\n') {
+        label
+            .split('\n')
+            .map(html_escape)
+            .collect::<Vec<_>>()
+            .join("<br/>")
+    } else {
+        html_escape(label)
+    };
     let measure_text: String = class_node
         .map(|cn| cn.raw_text())
         .unwrap_or_else(|| label.to_string());
-    let span_max_w =
-        crate::font_metrics::text_width(&measure_text, label_family, 16.0, false, false).round()
-            + 50.0;
+    // calculateTextWidth: split on \n, round each line, take max.
+    let span_max_w = measure_text
+        .split('\n')
+        .map(|line| {
+            crate::font_metrics::text_width(line, label_family, 16.0, false, false).round()
+        })
+        .fold(0.0_f64, f64::max)
+        + 50.0;
     out.push_str(&format!(
         r#"<foreignObject width="{w}" height="{h}"><div style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: {mw}px; text-align: center;" xmlns="http://www.w3.org/1999/xhtml"><span class="nodeLabel markdown-node-label" style="{ls}"><p>{txt}</p></span></div></foreignObject>"#,
         w = fmt_num(label_w),
