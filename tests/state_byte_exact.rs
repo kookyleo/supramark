@@ -195,6 +195,21 @@ fn cypress_15() {
     assert_byte_exact("ext_fixtures/cypress/state/15");
 }
 
+/// Composite state with a single leaf child, default rankdir TB so the
+/// inner pass runs LR.  Exercises the leaf-only-LR upstream-alignment
+/// post-process inside `dagre_bridge::layout_isolated_cluster`.
+#[test]
+fn cypress_30() {
+    assert_byte_exact("ext_fixtures/cypress/state/30");
+}
+
+/// Same shape as `cypress/30` but using the `stateDiagram` (v1) keyword.
+/// Confirms the leaf-only-LR fix applies regardless of state grammar.
+#[test]
+fn cypress_68() {
+    assert_byte_exact("ext_fixtures/cypress/state/68");
+}
+
 /// Dump diff for one fixture (set FIXTURE env var or default 26).
 #[test]
 #[ignore]
