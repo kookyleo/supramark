@@ -917,6 +917,13 @@ fn is_isolated_cluster(cluster_id: &str, data: &LayoutData) -> bool {
     // cross the boundary.  An edge whose BOTH original endpoints are cluster ids
     // represents a super-node connection that does not penetrate either cluster's
     // interior, so it must not prevent either cluster from being isolated.
+    //
+    // Additionally: an edge whose endpoint IS the cluster's own id (e.g.
+    // `NotShooting --> A` where NotShooting is the cluster) does NOT
+    // penetrate the cluster's interior — the cluster acts as a super-node
+    // connecting to its sibling. Such edges must be skipped from the
+    // boundary check; otherwise the cluster would be (incorrectly) judged
+    // non-isolated even though no inner state participates in the cross.
     for edge in &data.edges {
         let orig_src = edge.extra.get("orig_start").map(|s| s.as_str());
         let orig_dst = edge.extra.get("orig_end").map(|s| s.as_str());
@@ -931,6 +938,10 @@ fn is_isolated_cluster(cluster_id: &str, data: &LayoutData) -> bool {
         // fall back to post-retarget endpoints.
         let src = orig_src.or_else(|| edge_source(edge));
         let dst = orig_dst.or_else(|| edge_target(edge));
+        // Endpoint == cluster's own id: not an interior boundary penetration.
+        if src == Some(cluster_id) || dst == Some(cluster_id) {
+            continue;
+        }
         let src_in = src.map(|s| members.contains(s)).unwrap_or(false);
         let dst_in = dst.map(|s| members.contains(s)).unwrap_or(false);
         if src_in != dst_in {
@@ -1081,6 +1092,10 @@ fn is_isolated_within(
         if !parent_members.contains(src) || !parent_members.contains(dst) {
             continue;
         }
+        // Endpoint == sub-cluster's own id: not an interior boundary penetration.
+        if src == sub_cluster_id || dst == sub_cluster_id {
+            continue;
+        }
         // If exactly one endpoint is in sub_members the cluster is not isolated.
         let src_in = sub_members.contains(src);
         let dst_in = sub_members.contains(dst);
@@ -1108,7 +1123,20 @@ fn layout_isolated_cluster(
     outer_rankdir: RankDir,
     outer_ranksep: f64,
 ) -> InnerLayout {
-    let inner_rankdir = opposite_rankdir(outer_rankdir);
+    // Per-cluster direction override (e.g. state composite's `direction RL`
+    // line stored on `Node::dir`). When set, use it as the inner rankdir so
+    // that nested children are laid out in the user-requested orientation.
+    // Otherwise fall back to the upstream-extractor default (opposite of
+    // outer rankdir).
+    let cluster_dir = data
+        .nodes
+        .iter()
+        .find(|n| n.id == cluster_id)
+        .and_then(|n| n.dir.as_deref());
+    let inner_rankdir = match cluster_dir {
+        Some(d) => parse_rankdir(Some(d)),
+        None => opposite_rankdir(outer_rankdir),
+    };
     let inner_ranksep = outer_ranksep + 25.0;
     let inner_nodesep = data.node_spacing.unwrap_or(50.0);
 

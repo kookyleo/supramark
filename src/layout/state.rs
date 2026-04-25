@@ -212,6 +212,11 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
                 // depth-toggled alt suffix).
                 n.css_classes = Some("statediagram-cluster".into());
                 n.padding = Some(8.0);
+                // Per-cluster direction override (`direction RL` etc.). The
+                // dagre bridge reads this to set the inner-pass rankdir so
+                // child nodes flow in the user-requested orientation rather
+                // than the default `opposite_rankdir(outer)`.
+                n.dir = state.direction.clone();
             }
             StateKind::Note => {
                 n.shape = Some("note".into());
