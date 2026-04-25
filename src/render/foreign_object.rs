@@ -92,11 +92,34 @@ pub fn normalize_br_tags(src: &str) -> String {
             out.push('<');
             i += 1;
         } else {
-            out.push(bytes[i] as char);
-            i += 1;
+            // UTF-8-safe: copy a whole char (1..4 bytes) without truncating
+            // multibyte sequences. Casting `bytes[i] as char` would split
+            // CJK / emoji / accented bytes into Latin-1 supplements and
+            // emit mojibake into the SVG.
+            let ch_len = utf8_char_len(bytes[i]);
+            out.push_str(&src[i..i + ch_len]);
+            i += ch_len;
         }
     }
     out
+}
+
+/// Length in bytes of the UTF-8 character starting at the given lead byte.
+/// Returns 1 for any invalid lead so callers always advance.
+#[inline]
+fn utf8_char_len(b: u8) -> usize {
+    if b < 0x80 {
+        1
+    } else if b < 0xC0 {
+        // Continuation byte hit on its own — treat as 1 to avoid stalling.
+        1
+    } else if b < 0xE0 {
+        2
+    } else if b < 0xF0 {
+        3
+    } else {
+        4
+    }
 }
 
 /// Replace FontAwesome icon references (`fa:fa-car`, `fas:fa-spinner`, etc.)
@@ -539,8 +562,10 @@ fn parse_html_text_segments(html: &str, base_bold: bool) -> Vec<(String, bool)> 
             text.push('&');
             i += 1;
         } else {
-            text.push(bytes[i] as char);
-            i += 1;
+            // UTF-8-safe copy of the whole char (1..4 bytes).
+            let ch_len = utf8_char_len(bytes[i]);
+            text.push_str(&html[i..i + ch_len]);
+            i += ch_len;
         }
     }
     vec![(text, base_bold)]
@@ -624,14 +649,28 @@ pub fn markdown_label_to_html(src: &str) -> String {
             out.push_str("<br/>");
             i += 1;
         } else {
-            // Plain text — XML-escape
+            // Plain text — XML-escape ASCII metacharacters; pass any other
+            // bytes through as part of their parent UTF-8 char so that CJK /
+            // emoji / accented text survives intact.
             match b {
-                b'&' => out.push_str("&amp;"),
-                b'>' => out.push_str("&gt;"),
-                b'"' => out.push_str("&quot;"),
-                _ => out.push(b as char),
+                b'&' => {
+                    out.push_str("&amp;");
+                    i += 1;
+                }
+                b'>' => {
+                    out.push_str("&gt;");
+                    i += 1;
+                }
+                b'"' => {
+                    out.push_str("&quot;");
+                    i += 1;
+                }
+                _ => {
+                    let ch_len = utf8_char_len(b);
+                    out.push_str(&src[i..i + ch_len]);
+                    i += ch_len;
+                }
             }
-            i += 1;
         }
     }
     out
@@ -639,14 +678,33 @@ pub fn markdown_label_to_html(src: &str) -> String {
 
 /// XML-escape a plain text segment (for use within HTML element content).
 fn xml_escape_label(s: &str) -> String {
+    let bytes = s.as_bytes();
     let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'&' => out.push_str("&amp;"),
-            b'<' => out.push_str("&lt;"),
-            b'>' => out.push_str("&gt;"),
-            b'"' => out.push_str("&quot;"),
-            _ => out.push(b as char),
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'&' => {
+                out.push_str("&amp;");
+                i += 1;
+            }
+            b'<' => {
+                out.push_str("&lt;");
+                i += 1;
+            }
+            b'>' => {
+                out.push_str("&gt;");
+                i += 1;
+            }
+            b'"' => {
+                out.push_str("&quot;");
+                i += 1;
+            }
+            b => {
+                // UTF-8-safe: copy the entire char (1..4 bytes).
+                let ch_len = utf8_char_len(b);
+                out.push_str(&s[i..i + ch_len]);
+                i += ch_len;
+            }
         }
     }
     out
@@ -719,8 +777,13 @@ pub fn string_label_to_html(src: &str) -> String {
             out.push_str("&amp;");
             i += 1;
         } else {
-            out.push(b as char);
-            i += 1;
+            // UTF-8-safe copy of the entire char (1..4 bytes) — naked
+            // `bytes[i] as char` would shred multibyte sequences (CJK,
+            // emoji, accented Latin) into Latin-1 supplements and emit
+            // mojibake into the SVG.
+            let ch_len = utf8_char_len(b);
+            out.push_str(&src[i..i + ch_len]);
+            i += ch_len;
         }
     }
     out
