@@ -513,10 +513,40 @@ pub fn render(
 
     // Build cluster bounds map for cluster-endpoint edge clipping.
     // Keys are the original cluster IDs; values are the AABB bounds.
+    //
+    // For isolated clusters the layout engine reports `c.bounds` in the
+    // INNER dagre coordinate frame (typically anchored at (8, 8)) — the
+    // inner root group is later translated by `outer_tx / outer_ty` to
+    // place the cluster correctly in the outer (top-level) coordinate
+    // space. Since edge spline points are emitted in outer coordinates
+    // we must translate the bounds by the same offset before using them
+    // to clip `cluster-endpoint` edge paths; otherwise `cut_path_at_intersect`
+    // never sees the spline cross the boundary and either drops every
+    // segment or leaves the path entirely outside the cluster.
     let cluster_bounds: std::collections::HashMap<String, crate::layout::unified::Bounds> = l
         .clusters
         .iter()
-        .filter_map(|c| c.bounds.as_ref().map(|b| (c.id.clone(), b.clone())))
+        .filter_map(|c| {
+            let mut b = c.bounds.as_ref()?.clone();
+            // Pick up the matching cluster node so we can look up the
+            // pre-computed outer translate (only present on isolated
+            // clusters that participated in the inner-pass).
+            if let Some(cnode) = l.nodes.iter().find(|n| n.id == c.id && n.is_group) {
+                let tx = cnode
+                    .extra
+                    .get("outer_tx")
+                    .and_then(|s| s.parse::<f64>().ok());
+                let ty = cnode
+                    .extra
+                    .get("outer_ty")
+                    .and_then(|s| s.parse::<f64>().ok());
+                if let (Some(tx), Some(ty)) = (tx, ty) {
+                    b.x += tx;
+                    b.y += ty;
+                }
+            }
+            Some((c.id.clone(), b))
+        })
         .collect();
 
     // ── Render inner content first (markers + root group) ──────────
