@@ -26,8 +26,8 @@
 
 use crate::error::Result;
 use crate::font_metrics;
-use crate::layout::unified::types::{Edge, LayoutData, LayoutResult, Node};
 use crate::layout::unified::render as unified_render;
+use crate::layout::unified::types::{Edge, LayoutData, LayoutResult, Node};
 use crate::model::class::{ClassDiagram, ClassNode, LineType, RelationEnd};
 use crate::theme::ThemeVariables;
 
@@ -189,7 +189,10 @@ fn class_to_node(c: &ClassNode) -> Node {
     n.label = Some(c.label.clone());
     n.shape = Some("classBox".into());
     n.css_classes = Some(
-        std::iter::once("default").chain(c.css_classes.iter().map(String::as_str)).collect::<Vec<_>>().join(" "),
+        std::iter::once("default")
+            .chain(c.css_classes.iter().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join(" "),
     );
     n.parent_id = c.parent.clone();
     n.look = Some("classic".into());
@@ -214,33 +217,87 @@ fn class_to_node(c: &ClassNode) -> Node {
 }
 
 fn estimate_classbox_dimensions(c: &ClassNode) -> (f64, f64) {
-    // Upstream measures labels at 14 px (SVG root default via
-    // foreignObject getBoundingClientRect), not the theme fontSize.
+    // Upstream's `classBox.ts` derives the rough rect dimensions from
+    // `textHelper`'s shapeSvg.getBBox() in jsdom. Because the upstream
+    // `generate_ref.mjs` shim ignores transforms when computing getBBox
+    // and treats foreignObjects as starting at (0, 0), the bbox is the
+    // union of:
+    //
+    //   * label foreignObject       — (0, 0, label_w, line_h)
+    //   * each member foreignObject — (0, 0, member_w, line_h)
+    //   * each method foreignObject — (0, 0, method_w, line_h)
+    //
+    // (Empty groups contribute nothing; their `getBBox` collapses to
+    // {0,0,0,0} and is dropped by `unionBox`.)
+    //
+    // Then `classBox.ts` does:
+    //   const w = Math.max(node.width ?? 0, bbox.width);
+    //   let h = Math.max(node.height ?? 0, bbox.height);
+    //   if (no members && no methods) h += GAP;             // GAP=12
+    //   else if (members && no methods) h += GAP * 2;
+    //   const drawn_w = w + 2 * PADDING;                    // PADDING=12
+    //   const drawn_h = h + 2 * PADDING + extraHeight;
+    //
+    // where `extraHeight = renderExtraBox ? PADDING*2 : (no_members && no_methods ? -PADDING : 0)`.
+    // For empty members AND methods (no `hideEmptyMembersBox`): renderExtraBox=true → extraHeight=24.
     let font = 14.0;
     let family = "trebuchet ms,verdana,arial,sans-serif";
-    // Header row: label + optional generic + annotations.
-    let mut max_w: f64 = font_metrics::text_width(&c.label, family, font, true, false);
-    for a in &c.annotations {
-        let aw = font_metrics::text_width(&format!("<<{}>>", a), family, font, false, false);
-        max_w = max_w.max(aw);
-    }
-    let header_h = 38.0;
-    let row_h = 24.0;
+    let line_h = 16.296875_f64; // foreignObject height for label at 14 px
+    let padding = 12.0_f64;
 
+    // Label width (bold, html-label style — measured via foreignObject).
+    let label_w = font_metrics::text_width(&c.label, family, font, true, false);
+    // bbox.width = max of all visible foreignObjects' widths; with empty
+    // members/methods this is just the label width.
+    let mut bbox_w: f64 = label_w;
+    let mut bbox_h: f64 = line_h;
     for m in &c.members {
         let w = font_metrics::text_width(&m.text, family, font, false, false);
-        max_w = max_w.max(w);
+        bbox_w = bbox_w.max(w);
     }
     for m in &c.methods {
         let w = font_metrics::text_width(&m.text, family, font, false, false);
-        max_w = max_w.max(w);
+        bbox_w = bbox_w.max(w);
+    }
+    // Annotations contribute too but render in a separate group above
+    // the label; for sizing they only matter to bbox_w (label-side).
+    for a in &c.annotations {
+        let aw = font_metrics::text_width(&format!("«{}»", a), family, font, false, false);
+        bbox_w = bbox_w.max(aw);
     }
 
-    let members_h = (c.members.len() as f64 * row_h).max(row_h);
-    let methods_h = (c.methods.len() as f64 * row_h).max(row_h);
-    let total_h = header_h + members_h + methods_h;
-    let total_w = max_w + 24.0;
-    (total_w.max(80.0), total_h)
+    let has_members = !c.members.is_empty();
+    let has_methods = !c.methods.is_empty();
+
+    // bbox.height — only foreignObjects within the *empty* group case
+    // contribute the label height; non-empty member/method rows extend
+    // the bbox below the label by their own foreignObjects.
+    if has_members {
+        bbox_h += c.members.len() as f64 * line_h;
+    }
+    if has_methods {
+        bbox_h += c.methods.len() as f64 * line_h;
+    }
+
+    // h adjustments per classBox.ts:
+    let mut h = bbox_h;
+    if !has_members && !has_methods {
+        h += padding; // GAP
+    } else if has_members && !has_methods {
+        h += padding * 2.0;
+    }
+
+    // extraHeight: with empty members AND methods, renderExtraBox=true →
+    // extraHeight = PADDING * 2 = 24. Otherwise 0.
+    let extra_h = if !has_members && !has_methods {
+        padding * 2.0
+    } else {
+        0.0
+    };
+
+    let drawn_w = bbox_w + 2.0 * padding;
+    let drawn_h = h + 2.0 * padding + extra_h;
+    (drawn_w, drawn_h)
 }
 
 fn end_marker_name(end: RelationEnd) -> String {
