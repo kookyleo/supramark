@@ -2326,15 +2326,40 @@ fn compute_edge_path_style(e: &UEdge) -> String {
     // `linkStyle …` which copies the same string into both
     // `defaultStyle.style` and `defaultStyle.labelStyle`), upstream emits
     // the doubled-style template — `${style};;${style}` — rather than the
-    // class-derived `${style}${labelStyle};;` template. We detect this by
-    // checking whether the two arrays have identical non-empty entries.
-    // Class-derived label styles are a strict colour-only subset, so this
-    // check leaves the class path-style branch intact.
+    // class-derived `${style}${labelStyle};;` template.
+    //
+    // Detection rule:
+    //   1. label_style is non-empty and every entry also appears in style
+    //      (label is a subset of style — true for both linkStyle and class).
+    //   2. Either v == ls (no `fill:none` auto-add — only colour) or style
+    //      contains an auto-added `fill:none` entry that is absent from
+    //      label_style. The presence of `fill:none` in style but not in
+    //      label_style is the signature of `flowDb.updateLink`'s push, which
+    //      class-derived styles never trigger.
     let style_subsumes_label = match (e.style.as_ref(), e.label_style.as_ref()) {
         (Some(v), Some(ls)) => {
             let v_filtered: Vec<&String> = v.iter().filter(|s| !s.is_empty()).collect();
             let ls_filtered: Vec<&String> = ls.iter().filter(|s| !s.is_empty()).collect();
-            !ls_filtered.is_empty() && v_filtered == ls_filtered
+            if ls_filtered.is_empty() {
+                false
+            } else if v_filtered == ls_filtered {
+                true
+            } else {
+                // Each label entry must appear in style.
+                let label_in_style =
+                    ls_filtered.iter().all(|l| v_filtered.iter().any(|v| v == l));
+                // Detect linkStyle's auto-pushed `fill:none` (key starts with
+                // `fill` and value is `none`, with optional whitespace).
+                let has_auto_fill_none = v_filtered.iter().any(|s| {
+                    let t = s.trim();
+                    t == "fill:none" || t.starts_with("fill:") && t["fill:".len()..].trim() == "none"
+                });
+                let label_has_fill_none = ls_filtered.iter().any(|s| {
+                    let t = s.trim();
+                    t == "fill:none" || t.starts_with("fill:") && t["fill:".len()..].trim() == "none"
+                });
+                label_in_style && has_auto_fill_none && !label_has_fill_none
+            }
         }
         _ => false,
     };
@@ -2591,17 +2616,24 @@ fn render_edge_path(
 fn render_edge_label(e: &UEdge, html_labels: bool, l: &FlowchartLayout) -> String {
     use crate::render::foreign_object::{
         markdown_label_to_html, measure_html_label, measure_html_markup_label,
-        render_edge_label as fo_edge, replace_fa_icons, HtmlLabelFont, LabelOpts,
+        render_edge_label as fo_edge, replace_fa_icons, string_label_to_html, HtmlLabelFont,
+        LabelOpts,
     };
     use crate::render::shapes::types::{build_div_style_prefix, build_label_style};
     let label_text = e.label.clone().unwrap_or_default();
     // Markdown edge labels (` "`...`" `) need `markdownToHTML` conversion before
     // emission so `**bold**` etc. render as `<strong>...</strong>` like upstream.
-    // The htmlLabels=false branch already tokenises into MarkdownLines below, so
+    // String-typed quoted labels (`"…"`) flow through upstream's `createText` →
+    // `decodeEntities` → text-content path which HTML-escapes `&`, `<`, `>`
+    // so the inner `<p>` body matches `<p>&gt;= v11</p>` etc.
+    // The htmlLabels=false branch tokenises into MarkdownLines below, so
     // only the htmlLabels=true path needs the pre-conversion here.
     let is_markdown = e.label_type.as_deref() == Some("markdown");
+    let is_string = e.label_type.as_deref() == Some("string");
     let label_html = if is_markdown && html_labels && !label_text.is_empty() {
         markdown_label_to_html(&label_text)
+    } else if is_string && html_labels && !label_text.is_empty() {
+        string_label_to_html(&label_text)
     } else {
         label_text.clone()
     };

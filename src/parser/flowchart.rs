@@ -695,10 +695,24 @@ impl<'a> LineParser<'a> {
             interpolate = Some(name.to_string());
             styles_str = remainder.trim().to_string();
         }
+        // Upstream's `flow.jison` builds each style entry character-by-character
+        // from `styleComponent` rules that include SPACE, so leading whitespace
+        // is preserved (e.g. `color:orange, stroke: orange` keeps the leading
+        // space on ` stroke: orange`). The terminating `;` and any trailing
+        // whitespace are stripped. We mirror that here so the edge `style="…"`
+        // attribute reproduces upstream byte-for-byte.
         let mut styles: Vec<String> = styles_str
             .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
+            .map(|s| {
+                // Strip trailing `;` and trailing whitespace, but keep leading
+                // whitespace intact.
+                let mut t = s.trim_end();
+                while let Some(stripped) = t.strip_suffix(';') {
+                    t = stripped.trim_end();
+                }
+                t.to_string()
+            })
+            .filter(|s| !s.is_empty() && !s.chars().all(|c| c.is_whitespace()))
             .collect();
         // Upstream `flowDb.updateLink` appends `fill:none` to the styles
         // ONLY for index-targeted updates, never for `linkStyle default`.
