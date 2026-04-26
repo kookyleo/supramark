@@ -486,57 +486,70 @@ fn compute_viewbox(
             continue;
         }
 
-        let shape = n.shape.as_deref().unwrap_or("rect");
-        match shape {
-            "diamond" | "question" => {
-                // polygon points="s/2,0 s,-s/2 s/2,-s 0,-s/2"
-                // polygon has its own transform="translate(-s/2+0.5, s/2)" which is ignored.
-                // polyBBox of points = {x:0, y:-s, w:s, h:s}
-                let s = w; // w == h == s for diamond
-                expand(
-                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, -s, s, s,
-                );
-            }
-            "circle" | "circ" => {
-                // Upstream circle.ts: r = w/2 (with corrected sizing: d = label_w + padding).
-                // The <circle r> in local coords → bbox {x:-r, y:-r, w:2r, h:2r}.
-                // jsdom shim ignores transform, uses this local bbox.
-                let r = w / 2.0;
-                expand(
-                    &mut min_x,
-                    &mut min_y,
-                    &mut max_x,
-                    &mut max_y,
-                    -r,
-                    -r,
-                    2.0 * r,
-                    2.0 * r,
-                );
-            }
-            "trapezoid" | "trap" | "inv_trapezoid" | "invertedTrapezoid" | "lean_left"
-            | "lean-left" | "lean_right" | "lean-right" => {
-                // `node.width` already carries the visual width
-                // (= base_w + 2*shear). polygon raw points span
-                //   x ∈ [-shear, base_w + shear] = [-shear, w - shear]
-                //   y ∈ [-h, 0]
-                // and the polygon's own transform is ignored by the jsdom shim.
-                let shear = h / 2.0;
-                expand(
-                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, -shear, -h, w, h,
-                );
-            }
-            _ => {
-                // rect/round/stadium/etc.: rect x=-w/2, y=-h/2
-                expand(
-                    &mut min_x,
-                    &mut min_y,
-                    &mut max_x,
-                    &mut max_y,
-                    -w / 2.0,
-                    -h / 2.0,
-                    w,
-                    h,
-                );
+        // Clickable nodes (with `click` directive) are wrapped in `<a>`
+        // by the renderer. Upstream's jsdom getBBox shim has no special
+        // handler for `<a>` and therefore falls through to the textContent
+        // measurement branch (see generate_ref.mjs `intrinsicBox`), which
+        // returns `{x:0, y:0, width:textW, height:textH}` — i.e. the
+        // shape's negative-coordinate rect (and any local-coord polygon)
+        // is NOT visited because intrinsicBox treats the `<a>` as a leaf.
+        // Replicate that here by skipping the shape bbox; the foreignObject
+        // label below still contributes a `(0, 0, lw, lh)` box, matching
+        // the textContent fallback closely enough for byte-exact viewBox.
+        let has_link = n.link.as_deref().is_some_and(|s| !s.is_empty());
+        if !has_link {
+            let shape = n.shape.as_deref().unwrap_or("rect");
+            match shape {
+                "diamond" | "question" => {
+                    // polygon points="s/2,0 s,-s/2 s/2,-s 0,-s/2"
+                    // polygon has its own transform="translate(-s/2+0.5, s/2)" which is ignored.
+                    // polyBBox of points = {x:0, y:-s, w:s, h:s}
+                    let s = w; // w == h == s for diamond
+                    expand(
+                        &mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, -s, s, s,
+                    );
+                }
+                "circle" | "circ" => {
+                    // Upstream circle.ts: r = w/2 (with corrected sizing: d = label_w + padding).
+                    // The <circle r> in local coords → bbox {x:-r, y:-r, w:2r, h:2r}.
+                    // jsdom shim ignores transform, uses this local bbox.
+                    let r = w / 2.0;
+                    expand(
+                        &mut min_x,
+                        &mut min_y,
+                        &mut max_x,
+                        &mut max_y,
+                        -r,
+                        -r,
+                        2.0 * r,
+                        2.0 * r,
+                    );
+                }
+                "trapezoid" | "trap" | "inv_trapezoid" | "invertedTrapezoid" | "lean_left"
+                | "lean-left" | "lean_right" | "lean-right" => {
+                    // `node.width` already carries the visual width
+                    // (= base_w + 2*shear). polygon raw points span
+                    //   x ∈ [-shear, base_w + shear] = [-shear, w - shear]
+                    //   y ∈ [-h, 0]
+                    // and the polygon's own transform is ignored by the jsdom shim.
+                    let shear = h / 2.0;
+                    expand(
+                        &mut min_x, &mut min_y, &mut max_x, &mut max_y, -shear, -h, w, h,
+                    );
+                }
+                _ => {
+                    // rect/round/stadium/etc.: rect x=-w/2, y=-h/2
+                    expand(
+                        &mut min_x,
+                        &mut min_y,
+                        &mut max_x,
+                        &mut max_y,
+                        -w / 2.0,
+                        -h / 2.0,
+                        w,
+                        h,
+                    );
+                }
             }
         }
         // Node label foreignObject: at (0,0) in local coords (label <g> transform ignored).
