@@ -676,7 +676,7 @@ fn canon_shape(s: &str) -> &'static str {
         "circle" | "circ" => "circle",
         "doublecircle" => "doublecircle",
         "ellipse" => "ellipse",
-        "diamond" | "question" => "diamond",
+        "diamond" | "question" | "diam" => "diamond",
         "hexagon" | "hex" => "hexagon",
         "lean_right" | "lean-right" => "lean_right",
         "lean_left" | "lean-left" => "lean_left",
@@ -787,7 +787,10 @@ fn measure_vertex_box(v: &Vertex, is_bold: bool) -> (f64, f64) {
     // cylinder: extra 24 for arcs
     // circle: max(tw,th) + 32
     // doublecircle: max(tw,th) + 48
-    let shape = v.shape.as_deref().unwrap_or("rect");
+    // Apply canonical shape mapping so v11+ shape aliases (e.g. `diam`,
+    // `circ`, `hex`, …) feed into the per-shape padding tables below
+    // instead of falling through to the rect default.
+    let shape = canon_shape(v.shape.as_deref().unwrap_or("rect"));
     let p = FLOWCHART_PADDING;
     let (pad_x, pad_y) = match shape {
         "circle" | "circ" => {
