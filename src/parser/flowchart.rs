@@ -505,6 +505,7 @@ impl<'a> LineParser<'a> {
             children: Vec::new(),
             dir: None,
             order,
+            classes: Vec::new(),
         };
         // If nested, register parent->child
         if let Some(parent) = self.current_subgraph.last().cloned() {
@@ -565,6 +566,15 @@ impl<'a> LineParser<'a> {
             // domId suffix counter in sync.
             if let Some(v) = self.diag.find_vertex_mut(id) {
                 v.classes.push(cls.to_string());
+                continue;
+            }
+            // Subgraph match: `class <subgraph-id> <className>` attaches
+            // the class to the cluster `<g>` so the rendered DOM gains
+            // `class="cluster <className>"` and any matching `classDef`
+            // resolves to inline `style="…"` on the cluster rect.
+            // See cypress fixture 143 (`class T Test`, `class T TestSub`).
+            if let Some(sg) = self.diag.find_subgraph_mut(id) {
+                sg.classes.push(cls.to_string());
             }
         }
     }

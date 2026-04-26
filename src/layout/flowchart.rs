@@ -547,15 +547,27 @@ fn build_layout_data(d: &FlowchartDiagram) -> LayoutData {
             }
         });
         node.parent_id = parent_of.get(&sg.id).cloned();
-        // Cluster CSS class: empty string so render_cluster emits `class="cluster "`.
-        node.css_classes = None;
+        // Cluster CSS class: extra classes from `class <subgraph-id> <name>`
+        // directives are appended to the rendered DOM as `class="cluster <names…>"`.
+        // None / empty here causes the renderer to emit `class="cluster "`.
+        if !sg.classes.is_empty() {
+            node.css_classes = Some(sg.classes.join(" "));
+        } else {
+            node.css_classes = None;
+        }
         // `style <subgraph-id> ...` directives land on the matching Vertex (if any)
         // because the parser calls `ensure_vertex` on the id. Apply those styles here.
-        if let Some(sv) = d.find_vertex(&sg.id) {
-            let merged = collect_styles(sv, &class_map);
-            if !merged.is_empty() {
-                node.css_styles = Some(merged);
-            }
+        // Additionally, classes attached to the subgraph itself (via
+        // `class <subgraph-id> <name>`) resolve to inline styles by walking
+        // `classDef` entries in declaration order — last-wins per CSS key,
+        // mirroring `collect_styles` semantics for vertices. Without this,
+        // multiple `class <id> <a>` / `class <id> <b>` directives leak both
+        // `fill:` declarations into the rendered `style` attribute.
+        // See cypress fixture 143 (`class T Test`, `class T TestSub`).
+        let synthetic = synthesize_vertex_for_subgraph(sg, d);
+        let merged = collect_styles(&synthetic, &class_map);
+        if !merged.is_empty() {
+            node.css_styles = Some(merged);
         }
         data.nodes.push(node);
     }
@@ -1133,6 +1145,32 @@ fn styles_have_bold(styles: &[String]) -> bool {
 /// followed by a vertex's own `classDef myClass1 color:#0000ff` results
 /// in a single `color:#0000ff` entry, not two competing `color:` rules
 /// in the inline `style="…"` attribute.
+/// Build a synthetic [`Vertex`] that represents a subgraph for style-collection.
+///
+/// Combines:
+/// - the existing `style <id> ...` Vertex entry (if any) — same path used for
+///   inline-styled vertices.
+/// - the `class <id> <className>` directive → adds class names so the
+///   subsequent `collect_styles` pass walks each `classDef`'s style list
+///   and dedupes across them by CSS key (last-wins).
+fn synthesize_vertex_for_subgraph(
+    sg: &crate::model::flowchart::Subgraph,
+    d: &FlowchartDiagram,
+) -> Vertex {
+    let mut v = Vertex::default();
+    v.id = sg.id.clone();
+    if let Some(existing) = d.find_vertex(&sg.id) {
+        v.styles = existing.styles.clone();
+        v.classes.extend(existing.classes.iter().cloned());
+    }
+    for cls in &sg.classes {
+        if !v.classes.iter().any(|c| c == cls) {
+            v.classes.push(cls.clone());
+        }
+    }
+    v
+}
+
 fn collect_styles<'a>(v: &'a Vertex, class_map: &BTreeMap<&'a str, &'a ClassDef>) -> Vec<String> {
     // Upstream: getCompiledStyles(["default", "node", ...vertex.classes])
     let mut raw: Vec<String> = Vec::new();

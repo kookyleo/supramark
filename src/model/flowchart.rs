@@ -169,6 +169,11 @@ pub struct Subgraph {
     pub dir: Option<Direction>,
     /// Declaration order — first-seen.
     pub order: usize,
+    /// Class names applied via `class <subgraph-id> <name>` directive.
+    /// Mirrors `Vertex::classes` for clusters: at render-time these expand
+    /// into the cluster `<g>`'s `class="cluster <name1> <name2>"` attribute
+    /// and resolve to inline `style=` via `classDef`.
+    pub classes: Vec<String>,
 }
 
 /// `classDef name fill:#red,stroke:#000` — set of style props for a class.
@@ -238,5 +243,8 @@ impl FlowchartDiagram {
     }
     pub fn find_subgraph(&self, id: &str) -> Option<&Subgraph> {
         self.subgraphs.iter().find(|s| s.id == id)
+    }
+    pub fn find_subgraph_mut(&mut self, id: &str) -> Option<&mut Subgraph> {
+        self.subgraphs.iter_mut().find(|s| s.id == id)
     }
 }
