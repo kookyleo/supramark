@@ -1111,6 +1111,13 @@ fn measure_subgraph_title_box(title: Option<&Label>) -> (f64, f64) {
 /// Measure edge label dimensions to match the foreignObject rendered at runtime.
 /// Upstream edge labels use the jsdom default font: sans-serif 14px non-bold,
 /// which differs from the node-label font (trebuchet ms 14px).
+///
+/// Upstream renders the edge label as `<p>…</p>` and measures the result via
+/// `getBoundingClientRect()`. The jsdom shim collapses to `textContent` width
+/// — which strips ALL HTML tags (including `<br/>`) and measures the
+/// concatenated plain text as a single line. Sources with `<br>` line breaks
+/// therefore measure to the same width as the joined text would, NOT to the
+/// raw markup width that would include the literal `<br>` characters.
 fn measure_edge_label(text: &str) -> (f64, f64) {
     const EDGE_LABEL_FONT: &str = "sans-serif";
     const EDGE_LABEL_SIZE: f64 = 14.0;
@@ -1118,15 +1125,82 @@ fn measure_edge_label(text: &str) -> (f64, f64) {
     if text.is_empty() {
         return (0.0, h);
     }
-    let lines: Vec<&str> = text.split('\n').collect();
-    let mut max_w = 0.0f64;
-    for line in &lines {
-        let w = font_metrics::text_width(line, EDGE_LABEL_FONT, EDGE_LABEL_SIZE, false, false);
-        if w > max_w {
-            max_w = w;
+    // Mirror `parse_html_text_segments`/textContent semantics: strip HTML
+    // tags (`<br>`, `<strong>`, …) and decode entities, then measure the
+    // result as ONE line — `<br>` does not split because `textContent`
+    // collapses break tags. `\n` characters survive as whitespace and are
+    // dropped here to match upstream's `measureTextBlock` shim.
+    let plain = strip_html_for_measurement(text);
+    let w = font_metrics::text_width(&plain, EDGE_LABEL_FONT, EDGE_LABEL_SIZE, false, false);
+    (w, h)
+}
+
+/// Strip HTML tags and decode common entities to mirror jsdom's
+/// `textContent` for edge-label width measurement.
+fn strip_html_for_measurement(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'<' {
+            // A `<` only starts an HTML tag when followed by an ASCII letter
+            // or `/letter`. Anything else (`<<`, `< `, `<1`, `<!`, `<?`) is
+            // treated as literal text — matching parse_html_text_segments.
+            let next = bytes.get(i + 1).copied();
+            let is_tag_start = match next {
+                Some(c) if c.is_ascii_alphabetic() => true,
+                Some(b'/') => bytes
+                    .get(i + 2)
+                    .map(|c| c.is_ascii_alphabetic())
+                    .unwrap_or(false),
+                _ => false,
+            };
+            if is_tag_start {
+                if let Some(rel_end) = s[i..].find('>') {
+                    i += rel_end + 1;
+                    continue;
+                }
+            }
+            out.push('<');
+            i += 1;
+        } else if bytes[i] == b'&' {
+            if let Some(semi_rel) = s[i..].find(';') {
+                let entity = &s[i + 1..i + semi_rel];
+                let ch = match entity {
+                    "amp" => Some('&'),
+                    "lt" => Some('<'),
+                    "gt" => Some('>'),
+                    "quot" => Some('"'),
+                    "apos" => Some('\''),
+                    "nbsp" => Some('\u{00A0}'),
+                    _ => None,
+                };
+                if let Some(c) = ch {
+                    out.push(c);
+                    i += semi_rel + 1;
+                    continue;
+                }
+            }
+            out.push('&');
+            i += 1;
+        } else if bytes[i] == b'\n' {
+            // textContent treats inline `\n` as whitespace; under
+            // measureTextBlock the legacy single-line behaviour drops it.
+            i += 1;
+        } else {
+            // UTF-8-safe copy of the next char.
+            let mut len = 1usize;
+            while len < 4
+                && i + len < bytes.len()
+                && (bytes[i + len] & 0xC0) == 0x80
+            {
+                len += 1;
+            }
+            out.push_str(&s[i..i + len]);
+            i += len;
         }
     }
-    (max_w, h * lines.len() as f64)
+    out
 }
 
 /// Build a unified::Edge from a model Edge, applying link-style overrides.
