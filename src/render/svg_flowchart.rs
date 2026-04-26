@@ -377,8 +377,12 @@ fn bold_postprocess_node_svg(node: &UNode, svg: &str) -> String {
         font_size_px: None,
         bold: Some(true),
     };
-    let (lw_bold, _lh_bold) =
-        crate::render::foreign_object::measure_html_markup_label(&for_measure, &bold_font, 200.0, true);
+    let (lw_bold, _lh_bold) = crate::render::foreign_object::measure_html_markup_label(
+        &for_measure,
+        &bold_font,
+        200.0,
+        true,
+    );
     if (lw_bold - lw_norm).abs() < 1e-9 {
         // Bold metrics happen to match (e.g. font lacks bold variant).
         return svg.to_string();
@@ -500,8 +504,8 @@ fn compute_viewbox(
                     2.0 * r,
                 );
             }
-            "trapezoid" | "trap" | "inv_trapezoid" | "invertedTrapezoid"
-            | "lean_left" | "lean-left" | "lean_right" | "lean-right" => {
+            "trapezoid" | "trap" | "inv_trapezoid" | "invertedTrapezoid" | "lean_left"
+            | "lean-left" | "lean_right" | "lean-right" => {
                 // `node.width` already carries the visual width
                 // (= base_w + 2*shear). polygon raw points span
                 //   x ∈ [-shear, base_w + shear] = [-shear, w - shear]
@@ -509,14 +513,7 @@ fn compute_viewbox(
                 // and the polygon's own transform is ignored by the jsdom shim.
                 let shear = h / 2.0;
                 expand(
-                    &mut min_x,
-                    &mut min_y,
-                    &mut max_x,
-                    &mut max_y,
-                    -shear,
-                    -h,
-                    w,
-                    h,
+                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, -shear, -h, w, h,
                 );
             }
             _ => {
@@ -570,75 +567,34 @@ fn compute_viewbox(
     // Round to 3 decimal places to match fmt_coord() applied when building the
     // SVG path d attribute — the upstream pathBBox parses the rendered d string.
     //
-    // Additionally apply the marker visual offset (`markerOffsets.arrow_point = 4`)
-    // to the path endpoints, matching upstream's `getLineFunctionsWithOffset`.
-    // The offset shortens the path at arrow ends so the arrowhead doesn't
-    // overlap the node boundary. For a vertical edge going downward:
-    //   last_y_adjusted = last_y - 4
-    // For a diagonal edge, it is proportional to sin(angle).
+    // Apply the FULL `getLineFunctionsWithOffset` adjustment to a clone of the
+    // points (matching `apply_marker_offsets`), since jsdom's getBBox parses the
+    // rendered path d-string — which is built from the offset-adjusted points,
+    // not the raw layout points. The full adjustment includes:
+    //   1. Endpoint base offset along the direction toward the neighbour.
+    //   2. Per-point "extra-room" pull-back when the point is within
+    //      `markerHeight` of either endpoint along BOTH axes (this is what
+    //      shortens short cluster→cluster edges on BOTH sides even when only
+    //      one end carries an arrow).
     //
-    // Upstream markerOffsets only has: arrow_point=4, arrow_barb=0, arrow_barb_neo=5.5.
-    // arrow_open (edges without arrowheads, e.g. `---`) is NOT present, so NO offset
-    // is applied for those edges.
-    const ARROW_POINT_OFFSET: f64 = 4.0;
+    // Upstream markerOffsets only has: arrow_point=4, arrow_barb=0,
+    // arrow_barb_neo=5.5; arrow_open / arrow_cross / arrow_circle are absent,
+    // so they contribute no offset.
     for e in &l.edges {
         let Some(points) = &e.points else { continue };
-        let n = points.len();
-        if n == 0 {
+        if points.is_empty() {
             continue;
         }
 
         let arrow_end = e.arrow_type_end.as_deref().unwrap_or("none");
         let arrow_start = e.arrow_type_start.as_deref().unwrap_or("none");
-        // Only arrow_point carries a non-zero offset in upstream's markerOffsets.
-        let end_offset = if arrow_end == "arrow_point" {
-            ARROW_POINT_OFFSET
-        } else {
-            0.0
-        };
-        let start_offset = if arrow_start == "arrow_point" {
-            ARROW_POINT_OFFSET
-        } else {
-            0.0
-        };
 
-        for (i, p) in points.iter().enumerate() {
-            let (mut px, mut py) = (p.x, p.y);
+        let mut adjusted: Vec<Point> = points.clone();
+        apply_marker_offsets(&mut adjusted, arrow_end, arrow_start);
 
-            // Apply arrow_point end offset to the last point.
-            // Upstream getLineFunctionsWithOffset: offset applied along the
-            // backward direction vector from endpoint toward prev point.
-            //   angle = atan2(bdy, bdx)
-            //   px += cos(angle) * offset * sign_x
-            //   py += sin(angle) * offset * sign_y
-            if i == n - 1 && n >= 2 && end_offset > 0.0 {
-                let prev = &points[n - 2];
-                let bdx = prev.x - px;
-                let bdy = prev.y - py;
-                let blen = (bdx * bdx + bdy * bdy).sqrt();
-                if blen > 0.0 {
-                    let cos_a = bdx / blen;
-                    let sin_a = bdy / blen;
-                    px += end_offset * cos_a;
-                    py += end_offset * sin_a;
-                }
-            }
-            // Apply arrow_point start offset to the first point.
-            if i == 0 && n >= 2 && start_offset > 0.0 {
-                let next = &points[1];
-                let fdx = next.x - px;
-                let fdy = next.y - py;
-                let flen = (fdx * fdx + fdy * fdy).sqrt();
-                if flen > 0.0 {
-                    let cos_a = fdx / flen;
-                    let sin_a = fdy / flen;
-                    px += start_offset * cos_a;
-                    py += start_offset * sin_a;
-                }
-            }
-
-            let rx = (px * 1000.0).round() / 1000.0;
-            let ry = (py * 1000.0).round() / 1000.0;
+        for p in adjusted.iter() {
+            let rx = (p.x * 1000.0).round() / 1000.0;
+            let ry = (p.y * 1000.0).round() / 1000.0;
             if rx < min_x {
                 min_x = rx;
             }
@@ -2304,8 +2260,8 @@ fn render_edge_path(
     // Per-edge stroke color (from the final pathStyle), used to switch
     // marker references from the base `pointEnd` to the colored variant
     // `pointEnd_{colorId}` — matching upstream `addEdgeMarker` exactly.
-    let stroke_color = unified_shell::extract_stroke_color(&style_val)
-        .filter(|s| !s.trim().is_empty());
+    let stroke_color =
+        unified_shell::extract_stroke_color(&style_val).filter(|s| !s.trim().is_empty());
     let color_suffix = stroke_color
         .as_deref()
         .map(|c| format!("_{}", unified_shell::marker_color_id(c)))
