@@ -312,3 +312,38 @@ fn flowchart_single_diff_report() {
     eprintln!("EXP: ...{}...", &expected[e_start..e_end]);
     eprintln!("got len={} exp len={}", got.len(), expected.len());
 }
+
+/// Edge labels wrapped in `"\`…\`"` must be parsed as markdown so the
+/// renderer can convert `**bold**`/`*italic*`/etc. into `<strong>`/`<em>`
+/// tags. Regression for cypress fixtures 174/179 where the literal
+/// `**bold**` text used to leak through.
+#[test]
+fn edge_label_backtick_quotes_classify_as_markdown() {
+    use mermaid_little::model::flowchart::LabelKind;
+    let src = "flowchart LR\nb -- \"`1o **bold**`\" --> c";
+    let d = fcp::parse(src).unwrap();
+    let l = d.edges[0]
+        .label
+        .as_ref()
+        .expect("edge label parsed from `\"`...`\"` syntax");
+    assert!(matches!(l.kind, LabelKind::Markdown));
+    assert_eq!(l.text, "1o **bold**");
+}
+
+/// Round-shape bodies wrapped in `"\`…\`"` may legitimately contain `)`
+/// inside the markdown text (e.g. `"`Item.(1)`"`). The shape parser
+/// must respect quote/backtick regions so the closing `)` of the shape
+/// isn't mistaken for one inside the label. Regression for cypress
+/// fixtures 174/175.
+#[test]
+fn round_shape_label_with_inline_paren_in_markdown_quotes() {
+    let src = "flowchart LR\nb(\"`Item.(1)`\") --> c";
+    let d = fcp::parse(src).unwrap();
+    let v = d
+        .vertices
+        .iter()
+        .find(|v| v.id == "b")
+        .expect("vertex `b`");
+    let l = v.label.as_ref().expect("label populated");
+    assert_eq!(l.text, "Item.(1)");
+}

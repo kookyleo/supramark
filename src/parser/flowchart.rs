@@ -1588,46 +1588,46 @@ fn parse_one_vertex(
     let rest = &s[i..];
     let (shape, label, remainder) = if let Some(after) = rest.strip_prefix("[[") {
         // subroutine
-        let (text, r) = take_until(after, "]]")?;
+        let (text, r) = take_until_quote_aware(after, "]]")?;
         (
             Some("subroutine".to_string()),
             Some(parse_label_text(text)),
             r,
         )
     } else if let Some(after) = rest.strip_prefix("[(") {
-        let (text, r) = take_until(after, ")]")?;
+        let (text, r) = take_until_quote_aware(after, ")]")?;
         (
             Some("cylinder".to_string()),
             Some(parse_label_text(text)),
             r,
         )
     } else if let Some(after) = rest.strip_prefix("([") {
-        let (text, r) = take_until(after, "])")?;
+        let (text, r) = take_until_quote_aware(after, "])")?;
         (Some("stadium".to_string()), Some(parse_label_text(text)), r)
     } else if let Some(after) = rest.strip_prefix("(((") {
-        let (text, r) = take_until(after, ")))")?;
+        let (text, r) = take_until_quote_aware(after, ")))")?;
         (
             Some("doublecircle".to_string()),
             Some(parse_label_text(text)),
             r,
         )
     } else if let Some(after) = rest.strip_prefix("((") {
-        let (text, r) = take_until(after, "))")?;
+        let (text, r) = take_until_quote_aware(after, "))")?;
         (Some("circle".to_string()), Some(parse_label_text(text)), r)
     } else if let Some(after) = rest.strip_prefix("(-") {
-        let (text, r) = take_until(after, "-)")?;
+        let (text, r) = take_until_quote_aware(after, "-)")?;
         (Some("ellipse".to_string()), Some(parse_label_text(text)), r)
     } else if let Some(after) = rest.strip_prefix("(") {
-        let (text, r) = take_until(after, ")")?;
+        let (text, r) = take_until_quote_aware(after, ")")?;
         (Some("round".to_string()), Some(parse_label_text(text)), r)
     } else if let Some(after) = rest.strip_prefix("{{") {
-        let (text, r) = take_until(after, "}}")?;
+        let (text, r) = take_until_quote_aware(after, "}}")?;
         (Some("hexagon".to_string()), Some(parse_label_text(text)), r)
     } else if let Some(after) = rest.strip_prefix("{") {
-        let (text, r) = take_until(after, "}")?;
+        let (text, r) = take_until_quote_aware(after, "}")?;
         (Some("diamond".to_string()), Some(parse_label_text(text)), r)
     } else if let Some(after) = rest.strip_prefix(">") {
-        let (text, r) = take_until(after, "]")?;
+        let (text, r) = take_until_quote_aware(after, "]")?;
         (Some("odd".to_string()), Some(parse_label_text(text)), r)
     } else if let Some(after) = rest.strip_prefix("[/") {
         // Try trapezoid `[/...\]`, lean_right `[/.../]`, inv_trapezoid `[/...\]` (dup), or lean_right.
@@ -1635,10 +1635,10 @@ fn parse_one_vertex(
         let has_trap = after.contains("\\]");
         let has_lean = after.contains("/]");
         let (text, r, shape) = if has_trap && (!has_lean || after.find("\\]") < after.find("/]")) {
-            let (t, r) = take_until(after, "\\]")?;
+            let (t, r) = take_until_quote_aware(after, "\\]")?;
             (t, r, "trapezoid")
         } else {
-            let (t, r) = take_until(after, "/]")?;
+            let (t, r) = take_until_quote_aware(after, "/]")?;
             (t, r, "lean_right")
         };
         (Some(shape.to_string()), Some(parse_label_text(text)), r)
@@ -1646,15 +1646,15 @@ fn parse_one_vertex(
         let has_inv = after.contains("/]");
         let has_left = after.contains("\\]");
         let (text, r, shape) = if has_inv && (!has_left || after.find("/]") < after.find("\\]")) {
-            let (t, r) = take_until(after, "/]")?;
+            let (t, r) = take_until_quote_aware(after, "/]")?;
             (t, r, "inv_trapezoid")
         } else {
-            let (t, r) = take_until(after, "\\]")?;
+            let (t, r) = take_until_quote_aware(after, "\\]")?;
             (t, r, "lean_left")
         };
         (Some(shape.to_string()), Some(parse_label_text(text)), r)
     } else if let Some(after) = rest.strip_prefix("[") {
-        let (text, r) = take_until(after, "]")?;
+        let (text, r) = take_until_quote_aware(after, "]")?;
         // Handle [|key:value|label] syntax — strip the `|key:value|` prefix.
         // Upstream grammar rule 62: addVertex(id, label, "rect", ..., {key: value})
         let label_text = if let Some(pipe_rest) = text.strip_prefix('|') {
@@ -1725,6 +1725,57 @@ fn parse_one_vertex(
 fn take_until<'a>(s: &'a str, tok: &str) -> Option<(&'a str, &'a str)> {
     let end = s.find(tok)?;
     Some((&s[..end], &s[end + tok.len()..]))
+}
+
+/// Like `take_until`, but skip over `"..."` and `` `...` `` quoted regions when
+/// scanning for `tok`. Used for shape body parsers (round/stadium/cylinder/...)
+/// so a `)` or `]` inside a quoted markdown label such as
+/// `("`The dog (1)`")` doesn't terminate the body prematurely.
+fn take_until_quote_aware<'a>(s: &'a str, tok: &str) -> Option<(&'a str, &'a str)> {
+    let bytes = s.as_bytes();
+    let tok_bytes = tok.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        // Skip over quoted region (double-quote). Backslash escapes the next byte.
+        if b == b'"' {
+            i += 1;
+            while i < bytes.len() {
+                if bytes[i] == b'\\' && i + 1 < bytes.len() {
+                    i += 2;
+                    continue;
+                }
+                if bytes[i] == b'"' {
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+        // Skip over backtick-quoted region (markdown label delimiter).
+        if b == b'`' {
+            i += 1;
+            while i < bytes.len() {
+                if bytes[i] == b'`' {
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+        // Match `tok` at the current position.
+        if i + tok_bytes.len() <= bytes.len() && &bytes[i..i + tok_bytes.len()] == tok_bytes {
+            // SAFETY: i is at a valid char boundary (we've only stepped over
+            // ASCII delimiters or skipped within quoted regions byte-by-byte;
+            // `s` is a valid UTF-8 str so any non-ASCII bytes inside quotes
+            // remain part of the same str slice).
+            return Some((&s[..i], &s[i + tok_bytes.len()..]));
+        }
+        i += 1;
+    }
+    None
 }
 
 /// Parse the body of `@{ key: value, ... }` shape-data blocks. Only the

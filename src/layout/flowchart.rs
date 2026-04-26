@@ -1137,12 +1137,15 @@ fn measure_edge_label(text: &str, html_labels: bool, is_markdown: bool) -> (f64,
     if text.is_empty() {
         return (0.0, h);
     }
-    let measure_text = if !html_labels && is_markdown {
+    let measure_text = if is_markdown {
         // Under htmlLabels=false the SVG <text> textContent comes from
         // `markdownToLines` → `updateTextContentAndStyles`, which only
-        // emits the marker-free text. Reuse the foreign_object helper
-        // that mirrors `markdownToHTML`'s strip behaviour so the
-        // measured width matches what jsdom's getBBox() would see.
+        // emits the marker-free text. Under htmlLabels=true the foreignObject
+        // <p> displays the rendered HTML, but jsdom's getBoundingClientRect
+        // still measures the textContent (i.e. marker-free string). In
+        // both cases reuse `markdownToHTML` so the measured width matches
+        // upstream — strip_html_for_measurement removes the inserted
+        // `<strong>`/`<em>` tags and yields the plain text.
         crate::render::foreign_object::markdown_label_to_html(text)
     } else {
         text.to_string()

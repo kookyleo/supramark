@@ -2390,18 +2390,28 @@ fn render_edge_path(
 
 fn render_edge_label(e: &UEdge, html_labels: bool) -> String {
     use crate::render::foreign_object::{
-        measure_html_label, measure_html_markup_label, render_edge_label as fo_edge,
-        replace_fa_icons, HtmlLabelFont, LabelOpts,
+        markdown_label_to_html, measure_html_label, measure_html_markup_label,
+        render_edge_label as fo_edge, replace_fa_icons, HtmlLabelFont, LabelOpts,
     };
     use crate::render::shapes::types::{build_div_style_prefix, build_label_style};
     let label_text = e.label.clone().unwrap_or_default();
+    // Markdown edge labels (` "`...`" `) need `markdownToHTML` conversion before
+    // emission so `**bold**` etc. render as `<strong>...</strong>` like upstream.
+    // The htmlLabels=false branch already tokenises into MarkdownLines below, so
+    // only the htmlLabels=true path needs the pre-conversion here.
+    let is_markdown = e.label_type.as_deref() == Some("markdown");
+    let label_html = if is_markdown && html_labels && !label_text.is_empty() {
+        markdown_label_to_html(&label_text)
+    } else {
+        label_text.clone()
+    };
     // Apply FA icon substitution (fa:fa-car → <i class="fa fa-car"></i>) before
     // measuring, matching upstream's createText path. The <i> element contributes
     // zero width under the jsdom shim.
     // Also normalise `<br>` / `<br />` to `<br/>` so the rendered HTML matches
     // upstream's `markdownToHTML` re-serialisation exactly.
     let processed =
-        crate::render::foreign_object::normalize_br_tags(&replace_fa_icons(&label_text));
+        crate::render::foreign_object::normalize_br_tags(&replace_fa_icons(&label_html));
     let is_empty = processed.is_empty();
     // Upstream always measures the label height (even when empty),
     // using the font's line-height. For empty labels, width=0 but
