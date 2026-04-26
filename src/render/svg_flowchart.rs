@@ -226,6 +226,122 @@ fn diamond_br_postprocess(node: &UNode, svg: &str) -> String {
         .replace(&tx_wrong, &tx_right)
 }
 
+/// When a node has a `click <id> "<href>" [...]` directive, upstream
+/// wraps the inner shape `<g class="node ..." ...>...</g>` in an
+/// `<a href="..." [target="..."] data-look="..." transform="...">...</a>`
+/// anchor. The transform / data-look move to the anchor; the inner
+/// `<g>` keeps the id, picks up the `clickable` extra class, and gains
+/// a `title="..."` attribute when a tooltip was supplied.
+///
+/// The shape registry has no concept of node-level links, so we
+/// rewrite its output here. This is a string transform on the already-
+/// emitted SVG: cheaper than threading link data through every shape
+/// and isolates the click-event semantics in the flowchart renderer.
+fn link_postprocess_node_svg(node: &UNode, svg: &str) -> String {
+    use crate::render::shapes::types::xml_escape;
+    let link = match node.link.as_deref() {
+        Some(s) if !s.is_empty() => s,
+        _ => return svg.to_string(),
+    };
+    // Locate the OUTERMOST `<g class="node ...` opening tag — it is the
+    // first `<g class="node ` substring in the shape output.
+    let g_start = match svg.find("<g class=\"node ") {
+        Some(i) => i,
+        None => return svg.to_string(),
+    };
+    // Slice from `<g`.
+    let head_open_end = match svg[g_start..].find('>') {
+        Some(off) => g_start + off + 1,
+        None => return svg.to_string(),
+    };
+    let opening = &svg[g_start..head_open_end];
+    // Extract attribute values we need to preserve / move.
+    let class_val = match extract_attr(opening, "class") {
+        Some(v) => v,
+        None => return svg.to_string(),
+    };
+    let id_val = extract_attr(opening, "id").unwrap_or_default();
+    let data_look_val = extract_attr(opening, "data-look");
+    let transform_val = extract_attr(opening, "transform");
+    // Append `clickable` to the class string. The shape emits the
+    // non-link class as `"node {css_classes} "` (often with a trailing
+    // double space when `extra` is empty — the format produces
+    // `"node default  "`). Upstream's link branch instead supplies
+    // `"clickable"` as `extra`, yielding `"node default clickable "`
+    // (single space). Strip any trailing whitespace before appending
+    // so we don't introduce an extra space.
+    let trimmed = class_val.trim_end();
+    let new_class_val = format!("{} clickable ", trimmed);
+    // Build the anchor opening. Order: href, target?, data-look?, transform?.
+    let mut anchor = String::with_capacity(link.len() + 96);
+    anchor.push_str("<a href=\"");
+    anchor.push_str(&xml_escape(link));
+    anchor.push('"');
+    if let Some(target) = node.link_target.as_deref() {
+        if !target.is_empty() {
+            anchor.push_str(" target=\"");
+            anchor.push_str(&xml_escape(target));
+            anchor.push('"');
+        }
+    }
+    if let Some(dl) = data_look_val.as_deref() {
+        anchor.push_str(" data-look=\"");
+        anchor.push_str(dl);
+        anchor.push('"');
+    }
+    if let Some(tx) = transform_val.as_deref() {
+        anchor.push_str(" transform=\"");
+        anchor.push_str(tx);
+        anchor.push('"');
+    }
+    anchor.push('>');
+    // Rebuild the inner `<g>` — only class, id, optional title.
+    let mut new_g = String::with_capacity(opening.len() + 32);
+    new_g.push_str("<g class=\"");
+    new_g.push_str(&new_class_val);
+    new_g.push_str("\" id=\"");
+    new_g.push_str(&id_val);
+    new_g.push('"');
+    if let Some(tip) = node.tooltip.as_deref() {
+        if !tip.is_empty() {
+            new_g.push_str(" title=\"");
+            new_g.push_str(&xml_escape(tip));
+            new_g.push('"');
+        }
+    }
+    new_g.push('>');
+    // Splice: anything before <g …> + anchor + new <g …> + body + </a>.
+    // The shape emits `<g …>…</g>` balanced; the LAST `</g>` closes the
+    // outer group, and we append `</a>` after it.
+    let prefix = &svg[..g_start];
+    let body = &svg[head_open_end..];
+    // Find the LAST `</g>` in `body`.
+    let last_close = match body.rfind("</g>") {
+        Some(i) => i,
+        None => return svg.to_string(),
+    };
+    let body_inner = &body[..last_close];
+    let body_close = &body[last_close..];
+    let mut out = String::with_capacity(svg.len() + anchor.len() + 8);
+    out.push_str(prefix);
+    out.push_str(&anchor);
+    out.push_str(&new_g);
+    out.push_str(body_inner);
+    out.push_str(body_close);
+    out.push_str("</a>");
+    out
+}
+
+/// Extract the value of `attr="..."` from an opening tag. Returns
+/// `None` when the attribute is absent.
+fn extract_attr(opening: &str, attr: &str) -> Option<String> {
+    let needle = format!(" {}=\"", attr);
+    let i = opening.find(&needle)?;
+    let start = i + needle.len();
+    let end = opening[start..].find('"')?;
+    Some(opening[start..start + end].to_string())
+}
+
 fn bold_postprocess_node_svg(node: &UNode, svg: &str) -> String {
     use crate::render::foreign_object::HtmlLabelFont;
     use crate::render::shapes::types::fmt_num;
@@ -794,6 +910,7 @@ pub fn render(
             Ok(svg) => {
                 let patched = bold_postprocess_node_svg(&prefixed, &svg);
                 let patched = diamond_br_postprocess(&prefixed, &patched);
+                let patched = link_postprocess_node_svg(&prefixed, &patched);
                 inner.push_str(&patched);
             }
             Err(_) => {
@@ -801,6 +918,7 @@ pub fn render(
                 if let Ok(svg) = shapes::draw("rect", &prefixed, theme) {
                     let patched = bold_postprocess_node_svg(&prefixed, &svg);
                     let patched = diamond_br_postprocess(&prefixed, &patched);
+                    let patched = link_postprocess_node_svg(&prefixed, &patched);
                     inner.push_str(&patched);
                 }
             }
@@ -1641,11 +1759,13 @@ fn render_isolated_cluster_inner_root(
         match crate::render::shapes::draw(&shape_id, &prefixed, theme) {
             Ok(svg) => {
                 let patched = diamond_br_postprocess(&prefixed, &svg);
+                let patched = link_postprocess_node_svg(&prefixed, &patched);
                 out.push_str(&patched);
             }
             Err(_) => {
                 if let Ok(svg) = crate::render::shapes::draw("rect", &prefixed, theme) {
                     let patched = diamond_br_postprocess(&prefixed, &svg);
+                    let patched = link_postprocess_node_svg(&prefixed, &patched);
                     out.push_str(&patched);
                 }
             }
