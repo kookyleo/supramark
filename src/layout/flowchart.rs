@@ -564,70 +564,18 @@ fn build_layout_data(d: &FlowchartDiagram) -> LayoutData {
     let subgraph_ids: std::collections::HashSet<&str> =
         d.subgraphs.iter().map(|sg| sg.id.as_str()).collect();
 
-    // Nodes: vertices.
-    for v in &d.vertices {
-        // Skip vertices whose ID matches a subgraph — they are cluster references,
-        // not standalone nodes, and will be rendered as clusters.
-        if subgraph_ids.contains(v.id.as_str()) {
-            continue;
-        }
-        let shape_id = canon_shape(v.shape.as_deref().unwrap_or("rect"));
-        // Resolve styles first so that `font-weight:bold` is reflected in
-        // the label text-width measurement (matches upstream's
-        // `getBoundingClientRect()` on the rendered foreignObject div).
-        let merged_styles = collect_styles(v, &class_map);
-        let is_bold = styles_have_bold(&merged_styles);
-        let font_size_px = styles_font_size_px(&merged_styles);
-        let (w, h) = measure_vertex_box(v, is_bold, font_size_px);
-        let label_text = display_label(v);
-        let mut node = unified::Node::default();
-        node.id = v.id.clone();
-        node.dom_id = Some(flowchart_dom_id(&v.id, v.order));
-        node.label = Some(label_text.clone());
-        node.label_type = Some(label_kind_string(v.label.as_ref()).to_string());
-        node.shape = Some(shape_id.to_string());
-        node.width = Some(w);
-        node.height = Some(h);
-        node.padding = Some(FLOWCHART_PADDING);
-        node.look = Some("classic".into());
-        node.parent_id = parent_of.get(&v.id).cloned();
-        // CSS classes — upstream: `'default ' + vertex.classes.join(' ')`.
-        // `"default "` has a trailing space; when classes are appended via
-        // join(' '), the result is `"default dark"` (no trailing space) for
-        // one class, or `"default "` (trailing space) when the list is empty.
-        // The shape renderer then formats `"node {cssClasses} "` which
-        // produces `"node default  "` (double space) when no extra classes,
-        // and `"node default dark "` (one trailing space) when "dark" is last.
-        let classes = if v.classes.is_empty() {
-            "default ".to_string()
-        } else {
-            format!("default {}", v.classes.join(" "))
-        };
-        node.css_classes = Some(classes);
-        // Inline styles.
-        if !merged_styles.is_empty() {
-            node.css_styles = Some(merged_styles);
-        }
-        node.link = v.link.clone();
-        node.link_target = v.link_target.clone();
-        node.tooltip = v.tooltip.clone();
-        if v.callback.is_some() {
-            node.have_callback = Some(true);
-        }
-        // Rectangle radii (only set for `round`).
-        if shape_id == "round" {
-            node.rx = Some(5.0);
-            node.ry = Some(5.0);
-        }
-        data.nodes.push(node);
-    }
-
-    // Subgraph cluster nodes.
+    // ── Subgraph cluster nodes first ─────────────────────────────────────
     //
-    // Upstream `flowDb.getData()` iterates subgraphs in REVERSE
-    // declaration order (`for i = subGraphs.length - 1; i >= 0; i--`)
-    // when pushing them to the nodes array. Match that to align our
-    // dagre-input node insertion order with the reference.
+    // Upstream `flowDb.getData()` pushes subgraph cluster nodes BEFORE
+    // leaf-vertex nodes, iterating in REVERSE declaration order
+    // (`for i = subGraphs.length - 1; i >= 0; i--`). This insertion order
+    // is observable downstream because dagre's DFS-based feedback-arc-set
+    // (`acyclic.dfsFAS`) walks `graph.nodes()` in insertion order, so
+    // mirror it byte-for-byte to keep cycle resolution identical to the
+    // reference (e.g. dual-cluster fixtures 151/152/153/154 where
+    // edge `cluster_a → cluster_b` plus `cluster_a → leaf_inside_b`
+    // forms a 2-cycle and the chosen feedback edge depends on which
+    // node DFS visits first).
     for sg in d.subgraphs.iter().rev() {
         let (w, h) = measure_subgraph_title_box(sg.title.as_ref());
         let mut node = unified::Node::default();
@@ -689,6 +637,64 @@ fn build_layout_data(d: &FlowchartDiagram) -> LayoutData {
         let merged = collect_styles(&synthetic, &class_map);
         if !merged.is_empty() {
             node.css_styles = Some(merged);
+        }
+        data.nodes.push(node);
+    }
+
+    // Nodes: vertices.
+    for v in &d.vertices {
+        // Skip vertices whose ID matches a subgraph — they are cluster references,
+        // not standalone nodes, and will be rendered as clusters.
+        if subgraph_ids.contains(v.id.as_str()) {
+            continue;
+        }
+        let shape_id = canon_shape(v.shape.as_deref().unwrap_or("rect"));
+        // Resolve styles first so that `font-weight:bold` is reflected in
+        // the label text-width measurement (matches upstream's
+        // `getBoundingClientRect()` on the rendered foreignObject div).
+        let merged_styles = collect_styles(v, &class_map);
+        let is_bold = styles_have_bold(&merged_styles);
+        let font_size_px = styles_font_size_px(&merged_styles);
+        let (w, h) = measure_vertex_box(v, is_bold, font_size_px);
+        let label_text = display_label(v);
+        let mut node = unified::Node::default();
+        node.id = v.id.clone();
+        node.dom_id = Some(flowchart_dom_id(&v.id, v.order));
+        node.label = Some(label_text.clone());
+        node.label_type = Some(label_kind_string(v.label.as_ref()).to_string());
+        node.shape = Some(shape_id.to_string());
+        node.width = Some(w);
+        node.height = Some(h);
+        node.padding = Some(FLOWCHART_PADDING);
+        node.look = Some("classic".into());
+        node.parent_id = parent_of.get(&v.id).cloned();
+        // CSS classes — upstream: `'default ' + vertex.classes.join(' ')`.
+        // `"default "` has a trailing space; when classes are appended via
+        // join(' '), the result is `"default dark"` (no trailing space) for
+        // one class, or `"default "` (trailing space) when the list is empty.
+        // The shape renderer then formats `"node {cssClasses} "` which
+        // produces `"node default  "` (double space) when no extra classes,
+        // and `"node default dark "` (one trailing space) when "dark" is last.
+        let classes = if v.classes.is_empty() {
+            "default ".to_string()
+        } else {
+            format!("default {}", v.classes.join(" "))
+        };
+        node.css_classes = Some(classes);
+        // Inline styles.
+        if !merged_styles.is_empty() {
+            node.css_styles = Some(merged_styles);
+        }
+        node.link = v.link.clone();
+        node.link_target = v.link_target.clone();
+        node.tooltip = v.tooltip.clone();
+        if v.callback.is_some() {
+            node.have_callback = Some(true);
+        }
+        // Rectangle radii (only set for `round`).
+        if shape_id == "round" {
+            node.rx = Some(5.0);
+            node.ry = Some(5.0);
         }
         data.nodes.push(node);
     }
