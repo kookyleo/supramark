@@ -1257,7 +1257,7 @@ fn layout_isolated_cluster(
 
     for cc in &cluster_children {
         if is_isolated_within(&cc.id, &parent_members, data) {
-            let inner = layout_isolated_cluster(&cc.id, data, inner_rankdir, inner_ranksep);
+            let inner = layout_isolated_cluster(&cc.id, data, outer_rankdir, inner_ranksep);
             sub_isolated.insert(cc.id.clone(), inner);
         } else {
             non_isolated_cluster_children.push(cc);
@@ -1699,7 +1699,7 @@ fn layout_isolated_cluster(
 
     log::debug!(
         "dagre_bridge: inner layout for isolated cluster '{}': cluster_w={}, cluster_h={}, \
-         inner_x={}, inner_y={}, bbox_w={}, bbox_h={}, sub_isolated={:?}, inner_edges={}",
+         inner_x={}, inner_y={}, bbox_w={}, bbox_h={}, inner_rankdir={}, sub_isolated={:?}, inner_edges={}",
         cluster_id,
         cluster_width,
         cluster_height,
@@ -1707,6 +1707,7 @@ fn layout_isolated_cluster(
         inner_y,
         bbox_width,
         bbox_height,
+        match inner_rankdir { RankDir::TB => "TB", RankDir::BT => "BT", RankDir::LR => "LR", RankDir::RL => "RL" },
         sub_isolated.keys().collect::<Vec<_>>(),
         inner_edges.len(),
     );
