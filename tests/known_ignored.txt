@@ -25,3 +25,21 @@ ext_fixtures/demos/flowchart/44.mmd	KaTeX math rendering ($$...$$); byte-exact p
 ext_fixtures/demos/flowchart/45.mmd	KaTeX math rendering ($$...$$); byte-exact parity requires porting KaTeX renderer output.
 ext_fixtures/demos/flowchart/46.mmd	KaTeX math rendering ($$...$$); byte-exact parity requires porting KaTeX renderer output.
 ext_fixtures/demos/flowchart/47.mmd	KaTeX math rendering ($$...$$); byte-exact parity requires porting KaTeX renderer output.
+ext_fixtures/cypress/flowchart/223.mmd	Stadium shape uses roughjs for path generation; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/cypress/flowchart/224.mmd	Stadium shape uses roughjs for path generation; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/cypress/flowchart/90.mmd	Stadium + linkStyle/style uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/cypress/flowchart/91.mmd	Stadium + linkStyle/style uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/cypress/flowchart/105.mmd	Multiple shapes + stadium + linkStyle/style use roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/cypress/flowchart/113.mmd	Stadium shape + edge animation uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/cypress/flowchart/144.mmd	Stadium shape uses roughjs for path generation; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/cypress/flowchart/192.mmd	Stadium shape uses roughjs for path generation; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/cypress/flowchart/237.mmd	Stadium shape uses roughjs for path generation; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/cypress/flowchart/239.mmd	Stadium shape uses roughjs for path generation; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/demos/flowchart/34.mmd	Stadium + linkStyle/style uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/demos/flowchart/35.mmd	Stadium + linkStyle/style uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/demos/flowchart/38.mmd	Stadium + linkStyle/style uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/demos/flowchart/39.mmd	Stadium + linkStyle/style uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/demos/flowchart/40.mmd	Stadium + linkStyle/style uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/demos/flowchart/41.mmd	Stadium + linkStyle/style uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/demos/flowchart/63.mmd	Stadium + linkStyle/style uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
+ext_fixtures/demos/flowchart/65.mmd	Stadium + thick arrows + linkStyle/classDef uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
