@@ -65,7 +65,9 @@ fn read_known_ignored() -> std::collections::HashSet<String> {
                 continue;
             }
             if let Some((rel, _)) = line.split_once('\t') {
-                set.insert(rel.trim().to_string());
+                let key = rel.trim();
+                let key = key.strip_suffix(".mmd").unwrap_or(key);
+                set.insert(key.to_string());
             }
         }
     }
@@ -73,7 +75,8 @@ fn read_known_ignored() -> std::collections::HashSet<String> {
 }
 
 fn is_elk_source(src: &str) -> bool {
-    src.trim_start().starts_with("flowchart-elk")
+    let trimmed = src.trim_start();
+    trimmed.starts_with("flowchart-elk") || src.contains("layout: elk")
 }
 
 fn run_one(rel: &str) -> Result<(bool, String), String> {
@@ -244,7 +247,7 @@ fn flowchart_byte_exact_sweep() {
         }
     }
     eprintln!("[flowchart] byte-exact={}/{}", pass, total);
-    for (r, d) in diffs.iter().take(30) {
+    for (r, d) in diffs.iter() {
         eprintln!("[flowchart] diff {r}: {d}");
     }
     // This test is aspirational for the MVP: it exists so the CI / harness
