@@ -267,20 +267,18 @@ fn step_visited_points(points: &[Point], t: f64) -> Vec<(f64, f64)> {
     if points.is_empty() {
         return out;
     }
-    let mut x_prev = 0.0;
-    let mut y_prev = 0.0;
+    let mut x_prev = 0.0_f64;
+    let mut y_prev = 0.0_f64;
     for (i, p) in points.iter().enumerate() {
         if i == 0 {
             out.push((p.x, p.y));
-        } else {
-            let x_bend = x_prev + (p.x - x_prev) * t;
-            if x_bend != x_prev {
-                out.push((x_bend, y_prev));
-            }
-            if x_bend != p.x {
-                out.push((x_bend, p.y));
-            }
+        } else if t <= 0.0 {
+            out.push((x_prev, p.y));
             out.push((p.x, p.y));
+        } else {
+            let x1 = x_prev * (1.0 - t) + p.x * t;
+            out.push((x1, y_prev));
+            out.push((x1, p.y));
         }
         x_prev = p.x;
         y_prev = p.y;
@@ -392,24 +390,25 @@ fn path_step(points: &[Point], t: f64) -> String {
         return String::new();
     }
     let mut d = String::new();
-    let mut x_prev = 0.0;
-    let mut y_prev = 0.0;
+    let mut x_prev = 0.0_f64;
+    let mut y_prev = 0.0_f64;
     for (i, p) in points.iter().enumerate() {
         if i == 0 {
             let _ = write!(d, "M{},{}", fmt_coord(p.x), fmt_coord(p.y));
-        } else {
-            // step point: horizontal bend at x = lerp(x_prev, p.x, t).
-            let x_bend = x_prev + (p.x - x_prev) * t;
-            if x_bend != x_prev {
-                let _ = write!(d, "L{},{}", fmt_coord(x_bend), fmt_coord(y_prev));
-            }
-            if x_bend != p.x {
-                let _ = write!(d, "L{},{}", fmt_coord(x_bend), fmt_coord(p.y));
-            }
+        } else if t <= 0.0 {
+            let _ = write!(d, "L{},{}", fmt_coord(x_prev), fmt_coord(p.y));
             let _ = write!(d, "L{},{}", fmt_coord(p.x), fmt_coord(p.y));
+        } else {
+            let x1 = x_prev * (1.0 - t) + p.x * t;
+            let _ = write!(d, "L{},{}", fmt_coord(x1), fmt_coord(y_prev));
+            let _ = write!(d, "L{},{}", fmt_coord(x1), fmt_coord(p.y));
         }
         x_prev = p.x;
         y_prev = p.y;
+    }
+    if t > 0.0 && t < 1.0 && points.len() == 2 {
+        let last = points.last().unwrap();
+        let _ = write!(d, "L{},{}", fmt_coord(last.x), fmt_coord(last.y));
     }
     d
 }
@@ -1672,6 +1671,19 @@ mod tests {
     fn step_after_path_is_horizontal_then_vertical() {
         let pts = vec![Point { x: 0.0, y: 0.0 }, Point { x: 10.0, y: 10.0 }];
         assert_eq!(build_path(&pts, CurveType::StepAfter), "M0,0L10,0L10,10");
+    }
+
+    #[test]
+    fn step_after_with_three_points_emits_duplicate_corner() {
+        let pts = vec![
+            Point { x: 5.0, y: 0.0 },
+            Point { x: 10.0, y: 5.0 },
+            Point { x: 10.0, y: 10.0 },
+        ];
+        assert_eq!(
+            build_path(&pts, CurveType::StepAfter),
+            "M5,0L10,0L10,5L10,5L10,10"
+        );
     }
 
     #[test]
