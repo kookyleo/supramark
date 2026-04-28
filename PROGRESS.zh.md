@@ -10,7 +10,7 @@
 |---|---:|
 | Diagram 完整 byte-exact 已落地 | **13 / 23** |
 | Diagram 结构落地（parse + layout，render 可用） | **20 / 23**（+gantt） |
-| Stratum 3 byte-exact fixtures | **~558 / 632**（flowchart **219/236** 92.8%） |
+| Stratum 3 byte-exact fixtures | **~548 / 632**（flowchart **208/224** 93.0%） |
 | Lib unit 测试 | 530 passed / 0 failed / 7 ignored |
 | Cargo check warnings | ≤10（pre-existing dead_code） |
 | 项目代码总行数 | ~55,000 行 |
@@ -28,7 +28,17 @@
 4. **非孤立集群子节点 bbox 计算** —— 非孤立集群子节点在 jsdom getBBox shim 中贡献
    绝对坐标（cx-w/2, cy-h/2），而非对称半宽/半高。修复使用绝对坐标追踪。
 5. **per-edge curve metadata** —— 解析 `@{ curve: <type> }` 语法并传播到 unified Edge，
-   覆盖默认 basis 插值。cypress/196 viewBox 仅差 2.23px。
+    覆盖默认 basis 插值。cypress/196 viewBox 仅差 2.23px。
+6. **7 种 d3 curve type 实现** —— natural / monotoneX / monotoneY / bumpX / bumpY /
+    catmullRom / cardinal 从 stub（fallback to basis）改为独立实现，匹配 d3-shape 算法。
+7. **ELK fixture 正确过滤** —— `is_elk_source()` 改用 `contains("flowchart-elk")` 检测，
+    正确过滤 51 个 cypress + 1 个 demo ELK fixture（之前只过滤了 1 个）。
+8. **Cluster anchor rewrite 产生的 self-loop 不扩展** —— `Sub→In` 被 rewrite 为
+    `In→In` 后不再生成 labelRect helper nodes，匹配上游行为（上游在
+    adjustClustersAndEdges 之后不再做 self-loop expansion）。
+    修复 fixture 168 的 viewBox。
+9. **空子图降级为 regular node** —— 没有子节点的 subgraph（如 fixture 139 的 B）
+    被上游 demote 为普通 node 而非 cluster rect。
 
 ## 已完整 byte-exact 的 diagram（13/23）
 
@@ -57,7 +67,7 @@
 | block | ✓ 完整 | ✓ | **33/33** | ✓ 完成 |
 | requirement | ✓ 完整 | ✓ | **44/44** | ✓ 完成 |
 | state | ✓ 结构改进 | ✓ 全量 | **24/82** | 节点 ID/形状（坐标已精确）、edge d 属性 |
-| flowchart | ✓ 结构改进 | ✓ 全量 | **219/236** (92.8%) | 子图 inner dagre pass（架构差异）、edge path、零散差异 |
+| flowchart | ✓ 结构改进 | ✓ 全量 | **208/224** (93.0%) | 子图 inner dagre 方向差异（9 个 viewBox）、edge path、零散差异 |
 | class | ✓ 新实现 | ✓ 全量 | **0/113** | classBox shape 未 port、节点 ID/形状 |
 
 ### 核心诊断方法
