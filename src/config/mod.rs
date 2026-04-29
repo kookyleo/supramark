@@ -39,6 +39,8 @@ pub struct FlowchartConfig {
     pub title_top_margin: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wrapping_width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inherit_dir: Option<bool>,
     /// Unknown flowchart-scoped keys — kept for round-trip & forward-compat.
     #[serde(flatten)]
     pub extras: BTreeMap<String, Value>,
@@ -177,6 +179,7 @@ fn merge_flowchart(
             take!(diagram_padding);
             take!(title_top_margin);
             take!(wrapping_width);
+            take!(inherit_dir);
             for (k, v) in o.extras {
                 b.extras.insert(k, v);
             }

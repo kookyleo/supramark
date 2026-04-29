@@ -47,6 +47,12 @@ pub fn parse(source: &str) -> Result<FlowchartDiagram> {
                 if let Some(n) = fcc.rank_spacing {
                     diag.rank_spacing = Some(n);
                 }
+                if let Some(c) = &fcc.curve {
+                    diag.curve = Some(c.clone());
+                }
+                if let Some(b) = fcc.inherit_dir {
+                    diag.inherit_dir = b;
+                }
             }
         }
     }
@@ -64,6 +70,12 @@ pub fn parse(source: &str) -> Result<FlowchartDiagram> {
             }
             if let Some(n) = fcc.rank_spacing {
                 diag.rank_spacing = Some(n);
+            }
+            if let Some(c) = &fcc.curve {
+                diag.curve = Some(c.clone());
+            }
+            if let Some(b) = fcc.inherit_dir {
+                diag.inherit_dir = b;
             }
         }
     }

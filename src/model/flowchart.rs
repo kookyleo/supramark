@@ -217,6 +217,13 @@ pub struct FlowchartDiagram {
     /// Effective `flowchart.rankSpacing` (dagre `ranksep`) from frontmatter
     /// / `%%{init}%%`. `None` keeps the upstream default (50).
     pub rank_spacing: Option<u32>,
+    /// Effective `flowchart.curve` from frontmatter / `%%{init}%%`.
+    /// `None` keeps the upstream default ("basis").
+    pub curve: Option<String>,
+    /// Effective `flowchart.inheritDir` from frontmatter / `%%{init}%%`.
+    /// When `true`, subgraphs without an explicit `direction` keyword
+    /// inherit the outer direction instead of flipping.
+    pub inherit_dir: bool,
     /// All vertices declared, in source order. Duplicates coalesce —
     /// the first declaration wins, subsequent refs just need to exist.
     pub vertices: Vec<Vertex>,

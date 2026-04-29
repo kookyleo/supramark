@@ -40,6 +40,7 @@ pub fn flowchart_defaults() -> FlowchartConfig {
         diagram_padding: Some(8),
         title_top_margin: Some(25),
         wrapping_width: Some(200),
+        inherit_dir: None,
         extras: Default::default(),
     }
 }

@@ -790,7 +790,9 @@ fn build_layout_data(d: &FlowchartDiagram) -> LayoutData {
         // cluster to TB whenever the user didn't request an explicit
         // `direction` line, matching upstream byte-for-byte.
         node.dir = sg.dir.map(|d| d.as_str().to_string()).or_else(|| {
-            if d.direction.as_str() != "TB" && d.direction.as_str() != "TD" {
+            if d.inherit_dir {
+                Some(d.direction.as_str().to_string())
+            } else if d.direction.as_str() != "TB" && d.direction.as_str() != "TD" {
                 Some("TB".to_string())
             } else {
                 None
@@ -910,7 +912,7 @@ fn build_layout_data(d: &FlowchartDiagram) -> LayoutData {
         // Cypress/flowchart/159 (2 edges) → `_0`,`_2`; cypress/flowchart/55
         // (3 edges, elk-fallback) → `_0`,`_2`,`_3`.
         let counter = if raw == 0 { 0 } else { raw + 1 };
-        let mut ue = build_edge(e, d, counter, &class_map, d.html_labels.unwrap_or(true));
+        let mut ue = build_edge(e, d, counter, &class_map, d.html_labels.unwrap_or(true), d.curve.as_deref().unwrap_or("basis"));
         // Record original endpoints before retargeting so the isolation check
         // in dagre_bridge can test against the pre-retarget cluster IDs.
         ue.extra.insert("orig_start".into(), e.start.clone());
@@ -1517,6 +1519,7 @@ fn build_edge<'a>(
     pair_counter: usize,
     class_map: &BTreeMap<&'a str, &'a ClassDef>,
     html_labels: bool,
+    config_curve: &str,
 ) -> unified::Edge {
     let mut ue = unified::Edge::default();
     // Custom-id syntax `A name@-->B` lets the source set an explicit edge id
@@ -1537,8 +1540,8 @@ fn build_edge<'a>(
     ue.thickness = Some(thickness.into());
     ue.pattern = Some(pattern.into());
     ue.stroke = Some(thickness.into());
-    ue.interpolate = Some("basis".into());
-    ue.curve = Some("basis".into());
+    ue.interpolate = Some(config_curve.into());
+    ue.curve = Some(config_curve.into());
     if let Some(curve_override) = &e.curve {
         ue.interpolate = Some(curve_override.clone());
         ue.curve = Some(curve_override.clone());
