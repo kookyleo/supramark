@@ -446,7 +446,9 @@ pub fn extract_stroke_color(path_style: &str) -> Option<String> {
         // be `stroke-:` which never occurs upstream) or alpha/digit
         // (would be e.g. `mystroke:` — vanishingly rare but cheap to
         // guard).
-        let prev = abs.checked_sub(1).and_then(|i| path_style.as_bytes().get(i));
+        let prev = abs
+            .checked_sub(1)
+            .and_then(|i| path_style.as_bytes().get(i));
         if matches!(prev, Some(b) if b.is_ascii_alphanumeric() || *b == b'-') {
             start = abs + "stroke:".len();
             continue;

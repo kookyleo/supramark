@@ -189,6 +189,7 @@ pub fn convert_with_id(source: &str, id: &str) -> Result<String, MermaidError> {
             let l = layout::gantt::layout(&d, &effective_theme)?;
             render::svg_gantt::render(&d, &l, &effective_theme, id)
         }
+        detect::DiagramKind::Info => render::svg_info::render(&theme, id),
         other => Err(MermaidError::Unsupported(format!(
             "diagram kind '{}' not yet implemented — Wave 7: sequence/c4/gitgraph; mindmap TBD",
             other.id()

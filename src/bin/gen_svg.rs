@@ -11,20 +11,20 @@ fn main() {
     let base = std::path::PathBuf::from(".");
     let mmd = base.join("tests").join(format!("{}.mmd", rel));
     let source = fs::read_to_string(&mmd).unwrap();
-    let is_elk = source.trim_start().starts_with("flowchart-elk") || source.contains("layout: elk");
-    if is_elk {
-        eprintln!("ELK source, skipping");
-        std::process::exit(0);
+    let mut id = String::from("ref-");
+    let mut last_sep = false;
+    for c in rel.chars() {
+        if c.is_ascii_alphanumeric() {
+            id.push(c);
+            last_sep = false;
+        } else if !last_sep {
+            id.push('-');
+            last_sep = true;
+        }
     }
-    let d = mermaid_little::parser::flowchart::parse(&source).unwrap();
-    let pre = mermaid_little::preprocess::preprocess(&source).unwrap();
-    let theme_name = pre.config.theme.as_deref().unwrap_or("default");
-    let mut th = mermaid_little::theme::get_theme(theme_name);
-    if let Some(tv) = pre.config.theme_variables.as_ref() {
-        mermaid_little::theme::apply_theme_variables(&mut th, tv);
+    while id.ends_with('-') {
+        id.pop();
     }
-    let l = mermaid_little::layout::flowchart::layout(&d, &th).unwrap();
-    let id = rel.replace("/", "-").replace(".", "-");
-    let got = mermaid_little::render::svg_flowchart::render(&d, &l, &th, &id).unwrap();
+    let got = mermaid_little::convert_with_id(&source, &id).unwrap();
     fs::write(out_path, &got).unwrap();
 }

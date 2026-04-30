@@ -936,6 +936,7 @@ impl<'a> LineParser<'a> {
                                 index: idx,
                                 classes: Vec::new(),
                                 curve: None,
+                                scope: self.current_subgraph.last().cloned(),
                             };
                             self.diag.edges.push(edge);
                         }

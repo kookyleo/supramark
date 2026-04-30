@@ -142,8 +142,14 @@ pub fn layout(d: &StateDiagram, theme: &ThemeVariables) -> Result<StateLayout> {
             .copied()
             .unwrap_or(usize::MAX);
         ka.cmp(&kb).then_with(|| {
-            let ia = orig_state_index.get(a.id.as_str()).copied().unwrap_or(usize::MAX);
-            let ib = orig_state_index.get(b.id.as_str()).copied().unwrap_or(usize::MAX);
+            let ia = orig_state_index
+                .get(a.id.as_str())
+                .copied()
+                .unwrap_or(usize::MAX);
+            let ib = orig_state_index
+                .get(b.id.as_str())
+                .copied()
+                .unwrap_or(usize::MAX);
             ia.cmp(&ib)
         })
     });
@@ -1382,7 +1388,6 @@ fn measure_lines_box(lines: &[&str], font_size: f64, bold: bool) -> (f64, f64) {
     // plus padding.  Using max(40) caused over-wide nodes for short labels.
     (total_w, total_h)
 }
-
 
 /// Small marker on `LNode` kept local here — stashes a flag in `extra`
 /// so the renderer can skip invisible divider pseudo-nodes without

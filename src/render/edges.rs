@@ -578,12 +578,14 @@ fn natural_visited_points(points: &[Point]) -> Vec<(f64, f64)> {
 // ── d3 curveMonotoneX / curveMonotoneY ────────────────────────────────
 
 fn monotone_sign(x: f64) -> f64 {
-    if x < 0.0 { -1.0 } else { 1.0 }
+    if x < 0.0 {
+        -1.0
+    } else {
+        1.0
+    }
 }
 
-fn monotone_slope3(
-    x0: f64, y0: f64, x1: f64, y1: f64, x2: f64, y2: f64,
-) -> f64 {
+fn monotone_slope3(x0: f64, y0: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> f64 {
     let h0 = x1 - x0;
     let h1 = x2 - x1;
     let d0 = if h0 != 0.0 {
@@ -609,12 +611,20 @@ fn monotone_slope3(
     };
     let min_val = s0.abs().min(s1.abs()).min(0.5 * p.abs());
     let result = (monotone_sign(s0) + monotone_sign(s1)) * min_val;
-    if result == 0.0 || !result.is_finite() { 0.0 } else { result }
+    if result == 0.0 || !result.is_finite() {
+        0.0
+    } else {
+        result
+    }
 }
 
 fn monotone_slope2(x0: f64, y0: f64, x1: f64, y1: f64, t: f64) -> f64 {
     let h = x1 - x0;
-    if h != 0.0 { (3.0 * (y1 - y0) / h - t) / 2.0 } else { t }
+    if h != 0.0 {
+        (3.0 * (y1 - y0) / h - t) / 2.0
+    } else {
+        t
+    }
 }
 
 fn path_monotone_impl(points: &[Point], swap: bool) -> String {
@@ -623,7 +633,11 @@ fn path_monotone_impl(points: &[Point], swap: bool) -> String {
         return String::new();
     }
     if points.len() == 1 {
-        let (x, y) = if swap { (points[0].y, points[0].x) } else { (points[0].x, points[0].y) };
+        let (x, y) = if swap {
+            (points[0].y, points[0].x)
+        } else {
+            (points[0].x, points[0].y)
+        };
         return format!("M{},{}Z", fmt_coord(x), fmt_coord(y));
     }
     let coords: Vec<(f64, f64)> = points
@@ -675,7 +689,14 @@ fn path_monotone_impl(points: &[Point], swap: bool) -> String {
 }
 
 fn emit_monotone_cubic(
-    d: &mut String, x0: f64, y0: f64, x1: f64, y1: f64, t0: f64, t1: f64, swap: bool,
+    d: &mut String,
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    t0: f64,
+    t1: f64,
+    swap: bool,
 ) {
     use std::fmt::Write;
     let dx = (x1 - x0) / 3.0;
@@ -727,12 +748,24 @@ fn monotone_visited_points_impl(points: &[Point], swap: bool) -> Vec<(f64, f64)>
         .collect();
     if coords.len() == 1 {
         let (x, y) = coords[0];
-        if swap { out.push((y, x)); } else { out.push((x, y)); }
+        if swap {
+            out.push((y, x));
+        } else {
+            out.push((x, y));
+        }
         return out;
     }
-    if swap { out.push((coords[0].1, coords[0].0)); } else { out.push((coords[0].0, coords[0].1)); }
+    if swap {
+        out.push((coords[0].1, coords[0].0));
+    } else {
+        out.push((coords[0].0, coords[0].1));
+    }
     if coords.len() == 2 {
-        if swap { out.push((coords[1].1, coords[1].0)); } else { out.push((coords[1].0, coords[1].1)); }
+        if swap {
+            out.push((coords[1].1, coords[1].0));
+        } else {
+            out.push((coords[1].0, coords[1].1));
+        }
         return out;
     }
     let mut x0 = coords[0].0;
@@ -764,7 +797,14 @@ fn monotone_visited_points_impl(points: &[Point], swap: bool) -> Vec<(f64, f64)>
 }
 
 fn push_monotone_cubic_visited(
-    out: &mut Vec<(f64, f64)>, x0: f64, y0: f64, x1: f64, y1: f64, t0: f64, t1: f64, swap: bool,
+    out: &mut Vec<(f64, f64)>,
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    t0: f64,
+    t1: f64,
+    swap: bool,
 ) {
     let dx = (x1 - x0) / 3.0;
     let cx1 = x0 + dx;
@@ -880,10 +920,20 @@ fn bump_y_visited_points(points: &[Point]) -> Vec<(f64, f64)> {
 const D3_EPSILON: f64 = 1e-12;
 
 fn catmull_rom_point(
-    x0: f64, y0: f64, x1: f64, y1: f64, x2: f64, y2: f64,
-    l01_a: f64, l12_a: f64, l23_a: f64,
-    l01_2a: f64, l12_2a: f64, l23_2a: f64,
-    nx: f64, ny: f64,
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    l01_a: f64,
+    l12_a: f64,
+    l23_a: f64,
+    l01_2a: f64,
+    l12_2a: f64,
+    l23_2a: f64,
+    nx: f64,
+    ny: f64,
 ) -> (f64, f64, f64, f64) {
     let mut cx1 = x1;
     let mut cy1 = y1;
@@ -964,10 +1014,7 @@ fn path_catmull_rom(points: &[Point], alpha: f64) -> String {
             2 => {
                 pt = 3;
                 let (cx1, cy1, cx2, cy2) = catmull_rom_point(
-                    x0, y0, x1, y1, x2, y2,
-                    l01_a, l12_a, l23_a,
-                    l01_2a, l12_2a, l23_2a,
-                    x, y,
+                    x0, y0, x1, y1, x2, y2, l01_a, l12_a, l23_a, l01_2a, l12_2a, l23_2a, x, y,
                 );
                 let _ = write!(
                     d,
@@ -982,10 +1029,7 @@ fn path_catmull_rom(points: &[Point], alpha: f64) -> String {
             }
             _ => {
                 let (cx1, cy1, cx2, cy2) = catmull_rom_point(
-                    x0, y0, x1, y1, x2, y2,
-                    l01_a, l12_a, l23_a,
-                    l01_2a, l12_2a, l23_2a,
-                    x, y,
+                    x0, y0, x1, y1, x2, y2, l01_a, l12_a, l23_a, l01_2a, l12_2a, l23_2a, x, y,
                 );
                 let _ = write!(
                     d,
@@ -1014,10 +1058,7 @@ fn path_catmull_rom(points: &[Point], alpha: f64) -> String {
 
     if pt == 3 {
         let (cx1, cy1, cx2, cy2) = catmull_rom_point(
-            x0, y0, x1, y1, x2, y2,
-            l01_a, l12_a, 0.0,
-            l01_2a, l12_2a, 0.0,
-            x2, y2,
+            x0, y0, x1, y1, x2, y2, l01_a, l12_a, 0.0, l01_2a, l12_2a, 0.0, x2, y2,
         );
         let _ = write!(
             d,
@@ -1092,10 +1133,7 @@ fn catmull_rom_visited_points(points: &[Point], alpha: f64) -> Vec<(f64, f64)> {
             2 | _ => {
                 pt = 3;
                 let (cx1, cy1, cx2, cy2) = catmull_rom_point(
-                    x0, y0, x1, y1, x2, y2,
-                    l01_a, l12_a, l23_a,
-                    l01_2a, l12_2a, l23_2a,
-                    x, y,
+                    x0, y0, x1, y1, x2, y2, l01_a, l12_a, l23_a, l01_2a, l12_2a, l23_2a, x, y,
                 );
                 out.push((cx1, cy1));
                 out.push((cx2, cy2));
@@ -1117,10 +1155,7 @@ fn catmull_rom_visited_points(points: &[Point], alpha: f64) -> Vec<(f64, f64)> {
 
     if pt == 3 {
         let (cx1, cy1, cx2, cy2) = catmull_rom_point(
-            x0, y0, x1, y1, x2, y2,
-            l01_a, l12_a, 0.0,
-            l01_2a, l12_2a, 0.0,
-            x2, y2,
+            x0, y0, x1, y1, x2, y2, l01_a, l12_a, 0.0, l01_2a, l12_2a, 0.0, x2, y2,
         );
         out.push((cx1, cy1));
         out.push((cx2, cy2));
@@ -1857,10 +1892,7 @@ mod tests {
         );
 
         let pts2 = vec![Point { x: 0.0, y: 0.0 }, Point { x: 100.0, y: 0.0 }];
-        assert_eq!(
-            build_path(&pts2, CurveType::BumpX),
-            "M0,0C50,0,50,0,100,0"
-        );
+        assert_eq!(build_path(&pts2, CurveType::BumpX), "M0,0C50,0,50,0,100,0");
     }
 
     #[test]
@@ -1876,10 +1908,7 @@ mod tests {
         );
 
         let pts2 = vec![Point { x: 0.0, y: 0.0 }, Point { x: 100.0, y: 0.0 }];
-        assert_eq!(
-            build_path(&pts2, CurveType::BumpY),
-            "M0,0C0,0,100,0,100,0"
-        );
+        assert_eq!(build_path(&pts2, CurveType::BumpY), "M0,0C0,0,100,0,100,0");
     }
 
     #[test]

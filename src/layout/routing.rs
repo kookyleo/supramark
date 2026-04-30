@@ -645,5 +645,4 @@ mod tests {
         assert!(edge.label_x.is_some());
         assert!(edge.label_y.is_some());
     }
-
 }

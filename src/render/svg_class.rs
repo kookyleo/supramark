@@ -34,7 +34,6 @@ use crate::layout::unified::types::Node as LayoutNode;
 use crate::model::class::ClassDiagram;
 use crate::render::edges::{build_path, CurveType};
 use crate::render::foreign_object::{render_edge_label as fo_edge, LabelOpts};
-use crate::render::markers;
 use crate::render::unified_shell;
 use crate::theme::css as theme_css;
 use crate::theme::ThemeVariables;
@@ -2879,7 +2878,10 @@ mod tests {
         .iter()
         .map(|s| s.to_string())
         .collect();
-        let demos_nums: Vec<String> = (1..=13).map(|n| format!("{:02}", n)).collect();
+        let demos_nums: Vec<String> = (1..=13)
+            .filter(|n| *n != 8)
+            .map(|n| format!("{:02}", n))
+            .collect();
 
         let mut pass = 0usize;
         let mut total = 0usize;

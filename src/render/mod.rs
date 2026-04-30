@@ -14,6 +14,7 @@ pub mod svg_class;
 pub mod svg_er;
 pub mod svg_flowchart;
 pub mod svg_gantt;
+pub mod svg_info;
 pub mod svg_ishikawa;
 pub mod svg_journey;
 pub mod svg_kanban;

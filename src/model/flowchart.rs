@@ -156,6 +156,9 @@ pub struct Edge {
     pub classes: Vec<String>,
     /// Per-edge curve type from `@{ curve: <type> }` metadata.
     pub curve: Option<String>,
+    /// Innermost subgraph active where the edge statement was declared.
+    /// `None` means the edge was declared at diagram root.
+    pub scope: Option<String>,
 }
 
 /// A subgraph (cluster) declaration.

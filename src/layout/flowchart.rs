@@ -912,7 +912,14 @@ fn build_layout_data(d: &FlowchartDiagram) -> LayoutData {
         // Cypress/flowchart/159 (2 edges) → `_0`,`_2`; cypress/flowchart/55
         // (3 edges, elk-fallback) → `_0`,`_2`,`_3`.
         let counter = if raw == 0 { 0 } else { raw + 1 };
-        let mut ue = build_edge(e, d, counter, &class_map, d.html_labels.unwrap_or(true), d.curve.as_deref().unwrap_or("basis"));
+        let mut ue = build_edge(
+            e,
+            d,
+            counter,
+            &class_map,
+            d.html_labels.unwrap_or(true),
+            d.curve.as_deref().unwrap_or("basis"),
+        );
         // Record original endpoints before retargeting so the isolation check
         // in dagre_bridge can test against the pre-retarget cluster IDs.
         ue.extra.insert("orig_start".into(), e.start.clone());
@@ -1613,6 +1620,9 @@ fn build_edge<'a>(
         ue.curve = Some(i);
     }
     ue.look = Some("classic".into());
+    if let Some(scope) = &e.scope {
+        ue.extra.insert("scope_parent".into(), scope.clone());
+    }
     ue
 }
 

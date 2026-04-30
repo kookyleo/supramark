@@ -1021,11 +1021,13 @@ pub fn render(
             continue;
         };
         if let Some(cnode) = l.nodes.iter().find(|n| &n.id == cluster_id && n.is_group) {
-            let has_children = l.nodes.iter().any(|n| {
-                n.parent_id.as_deref() == Some(cluster_id) && !n.is_group
-            }) || l.nodes.iter().any(|n| {
-                n.parent_id.as_deref() == Some(cluster_id) && n.is_group
-            });
+            let has_children = l
+                .nodes
+                .iter()
+                .any(|n| n.parent_id.as_deref() == Some(cluster_id) && !n.is_group)
+                || l.nodes
+                    .iter()
+                    .any(|n| n.parent_id.as_deref() == Some(cluster_id) && n.is_group);
             if !has_children {
                 continue;
             } else {
@@ -1097,9 +1099,10 @@ pub fn render(
         let Some(cnode) = l.nodes.iter().find(|n| &n.id == cluster_id && n.is_group) else {
             continue;
         };
-        let has_children = l.nodes.iter().any(|n| {
-            n.parent_id.as_deref() == Some(cluster_id)
-        });
+        let has_children = l
+            .nodes
+            .iter()
+            .any(|n| n.parent_id.as_deref() == Some(cluster_id));
         if l.isolated_cluster_ids.contains(cluster_id) {
             // Skip if parent is also an isolated cluster (nested, handled recursively).
             let parent_also_isolated = cnode
@@ -1113,11 +1116,18 @@ pub fn render(
             if !has_children {
                 let cluster = l.clusters.iter().find(|c| &c.id == cluster_id);
                 if let Some(cluster) = cluster {
-                    inner.push_str(&render_empty_cluster_as_node(cnode, cluster, theme, id, html_labels));
+                    inner.push_str(&render_empty_cluster_as_node(
+                        cnode,
+                        cluster,
+                        theme,
+                        id,
+                        html_labels,
+                    ));
                 }
             } else {
                 inner.push_str(&render_isolated_cluster_inner_root(
                     cnode,
+                    d,
                     l,
                     theme,
                     id,
@@ -1133,7 +1143,13 @@ pub fn render(
                 }
                 let cluster = l.clusters.iter().find(|c| &c.id == cluster_id);
                 if let Some(cluster) = cluster {
-                    inner.push_str(&render_empty_cluster_as_node(cnode, cluster, theme, id, html_labels));
+                    inner.push_str(&render_empty_cluster_as_node(
+                        cnode,
+                        cluster,
+                        theme,
+                        id,
+                        html_labels,
+                    ));
                 }
             }
         }
@@ -1534,7 +1550,7 @@ fn render_cluster(
     html_labels: bool,
 ) -> String {
     use crate::render::foreign_object::{
-        measure_html_label, measure_html_markup_label, HtmlLabelFont,
+        measure_html_markup_label, HtmlLabelFont,
     };
 
     let w = node.width.unwrap_or(0.0);
@@ -1705,6 +1721,9 @@ fn build_cluster_text_inner_tspans(label: &str, is_markdown: bool) -> String {
 /// subgraph) are also skipped here — upstream feeds them through the same
 /// `expand_self_edge` path, so the renderer must not emit the original.
 fn is_replaced_self_loop(e: &UEdge) -> bool {
+    if e.extra.get("synthetic").map(|s| s.as_str()) == Some("cyclic_segment") {
+        return false;
+    }
     let os = e
         .extra
         .get("orig_start")
@@ -1996,6 +2015,7 @@ fn upstream_cluster_render_order(d: &FlowchartDiagram, l: &FlowchartLayout) -> V
 /// themselves rendered as nested inner root groups.
 fn render_isolated_cluster_inner_root(
     cnode: &UNode,
+    d: &FlowchartDiagram,
     l: &FlowchartLayout,
     theme: &ThemeVariables,
     svg_id: &str,
@@ -2070,45 +2090,34 @@ fn render_isolated_cluster_inner_root(
     // Build cluster_bounds for edge clipping: non-isolated sub-clusters
     // that are descendants of cnode.id. Their bounds (from l.clusters)
     // are already in the inner dagre coordinate frame.
-    let inner_cluster_bounds: std::collections::HashMap<String, crate::layout::unified::Bounds> =
-        l.clusters
-            .iter()
-            .filter_map(|c| {
-                let b = c.bounds.as_ref()?;
-                if c.id == cnode.id {
-                    return None;
-                }
-                if !is_descendant_of(&c.id, &cnode.id, l) {
-                    return None;
-                }
-                if l.isolated_cluster_ids.contains(&c.id) {
-                    return None;
-                }
-                Some((c.id.clone(), b.clone()))
-            })
-            .collect();
+    let inner_cluster_bounds: std::collections::HashMap<String, crate::layout::unified::Bounds> = l
+        .clusters
+        .iter()
+        .filter_map(|c| {
+            let b = c.bounds.as_ref()?;
+            if c.id == cnode.id {
+                return None;
+            }
+            if !is_descendant_of(&c.id, &cnode.id, l) {
+                return None;
+            }
+            if l.isolated_cluster_ids.contains(&c.id) {
+                return None;
+            }
+            Some((c.id.clone(), b.clone()))
+        })
+        .collect();
 
     // Inner <g class="edgePaths"> — edges between descendants of this
     // cluster, excluding edges between descendants of isolated sub-clusters.
     out.push_str(&unified_shell::open_layer("edgePaths"));
     for (i, e) in l.edges.iter().enumerate() {
-        let src = match isolated_render_endpoint(
-            e,
-            "orig_start",
-            e.start.as_deref(),
-            &cnode.id,
-            l,
-        ) {
+        let src = match isolated_render_endpoint(e, "orig_start", e.start.as_deref(), &cnode.id, l)
+        {
             Some(s) => s,
             None => continue,
         };
-        let dst = match isolated_render_endpoint(
-            e,
-            "orig_end",
-            e.end.as_deref(),
-            &cnode.id,
-            l,
-        ) {
+        let dst = match isolated_render_endpoint(e, "orig_end", e.end.as_deref(), &cnode.id, l) {
             Some(s) => s,
             None => continue,
         };
@@ -2157,23 +2166,12 @@ fn render_isolated_cluster_inner_root(
     // Inner <g class="edgeLabels">.
     out.push_str(&unified_shell::open_layer("edgeLabels"));
     for e in l.edges.iter() {
-        let src = match isolated_render_endpoint(
-            e,
-            "orig_start",
-            e.start.as_deref(),
-            &cnode.id,
-            l,
-        ) {
+        let src = match isolated_render_endpoint(e, "orig_start", e.start.as_deref(), &cnode.id, l)
+        {
             Some(s) => s,
             None => continue,
         };
-        let dst = match isolated_render_endpoint(
-            e,
-            "orig_end",
-            e.end.as_deref(),
-            &cnode.id,
-            l,
-        ) {
+        let dst = match isolated_render_endpoint(e, "orig_end", e.end.as_deref(), &cnode.id, l) {
             Some(s) => s,
             None => continue,
         };
@@ -2226,6 +2224,7 @@ fn render_isolated_cluster_inner_root(
         }
         out.push_str(&render_isolated_cluster_inner_root(
             n,
+            d,
             l,
             theme,
             svg_id,
@@ -2233,8 +2232,10 @@ fn render_isolated_cluster_inner_root(
         ));
     }
 
-    // Render direct leaf nodes (JS object key order, like outer level).
-    let inner_node_indices: Vec<usize> = js_object_key_order(l.nodes.iter().map(|n| n.id.as_str()));
+    // Render leaf nodes in upstream recursiveRender hierarchy order:
+    // non-isolated child clusters are walked before direct leaf members, then
+    // synthetic/helper leftovers fall back to JS object-key order.
+    let inner_node_indices = isolated_inner_leaf_node_order(&cnode.id, d, l);
     for &idx in &inner_node_indices {
         let n = &l.nodes[idx];
         if n.is_group {
@@ -2294,6 +2295,110 @@ fn node_parent_is(node_id: Option<&str>, cluster_id: &str, l: &FlowchartLayout) 
         .and_then(|n| n.parent_id.as_deref())
         .map(|p| p == cluster_id)
         .unwrap_or(false)
+}
+
+/// Determine the render order for leaf nodes inside an isolated cluster.
+///
+/// Mirrors upstream's `recursiveRender` DFS traversal scoped to an isolated
+/// cluster's inner dagre pass. The order is:
+/// 1. DFS into non-isolated child clusters first (their leaves appear before
+///    the cluster's direct leaves)
+/// 2. Direct leaf members in subgraph declaration order
+/// 3. Synthetic/helper nodes not in the diagram model fall back to their
+///    position in `l.nodes` (JS key-order fallback)
+///
+/// Returns indices into `l.nodes` in DFS traversal order. The caller still
+/// filters out `is_group` nodes and nodes inside isolated sub-clusters.
+fn isolated_inner_leaf_node_order(
+    cluster_id: &str,
+    d: &FlowchartDiagram,
+    l: &FlowchartLayout,
+) -> Vec<usize> {
+    use std::collections::{HashMap, HashSet};
+
+    let node_idx: HashMap<&str, usize> = l
+        .nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (n.id.as_str(), i))
+        .collect();
+    let subgraph_ids: HashSet<&str> = d.subgraphs.iter().map(|s| s.id.as_str()).collect();
+
+    // Build insertion order matching upstream getData() scoped to this cluster:
+    //   reversed child subgraphs, then member vertices in declaration order.
+    let mut insertion: Vec<String> = Vec::new();
+    for sg in d.subgraphs.iter().rev() {
+        if !node_idx.contains_key(sg.id.as_str()) {
+            continue;
+        }
+        if !is_descendant_of(&sg.id, cluster_id, l) {
+            continue;
+        }
+        if l.isolated_cluster_ids.contains(&sg.id) {
+            continue;
+        }
+        insertion.push(sg.id.clone());
+    }
+    for v in &d.vertices {
+        if subgraph_ids.contains(v.id.as_str()) {
+            continue;
+        }
+        if !node_idx.contains_key(v.id.as_str()) {
+            continue;
+        }
+        if !is_descendant_of(&v.id, cluster_id, l) {
+            continue;
+        }
+        if is_in_isolated_sub_cluster_of(&v.id, cluster_id, l) {
+            continue;
+        }
+        insertion.push(v.id.clone());
+    }
+
+    let pos: HashMap<&str, usize> = insertion
+        .iter()
+        .enumerate()
+        .map(|(i, id)| (id.as_str(), i))
+        .collect();
+
+    // Build child lists per parent in insertion order.
+    // Nodes absent from the insertion list (synthetic/helper) get usize::MAX
+    // so they sort after all explicitly-ordered nodes.
+    let mut children_of: HashMap<Option<String>, Vec<String>> = HashMap::new();
+    let mut sorted: Vec<&UNode> = l.nodes.iter().collect();
+    sorted.sort_by_key(|n| pos.get(n.id.as_str()).copied().unwrap_or(usize::MAX));
+    for n in sorted {
+        if !is_descendant_of(&n.id, cluster_id, l) {
+            continue;
+        }
+        if is_in_isolated_sub_cluster_of(&n.id, cluster_id, l) {
+            continue;
+        }
+        children_of
+            .entry(n.parent_id.clone())
+            .or_default()
+            .push(n.id.clone());
+    }
+
+    // DFS from cluster_id's children, collecting all node indices.
+    let mut result: Vec<usize> = Vec::new();
+    let start_children = children_of
+        .get(&Some(cluster_id.to_string()))
+        .cloned()
+        .unwrap_or_default();
+    let mut stack: Vec<String> = start_children.into_iter().rev().collect();
+    while let Some(id) = stack.pop() {
+        if let Some(&idx) = node_idx.get(id.as_str()) {
+            result.push(idx);
+        }
+        if let Some(kids) = children_of.get(&Some(id.clone())) {
+            for k in kids.iter().rev() {
+                stack.push(k.clone());
+            }
+        }
+    }
+
+    result
 }
 
 fn is_in_isolated_sub_cluster_of(node_id: &str, cnode_id: &str, l: &FlowchartLayout) -> bool {
@@ -2848,7 +2953,7 @@ fn render_edge_path(
         pts.reverse();
     }
 
-// Apply marker visual offsets to get the rendered path points.
+    // Apply marker visual offsets to get the rendered path points.
     let arrow_end = e.arrow_type_end.as_deref().unwrap_or("none");
     let arrow_start = e.arrow_type_start.as_deref().unwrap_or("none");
     apply_marker_offsets(&mut pts, arrow_end, arrow_start);
@@ -2875,17 +2980,17 @@ fn render_edge_path(
             let first_y = pts_raw[0].y;
             let last_y = pts_raw[pts_raw.len() - 1].y;
 
-if (first_x - last_x).abs() < 0.5 {
-                    // Boundary is vertical (right or left). The
-                    // self-loop interior (midpoint) is on the
-                    // OUTWARD side of the boundary. Offset toward
-                    // the interior direction.
-                    let interior_x = pts_raw[pts_raw.len() / 2].x;
-                    if interior_x > first_x {
-                        pts[0].x += mo;
-                    } else {
-                        pts[0].x -= mo;
-                    }
+            if (first_x - last_x).abs() < 0.5 {
+                // Boundary is vertical (right or left). The
+                // self-loop interior (midpoint) is on the
+                // OUTWARD side of the boundary. Offset toward
+                // the interior direction.
+                let interior_x = pts_raw[pts_raw.len() / 2].x;
+                if interior_x > first_x {
+                    pts[0].x += mo;
+                } else {
+                    pts[0].x -= mo;
+                }
             } else if (first_y - last_y).abs() < 0.5 {
                 // Boundary is horizontal (top or bottom). Determine side.
                 let interior_y = pts_raw[pts_raw.len() / 2].y;
@@ -3999,9 +4104,8 @@ fn cut_path_at_intersect_xywh(
 }
 
 /// Port of upstream `traverseEdge` + `calculatePoint` (utils.ts:305).
-/// Returns the half-total-distance midpoint of the polyline, with x/y
-/// rounded to 5 decimals via `roundNumber(_, 5)`. Returns `None` when the
-/// path collapses to a single point or degenerate length.
+/// Returns the half-total-distance midpoint of the polyline. Returns `None`
+/// when the path collapses to a single point or degenerate length.
 fn traverse_edge_midpoint(pts: &[(f64, f64)]) -> Option<(f64, f64)> {
     if pts.len() < 2 {
         return None;
@@ -4046,8 +4150,9 @@ fn traverse_edge_midpoint(pts: &[(f64, f64)]) -> Option<(f64, f64)> {
 /// When an edge enters or exits a cluster, upstream `insertEdge` re-clips
 /// the polyline at the cluster boundary (via `cutPathAtIntersect`) and the
 /// resulting `paths.updatedPath` triggers `positionEdgeLabel` to recompute
-/// the label translate via `calcLabelPosition`. Upstream does NOT apply
-/// `roundNumber(_, 5)` to label positions — only to path coordinates.
+/// the label translate via `calcLabelPosition`. Root-level cluster-edge
+/// declarations go through the rounded update path; edges declared inside a
+/// subgraph keep the raw dagre label precision.
 ///
 /// We approximate this by checking whether the edge's `orig_start` /
 /// `orig_end` reference a cluster (`is_group=true` node) and applying the
@@ -4084,16 +4189,22 @@ fn recompute_edge_label_position(e: &UEdge, l: &FlowchartLayout) -> Option<(f64,
         }
     }
     let path_actually_changed = pts.len() != pts_before.len()
-        || pts.iter().zip(pts_before.iter()).any(|(a, b)| {
-            (a.0 - b.0).abs() > 1e-6 || (a.1 - b.1).abs() > 1e-6
-        });
+        || pts
+            .iter()
+            .zip(pts_before.iter())
+            .any(|(a, b)| (a.0 - b.0).abs() > 1e-6 || (a.1 - b.1).abs() > 1e-6);
     if !path_actually_changed {
         return None;
     }
     if pts.len() < 2 {
         return None;
     }
-    traverse_edge_midpoint(&pts)
+    let (x, y) = traverse_edge_midpoint(&pts)?;
+    if e.extra.contains_key("scope_parent") {
+        Some((x, y))
+    } else {
+        Some((round_to_5(x), round_to_5(y)))
+    }
 }
 
 fn fmt_num(v: f64) -> String {

@@ -255,7 +255,9 @@ fn flowchart_byte_exact_sweep() {
 
 #[test]
 fn flowchart_single_diff_report() {
-        let rel = "ext_fixtures/cypress/flowchart/137";
+    let rel_buf = std::env::var("FLOWCHART_DIFF_REL")
+        .unwrap_or_else(|_| "ext_fixtures/cypress/flowchart/137".to_string());
+    let rel = rel_buf.as_str();
     let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mmd = base.join("tests").join(format!("{}.mmd", rel));
     let svg_path = base.join("tests/reference").join(format!("{}.svg", rel));
@@ -341,11 +343,7 @@ fn edge_label_backtick_quotes_classify_as_markdown() {
 fn round_shape_label_with_inline_paren_in_markdown_quotes() {
     let src = "flowchart LR\nb(\"`Item.(1)`\") --> c";
     let d = fcp::parse(src).unwrap();
-    let v = d
-        .vertices
-        .iter()
-        .find(|v| v.id == "b")
-        .expect("vertex `b`");
+    let v = d.vertices.iter().find(|v| v.id == "b").expect("vertex `b`");
     let l = v.label.as_ref().expect("label populated");
     assert_eq!(l.text, "Item.(1)");
 }
@@ -368,12 +366,17 @@ fn dump_fixture_168() {
     }
     let d = fcp::parse(source).unwrap();
     let l = fcl::layout(&d, &th).unwrap();
-    
+
     for e in &l.edges {
         if e.id.contains("Sub_In") {
-            eprintln!("Edge {}: start={:?} end={:?} orig_start={:?} orig_end={:?}", 
-                e.id, e.start, e.end, 
-                e.extra.get("orig_start"), e.extra.get("orig_end"));
+            eprintln!(
+                "Edge {}: start={:?} end={:?} orig_start={:?} orig_end={:?}",
+                e.id,
+                e.start,
+                e.end,
+                e.extra.get("orig_start"),
+                e.extra.get("orig_end")
+            );
             if let Some(pts) = &e.points {
                 eprintln!("  points ({}):", pts.len());
                 for (i, p) in pts.iter().enumerate() {
@@ -384,7 +387,7 @@ fn dump_fixture_168() {
             }
         }
     }
-    
+
     let got = svg_flowchart::render(&d, &l, &th, id).unwrap();
     if let Some(idx) = got.find("L_Sub_In_0") {
         let start = idx.saturating_sub(300);
@@ -481,18 +484,20 @@ fn dump_fixture_168_clusters() {
     }
     let d = fcp::parse(source).unwrap();
     let l = fcl::layout(&d, &th).unwrap();
-    
+
     for c in &l.clusters {
         eprintln!("Cluster {}: {:?}", c.id, c.bounds);
     }
     for n in &l.nodes {
-        eprintln!("Node {}: x={:?} y={:?} w={:?} h={:?} is_group={}", 
-            n.id, n.x, n.y, n.width, n.height, n.is_group);
+        eprintln!(
+            "Node {}: x={:?} y={:?} w={:?} h={:?} is_group={}",
+            n.id, n.x, n.y, n.width, n.height, n.is_group
+        );
     }
-    
+
     // Check the cluster clip process
     let got = svg_flowchart::render(&d, &l, &th, id).unwrap();
-    
+
     // Look at the data-points and d attribute for L_Sub_In_0
     if let Some(idx) = got.find("data-id=\"L_Sub_In_0\"") {
         let start = idx.saturating_sub(200);
@@ -500,4 +505,3 @@ fn dump_fixture_168_clusters() {
         eprintln!("\nEdge path fragment:\n{}", &got[start..end]);
     }
 }
-

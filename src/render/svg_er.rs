@@ -196,11 +196,12 @@ fn render_entity_node_with_attrs(
     let max_keys_w = a.max_keys_width;
 
     let mut out = String::with_capacity(8 * 1024);
+    let escaped_eid = html_escape(&e.id);
     out.push_str(&format!(
         r#"<g class="node {cls} " id="{sid}-{eid}" data-look="classic" transform="translate({tx}, {ty})">"#,
         cls = e.css_classes,
         sid = id,
-        eid = e.id,
+        eid = escaped_eid,
         tx = fmt_num(e.x),
         ty = fmt_num(e.y),
     ));
@@ -245,7 +246,7 @@ fn render_entity_node_with_attrs(
         ty = fmt_num(y + text_pad / 2.0),
         fw = fmt_num(a.name_bbox_width),
         fh = fmt_num(name_h - text_pad),
-        mw = calc_text_max_width(&e.label),
+        mw = calc_text_max_width_raw(&e.label),
         t = render_attr_markdown(&e.label),
     ));
 
@@ -578,30 +579,6 @@ fn calc_text_max_width_raw(text: &str) -> i64 {
     (max_w + 100.0).round() as i64
 }
 
-/// `max-width: Xpx` on the div — upstream uses
-/// `calculateTextWidth(text, config) + 100` where `calculateTextWidth`
-/// measures at 16 px (not 14 — addText re-measures at the base font).
-///
-/// Upstream's addText HTML-escapes `<` / `>` to `&lt;` / `&gt;` when
-/// the text goes through `parseGenericTypes`, and then measures the
-/// *escaped* form. We apply the same transform here so attribute-type
-/// columns holding `type<T>` / `type~T~` end up with the fixture's
-/// wider `max-width` value (208 vs 172).
-///
-/// For empty text we get 100 verbatim (matches the fixture's
-/// `max-width: 100px` on empty attribute cells).
-fn calc_text_max_width(text: &str) -> i64 {
-    use crate::font_metrics::text_width;
-    if text.is_empty() {
-        return 100;
-    }
-    // HTML-escape `<>` the same way addText does so the width
-    // matches the escaped form upstream feeds into calculateTextWidth.
-    let escaped = html_escape(text);
-    let w = text_width(&escaped, "sans-serif", 16.0, false, false);
-    (w + 100.0).round() as i64
-}
-
 // ──────────────────────────────────────────────────────────────────────
 // Style / classDef helpers
 // ──────────────────────────────────────────────────────────────────────
@@ -732,11 +709,12 @@ fn render_entity_node(
     let styles = collect_entity_styles(e, classes);
     let mut out = String::with_capacity(512);
     let class_extra = &e.css_classes;
+    let escaped_eid = html_escape(&e.id);
     out.push_str(&format!(
         r#"<g class="node {} " id="{sid}-{eid}" data-look="classic" transform="translate({tx}, {ty})">"#,
         class_extra,
         sid = id,
-        eid = e.id,
+        eid = escaped_eid,
         tx = fmt_num(e.x),
         ty = fmt_num(e.y),
     ));
@@ -840,12 +818,13 @@ fn render_edge_path(diag_id: &str, e: &EdgeLayout) -> String {
             em = end_marker
         )
     };
+    let escaped_eid = html_escape(&e.id);
 
     format!(
         r##"<path d="{d}" id="{did}-{eid}" class="{cls}" style="undefined;;;undefined" data-edge="true" data-et="edge" data-id="{eid}" data-points="{b64}" data-look="classic"{ms}{me}></path>"##,
         d = d,
         did = diag_id,
-        eid = e.id,
+        eid = escaped_eid,
         cls = class,
         b64 = data_points_b64,
         ms = marker_start_attr,
@@ -979,9 +958,10 @@ fn render_self_loop_helper(h: &crate::layout::er::SelfLoopHelper) -> String {
     let inner_w = 0.0;
     let inner_h = h.label_height;
     let inner = render_node_label("", inner_w, inner_h, &opts);
+    let escaped_id = html_escape(&h.id);
     format!(
         r#"<g class="label edgeLabel" id="{id}" transform="translate({tx}, {ty})"><rect width="0.1" height="0.1"></rect>{inner}</g>"#,
-        id = h.id,
+        id = escaped_id,
         tx = fmt_num(h.x),
         ty = fmt_num(h.y),
         inner = inner,
@@ -1332,13 +1312,40 @@ fn render_attr_markdown(s: &str) -> String {
     use crate::text::markdown_to_html;
     let parts = split_br(s);
     if parts.len() == 1 {
-        return markdown_to_html(s);
+        return escape_bare_ampersands(&markdown_to_html(s));
     }
     parts
         .iter()
-        .map(|p| markdown_to_html(p))
+        .map(|p| escape_bare_ampersands(&markdown_to_html(p)))
         .collect::<Vec<_>>()
         .join("<br/>")
+}
+
+fn escape_bare_ampersands(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'&' {
+            let tail = &s[i..];
+            if tail.starts_with("&amp;")
+                || tail.starts_with("&lt;")
+                || tail.starts_with("&gt;")
+                || tail.starts_with("&quot;")
+                || tail.starts_with("&#")
+            {
+                out.push('&');
+            } else {
+                out.push_str("&amp;");
+            }
+            i += 1;
+            continue;
+        }
+        let ch = s[i..].chars().next().unwrap_or('\0');
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -1372,7 +1379,11 @@ mod tests {
 
     fn render_fixture(source: &str, id: &str) -> String {
         let d = parser_er::parse(source).expect("parse");
-        let theme = get_theme("default");
+        let theme = d
+            .theme_override
+            .as_deref()
+            .map(get_theme)
+            .unwrap_or_else(|| get_theme("default"));
         let l = layout_er::layout(&d, &theme).expect("layout");
         super::render(&d, &l, &theme, id).expect("render")
     }

@@ -570,6 +570,13 @@ fn parse_class_decl(
     if backtick_quoted {
         name = name[1..name.len() - 1].to_string();
     } else {
+        if name.split_whitespace().nth(1).is_some() {
+            return Err(MermaidError::Parse {
+                line: line_no,
+                col: 1,
+                message: "class declaration id cannot contain unquoted whitespace".into(),
+            });
+        }
         name = name.split_whitespace().collect::<Vec<_>>().join("");
     }
 
@@ -1596,6 +1603,12 @@ mod tests {
         assert_eq!(c.id, "Foo");
         assert_eq!(c.base_id, "Foo");
         assert_eq!(c.generic.as_deref(), Some("T"));
+    }
+
+    #[test]
+    fn rejects_unquoted_whitespace_in_class_declaration_id() {
+        let err = parse("classDiagram\nclass People List~List~Person~~\n").unwrap_err();
+        assert!(matches!(err, MermaidError::Parse { .. }));
     }
 
     #[test]

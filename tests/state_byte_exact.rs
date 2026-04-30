@@ -151,9 +151,7 @@ fn cypress_03() {
 fn cypress_04() {
     assert_byte_exact("ext_fixtures/cypress/state/04");
 }
-/// cy/05 is an `info` diagram (unsupported diagram type), not a state diagram.
 #[test]
-#[ignore]
 fn cypress_05() {
     assert_byte_exact("ext_fixtures/cypress/state/05");
 }

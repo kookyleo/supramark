@@ -19,13 +19,13 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
     let shear = (3.0 * h) / 6.0;
     let w = visual_w - 2.0 * shear;
     // Raw upstream points — the polygon transform handles centring.
-    let pts = [
-        (-shear, 0.0),
-        (w + shear, 0.0),
-        (w, -h),
-        (0.0, -h),
-    ];
-    Ok(emit_polygon_node_with_transform(node, &pts, -w / 2.0, h / 2.0))
+    let pts = [(-shear, 0.0), (w + shear, 0.0), (w, -h), (0.0, -h)];
+    Ok(emit_polygon_node_with_transform(
+        node,
+        &pts,
+        -w / 2.0,
+        h / 2.0,
+    ))
 }
 
 #[cfg(test)]

@@ -117,7 +117,7 @@ fn parse_body(d: &mut ErDiagram, body: &str) -> Result<()> {
         if is_attribute_block_open(line) {
             // Handle attribute block — collect lines until `}`.
             let mut collected = String::from(line);
-            while !collected.contains('}') {
+            while !contains_top_level_char(&collected, '}') {
                 match lines.next() {
                     Some(n) => {
                         collected.push('\n');
@@ -140,7 +140,15 @@ fn parse_body(d: &mut ErDiagram, body: &str) -> Result<()> {
 /// that isn't part of a cardinality token (`o{` or `|{`).
 fn is_attribute_block_open(line: &str) -> bool {
     let bytes = line.as_bytes();
+    let mut in_quote = false;
     for (i, &b) in bytes.iter().enumerate() {
+        if b == b'"' {
+            in_quote = !in_quote;
+            continue;
+        }
+        if in_quote {
+            continue;
+        }
         if b == b'{' {
             let prev = if i == 0 { b' ' } else { bytes[i - 1] };
             if prev == b'o' || prev == b'|' {
@@ -151,6 +159,10 @@ fn is_attribute_block_open(line: &str) -> bool {
         }
     }
     false
+}
+
+fn contains_top_level_char(s: &str, needle: char) -> bool {
+    find_top_level_char(s, needle).is_some()
 }
 
 fn starts_with_ci(s: &str, prefix: &str) -> bool {
@@ -311,12 +323,12 @@ fn parse_entity_block(d: &mut ErDiagram, raw: &str) -> Result<()> {
 /// Split `PREFIX { ... }` style text into `(PREFIX, BODY)`; `BODY`
 /// excludes the enclosing braces.
 fn split_block(raw: &str) -> (&str, &str) {
-    let Some(open) = raw.find('{') else {
+    let Some(open) = find_top_level_char(raw, '{') else {
         return (raw, "");
     };
     let head = &raw[..open];
     let after = &raw[open + 1..];
-    let close = after.rfind('}').unwrap_or(after.len());
+    let close = rfind_top_level_char(after, '}').unwrap_or(after.len());
     (head, &after[..close])
 }
 
@@ -335,9 +347,21 @@ fn split_head(head: &str) -> (String, String, String) {
         None => (head, String::new()),
     };
 
+    // A fully quoted entity id is atomic. It may legally contain brackets,
+    // colons, braces, spaces, and punctuation that would otherwise look like
+    // alias/class/block syntax.
+    let main = main.trim();
+    if is_wrapped_in_double_quotes(main) {
+        return (
+            strip_entity_quotes(main).to_string(),
+            String::new(),
+            classes,
+        );
+    }
+
     // Now handle an optional `[alias]` chunk.
-    if let Some(open) = main.find('[') {
-        if let Some(close) = main.rfind(']') {
+    if let Some(open) = find_top_level_char(main, '[') {
+        if let Some(close) = rfind_top_level_char(main, ']') {
             if close > open {
                 let name = main[..open].trim();
                 let mut alias = main[open + 1..close].trim();
@@ -367,6 +391,39 @@ fn strip_entity_quotes(s: &str) -> &str {
     } else {
         s
     }
+}
+
+fn is_wrapped_in_double_quotes(s: &str) -> bool {
+    s.len() >= 2 && s.starts_with('"') && s.ends_with('"')
+}
+
+fn find_top_level_char(s: &str, needle: char) -> Option<usize> {
+    let mut in_quote = false;
+    for (idx, ch) in s.char_indices() {
+        if ch == '"' {
+            in_quote = !in_quote;
+            continue;
+        }
+        if !in_quote && ch == needle {
+            return Some(idx);
+        }
+    }
+    None
+}
+
+fn rfind_top_level_char(s: &str, needle: char) -> Option<usize> {
+    let mut last = None;
+    let mut in_quote = false;
+    for (idx, ch) in s.char_indices() {
+        if ch == '"' {
+            in_quote = !in_quote;
+            continue;
+        }
+        if !in_quote && ch == needle {
+            last = Some(idx);
+        }
+    }
+    last
 }
 
 /// Parse one attribute line: `type name [keys] ["comment"]`.
@@ -546,17 +603,26 @@ fn split_rel_start(line: &str) -> Option<(&str, &str)> {
             i += 1;
             continue;
         }
-        // Match cardinality start at i (must be preceded by whitespace)
-        // AND i must land on a UTF-8 char boundary to safely slice.
-        if i > 0 && bytes[i - 1].is_ascii_whitespace() && line.is_char_boundary(i) {
+        // Match cardinality start at i. Textual cardinalities need the
+        // traditional whitespace boundary; symbolic cardinalities can follow a
+        // quoted entity immediately (`"A"||--o{ B`) in upstream.
+        if i > 0 && line.is_char_boundary(i) {
             let tail = &line[i..];
-            if take_cardinality(tail).is_some() {
+            let boundary_ok =
+                bytes[i - 1].is_ascii_whitespace() || starts_symbolic_cardinality(tail);
+            if boundary_ok && take_cardinality(tail).is_some() {
                 return Some((&line[..i], tail));
             }
         }
         i += 1;
     }
     None
+}
+
+fn starts_symbolic_cardinality(s: &str) -> bool {
+    ["||", "|o", "o|", "}o", "o{", "}|", "|{"]
+        .iter()
+        .any(|kw| s.starts_with(kw))
 }
 
 /// Cardinality lookup — longest-match-first. Returns `(card, rest)`.
@@ -641,7 +707,7 @@ fn take_rel_type(s: &str) -> Option<(Identification, &str)> {
 }
 
 fn split_role(s: &str) -> (&str, String) {
-    if let Some(idx) = s.find(':') {
+    if let Some(idx) = find_top_level_char(s, ':') {
         let left = &s[..idx];
         let right = s[idx + 1..].trim();
         let right = right.trim_matches('"');
@@ -703,5 +769,53 @@ mod tests {
         assert_eq!(b.attributes.len(), 2);
         assert_eq!(b.attributes[0].attr_type, "string");
         assert_eq!(b.attributes[0].name, "title");
+    }
+
+    #[test]
+    fn quoted_relation_can_touch_symbolic_cardinality() {
+        let src = "erDiagram\n    \"Person . CUSTOMER\"||--o{ ORDER : places\n";
+        let d = parse(src).unwrap();
+        assert_eq!(
+            d.entity_keys,
+            vec!["Person . CUSTOMER".to_string(), "ORDER".to_string()]
+        );
+        assert_eq!(d.relationships.len(), 1);
+        assert_eq!(d.relationships[0].role_a, "places");
+    }
+
+    #[test]
+    fn quoted_entity_name_keeps_brackets_and_colons_atomic() {
+        let src = concat!(
+            "erDiagram\n",
+            "    \"Person . CUSTOMER\" }|..|{ \"Address//StreetAddress::[DELIVERY ADDRESS]\" : uses\n",
+            "    \"Address//StreetAddress::[DELIVERY ADDRESS]\" {\n",
+            "      int customerID FK\n",
+            "    }\n",
+        );
+        let d = parse(src).unwrap();
+        assert!(d
+            .entities
+            .contains_key("Address//StreetAddress::[DELIVERY ADDRESS]"));
+        assert_eq!(d.relationships.len(), 1);
+        assert_eq!(d.relationships[0].role_a, "uses");
+        assert_eq!(
+            d.entities["Address//StreetAddress::[DELIVERY ADDRESS]"]
+                .attributes
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn braces_inside_quoted_entity_name_do_not_open_or_close_block() {
+        let src = concat!(
+            "erDiagram\n",
+            "    \"a_[]{}|/;:'.?\" {\n",
+            "      string name \"comment\"\n",
+            "    }\n",
+        );
+        let d = parse(src).unwrap();
+        assert_eq!(d.entity_keys, vec!["a_[]{}|/;:'.?".to_string()]);
+        assert_eq!(d.entities["a_[]{}|/;:'.?"].attributes.len(), 1);
     }
 }

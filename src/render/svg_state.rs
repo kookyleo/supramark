@@ -39,11 +39,11 @@ use crate::model::state::StateDiagram;
 use crate::render::edges::{self, CurveType};
 use crate::render::shapes::{self, types::fmt_num};
 use crate::render::unified_shell;
-use regex::Regex;
-use std::sync::OnceLock;
 use crate::theme::css as theme_css;
 use crate::theme::ThemeVariables;
+use regex::Regex;
 use std::cell::Cell;
+use std::sync::OnceLock;
 
 thread_local! {
     /// Effective `look` value for the current `render(..)` call. Set on entry
@@ -1715,12 +1715,12 @@ fn emit_state_node(id: &str, n: &Node, _theme: &ThemeVariables) -> Option<String
 /// - A divider line at the bottom of the title row.
 /// - A label group containing two foreignObjects: title and description.
 fn emit_rect_with_title(id: &str, n: &Node, _theme: &ThemeVariables) -> Option<String> {
-    use crate::font_metrics::{line_height as fl_lh, text_width as ft_w};
+    use crate::font_metrics::text_width as ft_w;
     const FONT_FAMILY: &str = "sans-serif";
     const FONT_SIZE: f64 = 14.0;
     const HALF_PAD: f64 = 4.0; // halfPadding = node.padding / 2 = 8/2 = 4
 
-    let w = n.width.unwrap_or(0.0);
+    let _w = n.width.unwrap_or(0.0);
     let h = n.height.unwrap_or(0.0);
     let padding = n.label_padding_x.unwrap_or(8.0);
     let lh = h - padding; // = line_height (=16.296875)
@@ -3180,20 +3180,10 @@ mod tests {
                     Err(_) => continue,
                 };
                 let id = fixture_id(&rel);
-                let theme = get_theme("default");
                 let mmd_c = mmd.clone();
                 let id_c = id.clone();
-                let theme_c = theme.clone();
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    parse(&mmd_c).and_then(|d| {
-                        let eff = d
-                            .theme_override
-                            .as_deref()
-                            .map(get_theme)
-                            .unwrap_or_else(|| theme_c.clone());
-                        let l = crate::layout::state::layout(&d, &eff)?;
-                        render(&d, &l, &eff, &id_c)
-                    })
+                    crate::convert_with_id(&mmd_c, &id_c)
                 }));
                 let got = match result {
                     Ok(Ok(s)) => s,
@@ -4117,20 +4107,10 @@ mod tests {
                     Err(_) => continue,
                 };
                 let id = fixture_id(&rel);
-                let theme = get_theme("default");
                 let mmd_c = mmd.clone();
                 let id_c = id.clone();
-                let theme_c = theme.clone();
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    parse(&mmd_c).and_then(|d| {
-                        let eff = d
-                            .theme_override
-                            .as_deref()
-                            .map(get_theme)
-                            .unwrap_or_else(|| theme_c.clone());
-                        let l = crate::layout::state::layout(&d, &eff)?;
-                        render(&d, &l, &eff, &id_c)
-                    })
+                    crate::convert_with_id(&mmd_c, &id_c)
                 }));
                 let got = match result {
                     Ok(Ok(s)) => s,
@@ -4184,15 +4164,7 @@ mod tests {
                 };
             let id = fixture_id(rel);
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                parse(&mmd).and_then(|d| {
-                    let t = d
-                        .theme_override
-                        .as_deref()
-                        .map(get_theme)
-                        .unwrap_or_else(|| get_theme("default"));
-                    let l = crate::layout::state::layout(&d, &t)?;
-                    render(&d, &l, &t, &id)
-                })
+                crate::convert_with_id(&mmd, &id)
             }));
             let got = match result {
                 Ok(Ok(s)) => s,

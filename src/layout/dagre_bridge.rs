@@ -263,8 +263,12 @@ fn build_cluster_anchors(
             // connecting to the outside. This should be counted as external,
             // so treat it as "inside" the cluster (same as is_isolated_cluster
             // skip logic, but here we WANT the boundary cross to be detected).
-            let src_in = src.map(|s| members.contains(s) || s == cid).unwrap_or(false);
-            let dst_in = dst.map(|s| members.contains(s) || s == cid).unwrap_or(false);
+            let src_in = src
+                .map(|s| members.contains(s) || s == cid)
+                .unwrap_or(false);
+            let dst_in = dst
+                .map(|s| members.contains(s) || s == cid)
+                .unwrap_or(false);
             if src_in != dst_in {
                 has_external.insert(cid);
             }
@@ -284,8 +288,7 @@ fn build_cluster_anchors(
             .nodes
             .iter()
             .filter(|n| {
-                n.parent_id.as_deref() == Some(cluster_id)
-                    && !excluded.contains(n.id.as_str())
+                n.parent_id.as_deref() == Some(cluster_id) && !excluded.contains(n.id.as_str())
             })
             .collect();
         for child in &children {
@@ -507,7 +510,9 @@ fn build_graph_filtered_ex<'a>(
                 let orig_dst_str = orig_dst.unwrap_or(effective_dst);
                 log::debug!(
                     "dagre_bridge: rewrite self-loop on '{}' (from original {}→{}); not expanding",
-                    dagre_src, orig_src_str, orig_dst_str
+                    dagre_src,
+                    orig_src_str,
+                    orig_dst_str
                 );
                 let name = if edge.id.is_empty() {
                     None
@@ -878,11 +883,23 @@ fn rewrite_self_loop_points(node: &NodeLabel, nodesep: f64) -> Vec<Point> {
     let dy = node.height / 2.0;
 
     let base = [
-        Point { x: x5 + 2.0 * dx / 3.0, y: y6 - dy },
-        Point { x: x5 + 5.0 * dx / 6.0, y: y6 - dy },
-        Point { x: x5 + dx,              y: y6 },
-        Point { x: x5 + 5.0 * dx / 6.0, y: y6 + dy },
-        Point { x: x5 + 2.0 * dx / 3.0, y: y6 + dy },
+        Point {
+            x: x5 + 2.0 * dx / 3.0,
+            y: y6 - dy,
+        },
+        Point {
+            x: x5 + 5.0 * dx / 6.0,
+            y: y6 - dy,
+        },
+        Point { x: x5 + dx, y: y6 },
+        Point {
+            x: x5 + 5.0 * dx / 6.0,
+            y: y6 + dy,
+        },
+        Point {
+            x: x5 + 2.0 * dx / 3.0,
+            y: y6 + dy,
+        },
     ];
 
     let cx = node.x.unwrap_or(0.0);
@@ -912,7 +929,10 @@ fn intersect_rect(cx: f64, cy: f64, w: f64, h: f64, point: Point) -> Point {
         let w2 = if ddx < 0.0 { -w } else { w };
         (w2, w2 * ddy / ddx)
     };
-    Point { x: cx + sx, y: cy + sy }
+    Point {
+        x: cx + sx,
+        y: cy + sy,
+    }
 }
 
 /// Pull post-layout edge spline points + label centres.
@@ -976,9 +996,8 @@ fn collect_edges(
         out: &mut Edge,
     ) {
         let is_group = |id: &str| data.nodes.iter().any(|n| n.id == id && n.is_group);
-        let is_state_start = |shape: Option<&str>| {
-            matches!(shape, Some("stateStart" | "state_start" | "start"))
-        };
+        let is_state_start =
+            |shape: Option<&str>| matches!(shape, Some("stateStart" | "state_start" | "start"));
 
         let Some(pts) = out.points.as_mut() else {
             return;
@@ -1141,10 +1160,7 @@ fn collect_edges(
         if members.len() < 2 {
             continue;
         }
-        if !members
-            .iter()
-            .any(|&idx| lookups[idx].rewritten_for_dagre)
-        {
+        if !members.iter().any(|&idx| lookups[idx].rewritten_for_dagre) {
             continue;
         }
         // Check whether every member's edge name exists in the dagre
@@ -1199,16 +1215,26 @@ fn collect_edges(
         }
         let source_pts: Vec<Point> = snaps
             .iter()
-            .map(|s| s.points.get(1).copied().or_else(|| s.points.first().copied()).unwrap_or_default())
+            .map(|s| {
+                s.points
+                    .get(1)
+                    .copied()
+                    .or_else(|| s.points.first().copied())
+                    .unwrap_or_default()
+            })
             .collect();
         let x_span = source_pts
             .iter()
             .map(|p| p.x)
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(v), hi.max(v)));
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| {
+                (lo.min(v), hi.max(v))
+            });
         let y_span = source_pts
             .iter()
             .map(|p| p.y)
-            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(v), hi.max(v)));
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| {
+                (lo.min(v), hi.max(v))
+            });
         let sort_by_x = (x_span.1 - x_span.0) >= (y_span.1 - y_span.0);
         // Sort splines in ascending spatial order (leftmost / topmost
         // first for TB / LR layouts). Upstream assigns the
@@ -1226,18 +1252,12 @@ fn collect_edges(
                 asrc.x
                     .partial_cmp(&bsrc.x)
                     .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| {
-                        af.x.partial_cmp(&bf.x)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    })
+                    .then_with(|| af.x.partial_cmp(&bf.x).unwrap_or(std::cmp::Ordering::Equal))
             } else {
                 asrc.y
                     .partial_cmp(&bsrc.y)
                     .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| {
-                        af.y.partial_cmp(&bf.y)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    })
+                    .then_with(|| af.y.partial_cmp(&bf.y).unwrap_or(std::cmp::Ordering::Equal))
             }
         });
         if std::env::var("DEBUG_PARALLEL_REBIND").is_ok() {
@@ -1669,6 +1689,12 @@ struct InnerLayout {
     /// since `collect_edges` only looks at the outer dagre graph and would
     /// otherwise leave intra-cluster edges with empty `points`.
     inner_edges: Vec<InnerEdgePoints>,
+    /// Self-loop helper labelRect nodes produced by `expand_self_edge` inside
+    /// this inner dagre pass.
+    self_loop_helpers: Vec<Node>,
+    /// Self-loop cyclic-special segments produced by `expand_self_edge` inside
+    /// this inner dagre pass.
+    self_loop_segments: Vec<Edge>,
     /// Recursive inner layouts for sub-clusters that are isolated within
     /// this cluster's context.  Keyed by sub-cluster id.
     sub_isolated: std::collections::HashMap<String, InnerLayout>,
@@ -1691,6 +1717,17 @@ fn all_descendants(cluster_id: &str, data: &LayoutData) -> std::collections::Has
         }
     }
     members
+}
+
+fn cluster_subtree_has_self_loop(cluster_id: &str, data: &LayoutData) -> bool {
+    let mut ids = all_descendants(cluster_id, data);
+    ids.insert(cluster_id.to_string());
+    data.edges.iter().any(|e| {
+        let Some(src) = edge_source(e) else {
+            return false;
+        };
+        edge_target(e) == Some(src) && ids.contains(src)
+    })
 }
 
 /// Like `all_descendants` but excludes nodes whose ids are in `excluded`.
@@ -1846,7 +1883,23 @@ fn layout_isolated_cluster(
 
     for cc in &cluster_children {
         if is_isolated_within(&cc.id, &parent_members, data) {
-            let inner = layout_isolated_cluster(&cc.id, data, outer_rankdir, inner_ranksep);
+            let nested_outer_rankdir =
+                if is_flowchart_diagram(data) && cluster_subtree_has_self_loop(&cc.id, data) {
+                    let cluster_is_top_level = data
+                        .nodes
+                        .iter()
+                        .find(|n| n.id == cluster_id)
+                        .and_then(|n| n.parent_id.as_deref())
+                        .is_none();
+                    if cluster_is_top_level {
+                        inner_rankdir
+                    } else {
+                        outer_rankdir
+                    }
+                } else {
+                    outer_rankdir
+                };
+            let inner = layout_isolated_cluster(&cc.id, data, nested_outer_rankdir, inner_ranksep);
             sub_isolated.insert(cc.id.clone(), inner);
         } else {
             non_isolated_cluster_children.push(cc);
@@ -2241,7 +2294,10 @@ fn layout_isolated_cluster(
     let max_bottom = (rect_y + rect_h)
         .max(max_half_node_h)
         .max(cluster_child_max_y);
-    let min_top = rect_y.min(0.0_f64).min(-max_half_node_h).min(cluster_child_min_y);
+    let min_top = rect_y
+        .min(0.0_f64)
+        .min(-max_half_node_h)
+        .min(cluster_child_min_y);
     let mut bbox_width = max_right - min_left;
     let mut bbox_height = max_bottom - min_top;
 
@@ -2276,6 +2332,8 @@ fn layout_isolated_cluster(
             });
         }
     }
+    let mut self_loop_helpers = collect_self_loop_helpers(&g);
+    let mut self_loop_segments = collect_self_loop_segments(data, &g);
 
     // ── Upstream-alignment post-process: 5×5 swap fix ────────────────────
     //
@@ -2375,6 +2433,28 @@ fn layout_isolated_cluster(
                 *ly += dy;
             }
         }
+        for h in self_loop_helpers.iter_mut() {
+            if let Some(x) = h.x.as_mut() {
+                *x += dx;
+            }
+            if let Some(y) = h.y.as_mut() {
+                *y += dy;
+            }
+        }
+        for e in self_loop_segments.iter_mut() {
+            if let Some(points) = e.points.as_mut() {
+                for p in points {
+                    p.x += dx;
+                    p.y += dy;
+                }
+            }
+            if let Some(lx) = e.label_x.as_mut() {
+                *lx += dx;
+            }
+            if let Some(ly) = e.label_y.as_mut() {
+                *ly += dy;
+            }
+        }
     }
 
     log::debug!(
@@ -2401,6 +2481,8 @@ fn layout_isolated_cluster(
         bbox_height,
         child_positions,
         inner_edges,
+        self_loop_helpers,
+        self_loop_segments,
         sub_isolated,
     }
 }
@@ -2485,9 +2567,10 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
             // upstream demotes these to regular nodes. Giving them an
             // inner dagre pass produces degenerate results; they should
             // participate in the outer dagre as regular nodes.
-            let has_any_children = data.nodes.iter().any(|n| {
-                n.parent_id.as_deref() == Some(cid.as_str())
-            });
+            let has_any_children = data
+                .nodes
+                .iter()
+                .any(|n| n.parent_id.as_deref() == Some(cid.as_str()));
             if !has_any_children {
                 continue;
             }
@@ -2518,9 +2601,10 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
         if isolated_layouts.contains_key(cid) {
             continue;
         }
-        let has_any_children = data.nodes.iter().any(|n| {
-            n.parent_id.as_deref() == Some(cid.as_str())
-        });
+        let has_any_children = data
+            .nodes
+            .iter()
+            .any(|n| n.parent_id.as_deref() == Some(cid.as_str()));
         if !has_any_children {
             continue;
         }
@@ -2550,14 +2634,15 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
                 continue;
             }
             if is_isolated_within(cc_id, &parent_members, data) {
-                let has_cc_children = data.nodes.iter().any(|n| {
-                    n.parent_id.as_deref() == Some(cc_id.as_str())
-                });
+                let has_cc_children = data
+                    .nodes
+                    .iter()
+                    .any(|n| n.parent_id.as_deref() == Some(cc_id.as_str()));
                 if !has_cc_children {
                     continue;
                 }
                 let parent_inner_rankdir = opposite_rankdir(outer_rankdir);
-                let parent_inner_ranksep = outer_ranksep + 25.0;
+                let _parent_inner_ranksep = outer_ranksep + 25.0;
                 let (nested_outer_rankdir, nested_outer_ranksep) = if is_flowchart_diagram(data) {
                     (outer_rankdir, outer_ranksep)
                 } else {
@@ -2585,13 +2670,12 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
                 );
                 let old_bh = inner.bbox_height;
                 let old_bw = inner.bbox_width;
-                let inner = if is_flowchart_diagram(data)
-                    && !matches!(nested_inner_rankdir, RankDir::LR)
-                {
-                    apply_flowchart_cluster_correction(inner, cc_id, data)
-                } else {
-                    inner
-                };
+                let inner =
+                    if is_flowchart_diagram(data) && !matches!(nested_inner_rankdir, RankDir::LR) {
+                        apply_flowchart_cluster_correction(inner, cc_id, data)
+                    } else {
+                        inner
+                    };
                 log::debug!(
                     "dagre_bridge: nested isolated cluster '{}' bbox {}→{} × {}→{}",
                     cc_id,
@@ -2697,8 +2781,7 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
             // outer dagre they must NOT be compound parents (dagre-rs
             // panics on compound nodes with zero children).
             let has_children = data.nodes.iter().any(|child| {
-                child.parent_id.as_deref() == Some(&n.id)
-                    && !excluded_node_ids.contains(&child.id)
+                child.parent_id.as_deref() == Some(&n.id) && !excluded_node_ids.contains(&child.id)
             });
             if !has_children {
                 let mut leaf = n.clone();
@@ -2990,6 +3073,40 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
     let mut all_nodes = nodes;
     let mut all_edges = edges;
     {
+        fn gather_inner_self_loops(
+            inner: &InnerLayout,
+            helpers: &mut Vec<Node>,
+            segments: &mut Vec<Edge>,
+        ) {
+            helpers.extend(inner.self_loop_helpers.iter().cloned());
+            segments.extend(inner.self_loop_segments.iter().cloned());
+            for sub in inner.sub_isolated.values() {
+                gather_inner_self_loops(sub, helpers, segments);
+            }
+        }
+
+        let mut helpers = Vec::new();
+        let mut segments = Vec::new();
+        for inner in isolated_layouts.values() {
+            gather_inner_self_loops(inner, &mut helpers, &mut segments);
+        }
+        if !helpers.is_empty() {
+            log::debug!(
+                "dagre_bridge: exposing {} self-loop helper node(s) from isolated inner pass",
+                helpers.len()
+            );
+            all_nodes.extend(helpers);
+        }
+        if !segments.is_empty() {
+            log::debug!(
+                "dagre_bridge: exposing {} cyclic-special sub-edge(s) from isolated inner pass",
+                segments.len()
+            );
+            let refined = routing::refine_edges(&all_nodes, &segments);
+            all_edges.extend(refined);
+        }
+    }
+    {
         let helpers = collect_self_loop_helpers(&g);
         if !helpers.is_empty() {
             log::debug!(
@@ -3118,7 +3235,12 @@ fn polygon_intersect_for_node(
         }
         "choice" | "diamond" => {
             let s = w.max(h).max(28.0);
-            vec![(0.0, s / 2.0), (s / 2.0, 0.0), (0.0, -s / 2.0), (-s / 2.0, 0.0)]
+            vec![
+                (0.0, s / 2.0),
+                (s / 2.0, 0.0),
+                (0.0, -s / 2.0),
+                (-s / 2.0, 0.0),
+            ]
         }
         _ => return None,
     };
@@ -3462,7 +3584,9 @@ mod tests {
         to_child.id = "edge0".into();
         to_child.start = Some("Inactive".into());
         to_child.end = Some("Idle".into());
-        to_child.extra.insert("orig_start".into(), "Inactive".into());
+        to_child
+            .extra
+            .insert("orig_start".into(), "Inactive".into());
         to_child.extra.insert("orig_end".into(), "Idle".into());
 
         let mut cluster_loop = Edge::default();
@@ -3470,8 +3594,12 @@ mod tests {
         cluster_loop.start = Some("Active".into());
         cluster_loop.end = Some("Active".into());
         cluster_loop.label = Some("LOG".into());
-        cluster_loop.extra.insert("orig_start".into(), "Active".into());
-        cluster_loop.extra.insert("orig_end".into(), "Active".into());
+        cluster_loop
+            .extra
+            .insert("orig_start".into(), "Active".into());
+        cluster_loop
+            .extra
+            .insert("orig_end".into(), "Active".into());
 
         let data = LayoutData {
             nodes: vec![active, idle, inactive],
@@ -3499,7 +3627,11 @@ mod tests {
             .iter()
             .filter(|n| n.extra.get("synthetic").map(|s| s.as_str()) == Some("cyclic_helper"))
             .collect();
-        assert_eq!(owner_helpers.len(), 2, "cluster self-loop exposes 2 helper nodes");
+        assert_eq!(
+            owner_helpers.len(),
+            2,
+            "cluster self-loop exposes 2 helper nodes"
+        );
         let helper_ids: std::collections::HashSet<&str> =
             owner_helpers.iter().map(|n| n.id.as_str()).collect();
         assert!(helper_ids.contains("Active---Active---1"));
@@ -3567,11 +3699,7 @@ mod tests {
         };
         let theme = ThemeVariables::default();
         let out = layout(&data, &theme).expect("layout");
-        let out_edge = out
-            .edges
-            .iter()
-            .find(|e| e.id == "edge0")
-            .expect("edge0");
+        let out_edge = out.edges.iter().find(|e| e.id == "edge0").expect("edge0");
         assert_eq!(
             out_edge.extra.get("from_cluster").map(|s| s.as_str()),
             Some("Active")

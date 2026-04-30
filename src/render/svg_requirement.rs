@@ -682,7 +682,7 @@ fn edge_path_basis(pts: &[crate::layout::unified::Point]) -> String {
     let mut point_idx = 0usize; // 0=first, 1=second, 2+=subsequent
 
     // Helper: bezierCurveTo
-    let mut bcurve_to = |d: &mut String, x0: f64, y0: f64, x1: f64, y1: f64, x: f64, y: f64| {
+    let bcurve_to = |d: &mut String, x0: f64, y0: f64, x1: f64, y1: f64, x: f64, y: f64| {
         let cp1x = (2.0 * x0 + x1) / 3.0;
         let cp1y = (2.0 * y0 + y1) / 3.0;
         let cp2x = (x0 + 2.0 * x1) / 3.0;

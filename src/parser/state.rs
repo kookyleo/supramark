@@ -558,7 +558,8 @@ fn apply_divider_translation(diagram: &mut crate::model::state::StateDiagram) {
             // re-scoping transitions whose non-start endpoint lives in this
             // chunk, then renaming/inserting the corresponding implicit
             // start/end node under the wrapper.
-            let insert_at = first_state_index(diagram, &chunk_children).unwrap_or(diagram.states.len());
+            let insert_at =
+                first_state_index(diagram, &chunk_children).unwrap_or(diagram.states.len());
             if uses_parent_start {
                 if chunk_children.iter().any(|id| id == &parent_start) {
                     if let Some(s) = diagram.states.iter_mut().find(|s| s.id == parent_start) {
@@ -606,11 +607,14 @@ fn apply_divider_translation(diagram: &mut crate::model::state::StateDiagram) {
             }
 
             for tr in &mut diagram.transitions {
-                if uses_parent_start && tr.source == parent_start && chunk_members.contains(&tr.target)
+                if uses_parent_start
+                    && tr.source == parent_start
+                    && chunk_members.contains(&tr.target)
                 {
                     tr.source = wrapper_start.clone();
                 }
-                if uses_parent_end && tr.target == parent_end && chunk_members.contains(&tr.source) {
+                if uses_parent_end && tr.target == parent_end && chunk_members.contains(&tr.source)
+                {
                     tr.target = wrapper_end.clone();
                 }
             }
@@ -1060,7 +1064,7 @@ fn ingest_state_decl(diagram: &mut StateDiagram, decl: &str, parent: Option<Stri
                     .trim();
                 // Strip trailing ':' from the id (happens when `as S1: desc`
                 // is parsed by split_whitespace — the `: desc` is not separated).
-                let (id, maybe_desc) = if let Some((tok, desc_rest)) = split_once_colon(raw_token) {
+                let (id, _maybe_desc) = if let Some((tok, desc_rest)) = split_once_colon(raw_token) {
                     // e.g. raw_token = "S1:" — colon is a suffix with no desc text here.
                     // The actual description is in `after_as` after the id+colon.
                     let _ = desc_rest; // empty or irrelevant
@@ -1359,7 +1363,11 @@ mod test_divider {
         for (wrapper, start_id, first_leaf) in [
             ("divider-id-1", "divider-id-1_start", "NumLockOff"),
             ("divider-id-2", "divider-id-2_start", "CapsLockOff"),
-            ("id-3tkmm1l27ep-1", "id-3tkmm1l27ep-1_start", "ScrollLockOff"),
+            (
+                "id-3tkmm1l27ep-1",
+                "id-3tkmm1l27ep-1_start",
+                "ScrollLockOff",
+            ),
         ] {
             let w = d.states.iter().find(|s| s.id == wrapper).unwrap();
             assert_eq!(w.children.first().map(|s| s.as_str()), Some(start_id));

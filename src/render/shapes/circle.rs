@@ -52,8 +52,7 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
         // the visual result but is required for byte-exact parity. See
         // cypress/flowchart/88 + demos/flowchart/30, /31, /61.
         let font = crate::render::foreign_object::HtmlLabelFont::default();
-        let (w, h) =
-            crate::render::foreign_object::measure_html_label("", &font, 200.0, true);
+        let (w, h) = crate::render::foreign_object::measure_html_label("", &font, 200.0, true);
         let opts = crate::render::foreign_object::LabelOpts {
             wrap_in_p: false,
             ..crate::render::foreign_object::LabelOpts::default()

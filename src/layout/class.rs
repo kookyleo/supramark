@@ -502,7 +502,7 @@ fn estimate_classbox_dimensions(c: &ClassNode) -> (f64, f64) {
     // bbox.width = max of all visible foreignObjects' widths; with empty
     // members/methods this is just the label width.
     let mut bbox_w: f64 = label_w;
-    let mut bbox_h: f64 = line_h;
+    let bbox_h: f64 = line_h;
     // Upstream renders `m.text` through markdown → HTML → div.textContent,
     // which strips the leading `\` visibility escape and the `&lt;`/`&gt;`
     // entities are restored to literal `<`/`>` before measurement.

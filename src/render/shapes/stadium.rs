@@ -7,7 +7,9 @@
 //! [`types::create_stadium_path_d`] since the non-handDrawn path is
 //! byte-exact with the RoughJS output when roughness is zero.
 
-use super::types::{create_stadium_path_d, fmt_num, get_node_classes, xml_escape, xml_escape_label};
+use super::types::{
+    create_stadium_path_d, fmt_num, get_node_classes, xml_escape, xml_escape_label,
+};
 use crate::error::Result;
 use crate::layout::unified::types::Node;
 use crate::theme::ThemeVariables;

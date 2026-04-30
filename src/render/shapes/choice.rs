@@ -25,14 +25,8 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
     let id = node.dom_id.clone().unwrap_or_else(|| node.id.clone());
     let tx = node.x.unwrap_or(0.0);
     let ty = node.y.unwrap_or(0.0);
-    let fill_color = node
-        .background_color
-        .as_deref()
-        .unwrap_or("#ECECFF");
-    let stroke_color = node
-        .border_color
-        .as_deref()
-        .unwrap_or("#9370DB");
+    let fill_color = node.background_color.as_deref().unwrap_or("#ECECFF");
+    let stroke_color = node.border_color.as_deref().unwrap_or("#9370DB");
     let data_look = match node.look.as_deref() {
         Some(look) if !look.is_empty() => format!(r#" data-look="{}""#, look),
         _ => String::new(),
