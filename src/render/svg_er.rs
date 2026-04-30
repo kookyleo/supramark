@@ -974,7 +974,7 @@ fn render_self_loop_helper(h: &crate::layout::er::SelfLoopHelper) -> String {
     // `max-width: 10px` matches the helper rect width — upstream uses the
     // node's `width` (10) as the wrap budget. See `labelHelper` /
     // `node-html-tree.ts` in the upstream renderer.
-    opts.max_width = h.width;
+    opts.max_width = 10.0;
     // Inner foreignObject geometry: width=0 (empty span), height=label_h.
     let inner_w = 0.0;
     let inner_h = h.label_height;
@@ -1504,6 +1504,8 @@ mod tests {
         for rel in [
             "ext_fixtures/cypress/er/01",
             "ext_fixtures/cypress/er/02",
+            "ext_fixtures/cypress/er/04",
+            "ext_fixtures/cypress/er/10",
             "ext_fixtures/cypress/er/12",
             "ext_fixtures/cypress/er/13",
             "ext_fixtures/cypress/er/14",
@@ -1521,8 +1523,10 @@ mod tests {
             "ext_fixtures/cypress/er/27",
             "ext_fixtures/cypress/er/28",
             "ext_fixtures/cypress/er/43",
+            "ext_fixtures/cypress/er/44",
             "ext_fixtures/cypress/er/49",
             "ext_fixtures/cypress/er/50",
+            "ext_fixtures/cypress/er/51",
             "ext_fixtures/cypress/er/53",
             "ext_fixtures/cypress/er/54",
             "ext_fixtures/cypress/er/55",

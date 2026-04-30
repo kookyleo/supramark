@@ -776,44 +776,55 @@ pub fn layout(d: &ErDiagram, theme: &ThemeVariables) -> Result<ErLayout> {
     }
     // Walk every edge (regular + synthetic cyclic-special) and union their
     // basis-spline path bbox + label foreignObject contribution.
-    let mut accumulate_edge = |edge: &EdgeLayout,
-                               min_x: &mut f64,
-                               min_y: &mut f64,
-                               max_x: &mut f64,
-                               max_y: &mut f64| {
-        // The reference `pathBBox` parses the emitted `d` attribute which
-        // uses 3-decimal rounding (d3-path's `.appendRound(3)`). The actual
-        // path d is a `curveBasis` spline; pathBBox unions every M/L/C anchor
-        // and control point. The raw dagre waypoints are NOT directly visible
-        // in the path (basis only interpolates the endpoints), so unioning
-        // raw points overshoots / undershoots the true rendered envelope.
-        // Mirror `render::edges::path_basis` to collect the exact set of
-        // (x,y) tokens the renderer will emit.
-        let r3 = |v: f64| (v * 1000.0).round() / 1000.0;
+    //
+    // The reference `pathBBox` parses the emitted `d` attribute which uses
+    // 3-decimal rounding (d3-path's `.appendRound(3)`). pathBBox unions
+    // every M/L/C anchor and control point. The raw dagre waypoints are
+    // NOT directly visible in the path (basis only interpolates the
+    // endpoints), so unioning raw points overshoots / undershoots the true
+    // rendered envelope.  Mirror `render::edges::path_basis` to collect the
+    // exact set of (x,y) tokens the renderer will emit.
+    //
+    // IMPORTANT: each edge path forms a **per-element bbox** that the
+    // reference's `unionBox` merges using `maxY = max(maxY, box.y +
+    // box.height)`.  When a path spans a large Y range (e.g. minY≈84,
+    // maxY≈391), the intermediate `height = maxY - minY` loses 1 ULP
+    // relative to the exact span, and `minY + height` can round 1 ULP
+    // above the original `maxY`.  We must replicate this per-box round-
+    // trip so our global bounds match the reference byte-for-byte.
+    let r3 = |v: f64| (v * 1000.0).round() / 1000.0;
+    let mut path_bboxes: Vec<(f64, f64, f64, f64)> = Vec::new();
+    for edge in &out.edges {
+        let mut e_min_x = f64::INFINITY;
+        let mut e_min_y = f64::INFINITY;
+        let mut e_max_x = f64::NEG_INFINITY;
+        let mut e_max_y = f64::NEG_INFINITY;
         let mut acc_pt = |x: f64, y: f64| {
-            acc(min_x, min_y, max_x, max_y, r3(x), r3(y), 0.0, 0.0);
+            let rx = r3(x);
+            let ry = r3(y);
+            e_min_x = e_min_x.min(rx);
+            e_min_y = e_min_y.min(ry);
+            e_max_x = e_max_x.max(rx);
+            e_max_y = e_max_y.max(ry);
         };
         let n = edge.points.len();
         if n == 1 {
             acc_pt(edge.points[0].0, edge.points[0].1);
         } else if n >= 2 {
-            // M p0
             let (mut x0, mut y0) = (f64::NAN, f64::NAN);
             let (mut x1, mut y1) = (f64::NAN, f64::NAN);
             let mut state = 0u8;
             for &(x, y) in &edge.points {
                 match state {
                     0 => {
-                        acc_pt(x, y); // M
+                        acc_pt(x, y);
                         state = 1;
                     }
                     1 => {
                         state = 2;
                     }
                     2 => {
-                        // L (5*x0+x1)/6, ...
                         acc_pt((5.0 * x0 + x1) / 6.0, (5.0 * y0 + y1) / 6.0);
-                        // C c1, c2, e
                         acc_pt((2.0 * x0 + x1) / 3.0, (2.0 * y0 + y1) / 3.0);
                         acc_pt((x0 + 2.0 * x1) / 3.0, (y0 + 2.0 * y1) / 3.0);
                         acc_pt((x0 + 4.0 * x1 + x) / 6.0, (y0 + 4.0 * y1 + y) / 6.0);
@@ -830,40 +841,38 @@ pub fn layout(d: &ErDiagram, theme: &ThemeVariables) -> Result<ErLayout> {
                 y0 = y1;
                 y1 = y;
             }
-            // lineEnd
             match state {
                 3 => {
-                    // emit_basis_cubic(p_{n-2}, p_{n-1}, p_{n-1})
                     acc_pt((2.0 * x0 + x1) / 3.0, (2.0 * y0 + y1) / 3.0);
                     acc_pt((x0 + 2.0 * x1) / 3.0, (y0 + 2.0 * y1) / 3.0);
                     acc_pt((x0 + 5.0 * x1) / 6.0, (y0 + 5.0 * y1) / 6.0);
-                    // L p_{n-1}
                     acc_pt(x1, y1);
                 }
                 2 => {
-                    // L p1
                     acc_pt(x1, y1);
                 }
                 _ => {}
             }
         }
-        // Edge label FO at (0, 0, label_w, label_h)
-        acc(
-            min_x,
-            min_y,
-            max_x,
-            max_y,
-            0.0,
-            0.0,
-            edge.label_width,
-            edge.label_height,
-        );
-    };
-    for e in &out.edges {
-        // `out.edges` already includes the synthetic cyclic-special segments
-        // spliced in at the position of each user self-edge, so we cover
-        // every emitted path here in one pass.
-        accumulate_edge(e, &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+        if e_min_x.is_finite() {
+            path_bboxes.push((e_min_x, e_min_y, e_max_x - e_min_x, e_max_y - e_min_y));
+        }
+        // Edge label FO at (0, 0, label_w, label_h) — unioned as a
+        // separate per-element box to match the reference's unionBox flow.
+        if edge.label_width > 0.0 || edge.label_height > 0.0 {
+            path_bboxes.push((0.0, 0.0, edge.label_width, edge.label_height));
+        }
+    }
+    // Union all per-element bboxes using the reference's unionBox formula:
+    //   minY_global = min(b.y)
+    //   maxY_global = max(b.y + b.height)
+    // This introduces the 1-ULP rounding from (minY + (maxY - minY))
+    // that the reference's unionBox produces for wide-range boxes.
+    for (bx, by, bw, bh) in &path_bboxes {
+        min_x = min_x.min(*bx);
+        min_y = min_y.min(*by);
+        max_x = max_x.max(bx + bw);
+        max_y = max_y.max(by + bh);
     }
     // Self-loop helper rect placeholders (10×10 invisibles) — upstream's
     // `getBBox` shim treats their `<rect>` at local (0, 0, 0.1, 0.1) and
