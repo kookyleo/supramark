@@ -394,6 +394,76 @@ fn dump_fixture_168() {
 }
 
 #[test]
+fn dump_fixture_155_parallel_edge_assignment() {
+    let source = r#"flowchart TB
+   subgraph S1
+    sub1 -->sub2
+   end
+  subgraph S2
+    sub4
+   end
+   S1 --> S2
+   sub1 --> sub4
+"#;
+    let id = "ref-ext-fixtures-cypress-flowchart-155";
+    let pre = preprocess::preprocess(source).unwrap();
+    let theme_name = pre.config.theme.as_deref().unwrap_or("default");
+    let mut th = theme::get_theme(theme_name);
+    if let Some(tv) = pre.config.theme_variables.as_ref() {
+        theme::apply_theme_variables(&mut th, tv);
+    }
+    let d = fcp::parse(source).unwrap();
+    let l = fcl::layout(&d, &th).unwrap();
+
+    for e in &l.edges {
+        if e.id == "L_sub1_sub4_0" || e.id == "L_S1_S2_0" {
+            if let Some(pts) = &e.points {
+                eprintln!("{}: first_point x = {:.6}", e.id, pts[0].x);
+            }
+        }
+    }
+
+    // L_sub1_sub4_0 (leaf edge, inserted first) must get the LEFT spline:
+    // its first point x should be ~104.788 (close to sub1 center at 99.98),
+    // NOT ~119.687 (the right spline that belongs to L_S1_S2_0).
+    let sub1_sub4_edge = l.edges.iter().find(|e| e.id == "L_sub1_sub4_0").unwrap();
+    let sub1_sub4_x0 = sub1_sub4_edge.points.as_ref().unwrap()[0].x;
+    assert!(
+        (sub1_sub4_x0 - 104.788).abs() < 1.0,
+        "L_sub1_sub4_0 first x should be ~104.788, got {:.6}",
+        sub1_sub4_x0
+    );
+
+    let s1_s2_edge = l.edges.iter().find(|e| e.id == "L_S1_S2_0").unwrap();
+    let s1_s2_x0 = s1_s2_edge.points.as_ref().unwrap()[0].x;
+    assert!(
+        (s1_s2_x0 - 119.687).abs() < 1.0,
+        "L_S1_S2_0 first x should be ~119.687, got {:.6}",
+        s1_s2_x0
+    );
+
+    let got = svg_flowchart::render(&d, &l, &th, id).unwrap();
+    let expected_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/reference/ext_fixtures/cypress/flowchart/155.svg");
+    let expected = std::fs::read_to_string(&expected_path).unwrap();
+
+    if got == expected {
+        eprintln!("fixture 155: BYTE-EXACT MATCH!");
+    } else {
+        let byte_pos = got
+            .bytes()
+            .zip(expected.bytes())
+            .position(|(a, b)| a != b)
+            .unwrap_or(0);
+        eprintln!("fixture 155: DIFF at byte {}", byte_pos);
+        let start = byte_pos.saturating_sub(30);
+        let end = (byte_pos + 60).min(got.len().min(expected.len()));
+        eprintln!("GOT:  ...{}...", &got[start..end]);
+        eprintln!("EXP:  ...{}...", &expected[start..end]);
+    }
+}
+
+#[test]
 fn dump_fixture_168_clusters() {
     let source = r#"flowchart TB
     Out --> In
@@ -430,3 +500,4 @@ fn dump_fixture_168_clusters() {
         eprintln!("\nEdge path fragment:\n{}", &got[start..end]);
     }
 }
+
