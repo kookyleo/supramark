@@ -242,7 +242,6 @@ ext_fixtures/cypress/sequence/94.mmd	MVP scope: sequence features [note] not yet
 ext_fixtures/cypress/sequence/95.mmd	MVP scope: sequence features [note] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
 ext_fixtures/cypress/sequence/96.mmd	MVP scope: sequence features [note] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
 ext_fixtures/cypress/sequence/97.mmd	MVP scope: sequence features [note] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
-ext_fixtures/cypress/sequence/98.mmd	MVP scope: sequence diagram scaffold only — minimum-viable parse + layout + render emits a placeholder SVG, not byte-exact with upstream svgDraw output.
 ext_fixtures/cypress/sequence/99.mmd	MVP scope: sequence diagram scaffold only — minimum-viable parse + layout + render emits a placeholder SVG, not byte-exact with upstream svgDraw output.
 ext_fixtures/demos/sequence/01.mmd	MVP scope: sequence features [loop_alt,par,note,rect,autonumber,activation] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
 ext_fixtures/demos/sequence/02.mmd	MVP scope: sequence features [activation] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
