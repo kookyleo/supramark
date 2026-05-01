@@ -151,16 +151,18 @@ pub fn render(
     }
     out.push_str("</g>");
 
-    // ── Commit labels ───────────────────────────────────────────────
+    // ── Commit labels (interleaved with tags) ──────────────────────
     // Two paths: rotated -45° (rotateCommitLabel=true, default) or
     // axis-aligned text under the line (rotateCommitLabel=false).
+    // Tags for a commit appear right after that commit's label in
+    // document order, matching the reference output.
     out.push_str(r#"<g class="commit-labels">"#);
     let py = 2.0_f64;
+    let px = 4.0_f64;
+    let tag_lh = l.commit_label_text_height;
+    let h2 = tag_lh / 2.0;
     for (i, c) in l.commits.iter().enumerate() {
         let commit = &d.commits[i];
-        // HIGHLIGHT shows label like normal; REVERSE too. CHERRY_PICK and
-        // MERGE-without-customId don't render — but those aren't reachable
-        // here yet (layout filters them).
         if matches!(commit.kind, crate::model::gitgraph::CommitKind::CherryPick) {
             continue;
         }
@@ -190,7 +192,6 @@ pub fn render(
                 label = escape_text(&commit.id),
             ));
         } else {
-            // Non-rotated: empty <g> wrapper, then rect + text.
             out.push_str(&format!(
                 r#"<g><rect class="commit-label-bkg" x="{x}" y="{y}" width="{w}" height="{h}"></rect><text x="{tx}" y="{ty}" class="commit-label">{label}</text></g>"#,
                 x = fmt_num(rect_x),
@@ -201,6 +202,54 @@ pub fn render(
                 ty = fmt_num(text_y),
                 label = escape_text(&commit.id),
             ));
+        }
+
+        // Tags for this commit (rendered in REVERSE order — upstream's
+        // `for (const tagValue of commit.tags.reverse())`).
+        if !commit.tags.is_empty() {
+            let mut max_w = 0.0_f64;
+            for t in &commit.tags {
+                let w = crate::font_metrics::text_width(t, "sans-serif", 14.0, false, false);
+                if w > max_w {
+                    max_w = w;
+                }
+            }
+            let mut y_off = 0.0_f64;
+            for t in commit.tags.iter().rev() {
+                let ly = c.cy - 19.2 - y_off;
+                let pwo = c.pos_with_offset;
+                let pos = c.pos;
+                let points = format!(
+                    "\n      {p1x},{p1y}  \n      {p1x},{p2y}\n      {p3x},{p3y}\n      {p4x},{p3y}\n      {p4x},{p5y}\n      {p6x},{p5y}",
+                    p1x = fmt_num(pos - max_w / 2.0 - px / 2.0),
+                    p1y = fmt_num(ly + py),
+                    p2y = fmt_num(ly - py),
+                    p3x = fmt_num(pwo - max_w / 2.0 - px),
+                    p3y = fmt_num(ly - h2 - py),
+                    p4x = fmt_num(pwo + max_w / 2.0 + px),
+                    p5y = fmt_num(ly + h2 + py),
+                    p6x = fmt_num(pwo - max_w / 2.0 - px),
+                );
+                let w_tag = crate::font_metrics::text_width(t, "sans-serif", 14.0, false, false);
+                let tx = pwo - w_tag / 2.0;
+                let hole_cx = pos - max_w / 2.0 + px / 2.0;
+                out.push_str(&format!(
+                    r#"<polygon class="tag-label-bkg" points="{p}"></polygon>"#,
+                    p = points,
+                ));
+                out.push_str(&format!(
+                    r#"<circle cy="{cy}" cx="{cx}" r="1.5" class="tag-hole"></circle>"#,
+                    cy = fmt_num(ly),
+                    cx = fmt_num(hole_cx),
+                ));
+                out.push_str(&format!(
+                    r#"<text y="{ty}" class="tag-label" x="{tx}">{label}</text>"#,
+                    ty = fmt_num(c.cy - 16.0 - y_off),
+                    tx = fmt_num(tx),
+                    label = escape_text(t),
+                ));
+                y_off += 20.0;
+            }
         }
     }
     out.push_str("</g>");

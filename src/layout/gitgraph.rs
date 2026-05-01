@@ -82,11 +82,6 @@ pub fn layout(d: &GitGraphDiagram, _theme: &ThemeVariables) -> Result<GitGraphLa
             "gitGraph: merge commits not yet implemented".into(),
         ));
     }
-    if d.commits.iter().any(|c| !c.tags.is_empty()) {
-        return Err(crate::error::MermaidError::Unsupported(
-            "gitGraph: commit tags not yet implemented".into(),
-        ));
-    }
     if d.commits.iter().any(|c| matches!(
         c.kind,
         crate::model::gitgraph::CommitKind::Merge
@@ -304,8 +299,59 @@ pub fn layout(d: &GitGraphDiagram, _theme: &ThemeVariables) -> Result<GitGraphLa
     for (i, c) in commits.iter().enumerate() {
         let lw = label_widths[i];
         let lh = commit_label_text_height;
+        // Don't render commit-label for cherry-pick or non-customId merge —
+        // but we don't have those types here yet.
         acc(c.pos_with_offset - lw / 2.0 - py, c.cy + 13.5, lw + 2.0 * py, lh + 2.0 * py);
         acc(0.0, 0.0, lw, lh);
+    }
+
+    // commit-tags. Each tag adds a polygon, a hole-circle, and a text.
+    // Geometry mirrors `drawCommitTags`; tags are rendered in reverse
+    // order, with `yOffset` incrementing by 20 per tag.
+    let px = 4.0_f64;
+    let tag_lh = commit_label_text_height;
+    let h2 = tag_lh / 2.0;
+    for (i, c) in commits.iter().enumerate() {
+        let commit = &d.commits[i];
+        let tags = &commit.tags;
+        if tags.is_empty() {
+            continue;
+        }
+        // First pass: compute max width across all tags on this commit.
+        let mut max_w = 0.0_f64;
+        for t in tags {
+            let w = font_metrics::text_width(t, font_family, label_size, false, false);
+            if w > max_w {
+                max_w = w;
+            }
+        }
+        let mut y_off = 0.0_f64;
+        for t in tags.iter().rev() {
+            let ly = c.cy - 19.2 - y_off;
+            // polygon points (LR / non-redux):
+            let p1x = c.pos - max_w / 2.0 - px / 2.0;
+            let p1y = ly + py;
+            let p2y = ly - py;
+            let p3x = c.pos_with_offset - max_w / 2.0 - px;
+            let p3y = ly - h2 - py;
+            let p4x = c.pos_with_offset + max_w / 2.0 + px;
+            let p5y = ly + h2 + py;
+            let p6x = c.pos_with_offset - max_w / 2.0 - px;
+            // bbox of polygon
+            let lo_x = p1x.min(p3x).min(p4x).min(p6x);
+            let hi_x = p1x.max(p3x).max(p4x).max(p6x);
+            let lo_y = p1y.min(p2y).min(p3y).min(p5y);
+            let hi_y = p1y.max(p2y).max(p3y).max(p5y);
+            acc(lo_x, lo_y, hi_x - lo_x, hi_y - lo_y);
+            // hole-circle at (cx = pos - maxW/2 + PX/2, cy = ly, r = 1.5)
+            let hole_cx = c.pos - max_w / 2.0 + px / 2.0;
+            acc(hole_cx - 1.5, ly - 1.5, 3.0, 3.0);
+            // text intrinsic (0, 0, w_tag, lh)
+            let w_tag = font_metrics::text_width(t, font_family, label_size, false, false);
+            acc(0.0, 0.0, w_tag, tag_lh);
+            y_off += 20.0;
+            let _ = w_tag;
+        }
     }
 
     // Title position is computed *before* the title text is itself
