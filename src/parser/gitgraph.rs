@@ -147,7 +147,13 @@ pub fn parse(source: &str) -> Result<GitGraphDiagram> {
         }
         if let Some(rest) = strip_keyword(line, "commit") {
             let (id, kind, tags) = parse_commit_args(rest)?;
-            let id = id.unwrap_or_else(|| format!("{}-noid", seq));
+            // Mirrors upstream `id: id ? id : state.records.seq + '-' + getID()`.
+            // Same JS short-circuit as merge: PRNG is consumed only when
+            // no explicit id was supplied.
+            let id = match id {
+                Some(s) => s,
+                None => format!("{seq}-{}", prng.make_hex(7)),
+            };
             let parents: Vec<String> = head.iter().cloned().collect();
             let commit = Commit {
                 id: id.clone(),
@@ -175,7 +181,9 @@ pub fn parse(source: &str) -> Result<GitGraphDiagram> {
             }
             branch_heads.entry(name.clone()).or_insert(head.clone());
             current_branch = name;
-        } else if let Some(rest) = strip_keyword(line, "checkout") {
+        } else if let Some(rest) = strip_keyword(line, "checkout")
+            .or_else(|| strip_keyword(line, "switch"))
+        {
             let name = parse_ident(rest);
             if branch_heads.contains_key(&name) {
                 head = branch_heads.get(&name).cloned().flatten();
@@ -210,11 +218,15 @@ pub fn parse(source: &str) -> Result<GitGraphDiagram> {
             };
             let (custom_id, custom_type, tags) = parse_merge_args(args)?;
             let has_custom_id = custom_id.is_some();
-            // ID generation must mirror upstream exactly: `${seq}-${getID()}`
-            // where `getID()` is `random({length:7})` — i.e. consumes 7 PRNG
-            // draws regardless of whether `customId` overrides the result.
-            let auto_id = format!("{seq}-{}", prng.make_hex(7));
-            let id = custom_id.unwrap_or(auto_id);
+            // ID generation mirrors upstream: `customId || \`${seq}-${getID()}\``
+            // — JS short-circuits, so the PRNG is consumed only when no
+            // custom id is supplied. Mirroring this ordering is required
+            // so subsequent cherry-pick / merge commits land on the
+            // exact hex sequence produced by the reference shim.
+            let id = match custom_id {
+                Some(c) => c,
+                None => format!("{seq}-{}", prng.make_hex(7)),
+            };
             let mut parents: Vec<String> = head.iter().cloned().collect();
             parents.push(other_head);
             let commit = Commit {
@@ -232,10 +244,64 @@ pub fn parse(source: &str) -> Result<GitGraphDiagram> {
             head = Some(id.clone());
             branch_heads.insert(current_branch.clone(), Some(id));
             diagram.commits.push(commit);
-        } else if strip_keyword(line, "cherry-pick").is_some() {
-            return Err(MermaidError::Unsupported(
-                "gitGraph: 'cherry-pick' not yet supported in minimal port".into(),
-            ));
+        } else if let Some(rest) = strip_keyword(line, "cherry-pick") {
+            let (source_id, parent, tags, tag_was_set) = parse_cherrypick_args(rest)?;
+            // Mirrors upstream's gitGraphAst.cherryPick: emits a new
+            // CHERRY_PICK commit on the current branch with parents
+            // `[currentHead, sourceId]`. The auto-id consumes 7 PRNG
+            // draws even though we always end up using the auto value.
+            let auto_id = format!("{seq}-{}", prng.make_hex(7));
+            let id = auto_id;
+            let mut parents: Vec<String> = head.iter().cloned().collect();
+            // The source commit must already exist; if not, fall back
+            // to no extra parent (we still emit a commit so the rest of
+            // the diagram parses, mirroring upstream's softer fallback
+            // when running outside the strict lint mode).
+            if let Some(src) = diagram.commits.iter().find(|c| c.id == source_id) {
+                parents.push(src.id.clone());
+            } else {
+                return Err(MermaidError::Parse {
+                    line: 0,
+                    col: 0,
+                    message: format!("cherry-pick: unknown source commit '{source_id}'"),
+                });
+            }
+            // Default tag mirrors upstream: when no `tag:` was passed
+            // at all, use `cherry-pick:<id>` (or
+            // `cherry-pick:<id>|parent:<parent>` for merge sources).
+            // When `tag:` was set (even to ""), upstream's
+            // `tags.filter(Boolean)` collapses to an empty list, which
+            // we mirror by skipping the default entirely.
+            let resolved_tags = if !tag_was_set {
+                let src = diagram.commits.iter().find(|c| c.id == source_id);
+                let suffix = if let (Some(s), Some(p)) = (src, parent.as_ref()) {
+                    if matches!(s.kind, CommitKind::Merge) {
+                        format!("|parent:{}", p)
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    String::new()
+                };
+                vec![format!("cherry-pick:{}{}", source_id, suffix)]
+            } else {
+                tags
+            };
+            let commit = Commit {
+                id: id.clone(),
+                seq,
+                kind: CommitKind::CherryPick,
+                custom_type: None,
+                custom_id: false,
+                tags: resolved_tags,
+                parents,
+                branch: current_branch.clone(),
+                message: format!("cherry-picked into {current_branch}"),
+            };
+            seq += 1;
+            head = Some(id.clone());
+            branch_heads.insert(current_branch.clone(), Some(id));
+            diagram.commits.push(commit);
         } else {
             // Unknown statement — skip for now.
         }
@@ -506,6 +572,49 @@ fn parse_commit_args(s: &str) -> Result<(Option<String>, CommitKind, Vec<String>
         }
     }
     Ok((id, kind, tags))
+}
+
+/// Parse the trailing arg list of a `cherry-pick` statement.
+/// Returns `(source_id, parent_id, tags, tag_was_set)`. The boolean
+/// distinguishes "user wrote `tag:`" from "user did not", because
+/// upstream suppresses the default `cherry-pick:<id>` tag whenever any
+/// `tag:` was supplied (even when its value is empty).
+fn parse_cherrypick_args(
+    s: &str,
+) -> Result<(String, Option<String>, Vec<String>, bool)> {
+    let mut id: Option<String> = None;
+    let mut parent: Option<String> = None;
+    let mut tags: Vec<String> = Vec::new();
+    let mut tag_was_set = false;
+    let mut rem = s.trim();
+    while !rem.is_empty() {
+        if let Some(after) = rem.strip_prefix("id:") {
+            let (val, next) = take_quoted_or_word(after.trim_start());
+            id = Some(val);
+            rem = next.trim_start();
+        } else if let Some(after) = rem.strip_prefix("parent:") {
+            let (val, next) = take_quoted_or_word(after.trim_start());
+            parent = Some(val);
+            rem = next.trim_start();
+        } else if let Some(after) = rem.strip_prefix("tag:") {
+            let (val, next) = take_quoted_or_word(after.trim_start());
+            tag_was_set = true;
+            if !val.is_empty() {
+                tags.push(val);
+            }
+            rem = next.trim_start();
+        } else {
+            let mut chars = rem.chars();
+            chars.next();
+            rem = chars.as_str().trim_start();
+        }
+    }
+    let id = id.ok_or_else(|| MermaidError::Parse {
+        line: 0,
+        col: 0,
+        message: "cherry-pick requires id:".into(),
+    })?;
+    Ok((id, parent, tags, tag_was_set))
 }
 
 /// Strip the leading word (whitespace-delimited) and return it +

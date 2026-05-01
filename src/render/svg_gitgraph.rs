@@ -106,7 +106,15 @@ pub fn render(
 
     // ── Arrows: walk commits in chronological order; for each commit
     //    emit one path per parent edge. Mirrors upstream `drawArrows`.
+    //
+    // `lanes` accumulates Y values used by `findLane` — initially seeded
+    // with each visible branch's spine Y, then mutated as we route.
     out.push_str(r#"<g class="commit-arrows">"#);
+    let mut lanes: Vec<f64> = if d.config.show_branches {
+        l.branches.iter().map(|bp| bp.pos - 2.0).collect()
+    } else {
+        Vec::new()
+    };
     for (i, c) in d.commits.iter().enumerate() {
         for parent_id in &c.parents {
             let parent_idx = match d.commits.iter().position(|cc| &cc.id == parent_id) {
@@ -116,7 +124,12 @@ pub fn render(
             let pa = &l.commits[parent_idx];
             let pb = &l.commits[i];
             let parent_commit = &d.commits[parent_idx];
-            let line_def = build_arrow_path(pa, pb, c, parent_commit);
+            let needs_reroute = should_reroute(parent_commit, c, pa, pb, &d.commits);
+            let line_def = if needs_reroute {
+                build_arrow_path_rerouted(pa, pb, c, parent_commit, &mut lanes)
+            } else {
+                build_arrow_path(pa, pb, c, parent_commit)
+            };
             // Color class — see upstream `drawArrow` for the rules:
             // - for non-merge edges: dest branch color
             // - for merge edges where `commitA.id !== commitB.parents[0]`:
@@ -124,12 +137,16 @@ pub fn render(
             // Color rule for LR (mirrors upstream `drawArrow`):
             //   - default: destination branch color
             //   - merge with non-primary parent: source branch color
-            // The "source-branch color when source-below-dest" override
-            // only applies in the *rerouted* path (for the 10×10 arc detour),
-            // which we don't yet emit.
+            //   - rerouted with source-below-dest (p1.y > p2.y): source
+            //     branch color (the rising-arrow override at line 734).
+            //   - non-rerouted with source-below-dest: still source-branch
+            //     in TB/BT mode, but for LR mode upstream does NOT override
+            //     in the non-rerouted branch. We follow upstream literally.
             let raw_idx = if matches!(c.kind, CommitKind::Merge)
                 && c.parents.first() != Some(parent_id)
             {
+                pa.branch_index
+            } else if needs_reroute && pa.cy > pb.cy {
                 pa.branch_index
             } else {
                 pb.branch_index
@@ -170,6 +187,30 @@ pub fn render(
                     id = id_esc,
                     tc = type_class,
                     cidx = cidx,
+                ));
+            }
+            CommitKind::CherryPick => {
+                // Outer circle r=10 + two filled white "splatter" dots
+                // at (cx±3, cy+2) r=2.75 + two short white lines
+                // forming a wedge (cx+3, cy+1) → (cx, cy-5) and
+                // (cx-3, cy+1) → (cx, cy-5). Mirrors upstream
+                // `drawCommitBullet` cherry-pick branch (light theme).
+                let hash = "#";
+                out.push_str(&format!(
+                    r#"<circle cx="{cx}" cy="{cy}" r="10" class="commit {id} {tc}"></circle><circle cx="{cx1}" cy="{cy1}" r="2.75" fill="{h}fff" class="commit {id} {tc}"></circle><circle cx="{cx2}" cy="{cy1}" r="2.75" fill="{h}fff" class="commit {id} {tc}"></circle><line x1="{lx1}" y1="{ly1}" x2="{lx2}" y2="{ly2}" stroke="{h}fff" class="commit {id} {tc}"></line><line x1="{lx3}" y1="{ly1}" x2="{lx2}" y2="{ly2}" stroke="{h}fff" class="commit {id} {tc}"></line>"#,
+                    cx = fmt_num(c.cx),
+                    cy = fmt_num(c.cy),
+                    cx1 = fmt_num(c.cx - 3.0),
+                    cx2 = fmt_num(c.cx + 3.0),
+                    cy1 = fmt_num(c.cy + 2.0),
+                    lx1 = fmt_num(c.cx + 3.0),
+                    ly1 = fmt_num(c.cy + 1.0),
+                    lx2 = fmt_num(c.cx),
+                    ly2 = fmt_num(c.cy - 5.0),
+                    lx3 = fmt_num(c.cx - 3.0),
+                    id = id_esc,
+                    tc = type_class,
+                    h = hash,
                 ));
             }
             _ => {
@@ -220,11 +261,11 @@ pub fn render(
     let h2 = tag_lh / 2.0;
     for (i, c) in l.commits.iter().enumerate() {
         let commit = &d.commits[i];
-        // Skip commit-label for cherry-pick + non-customId merge.
-        if matches!(commit.kind, CommitKind::CherryPick) {
-            continue;
-        }
-        let skip_label = (matches!(commit.kind, CommitKind::Merge) && !commit.custom_id)
+        // Skip the commit-LABEL (text + bkg) for cherry-pick and
+        // non-customId merge, plus when `showCommitLabel` is off — but
+        // always emit the tag(s), regardless of these label suppressions.
+        let skip_label = matches!(commit.kind, CommitKind::CherryPick)
+            || (matches!(commit.kind, CommitKind::Merge) && !commit.custom_id)
             || !d.config.show_commit_label;
         if !skip_label {
             let lw = l.commit_label_widths[i];
@@ -327,6 +368,101 @@ pub fn render(
 
     out.push_str("</svg>");
     Ok(out)
+}
+
+/// Mirror upstream `shouldRerouteArrow` for LR mode. Returns `true`
+/// when there is at least one commit between A and B (by `seq`) on the
+/// "outer" branch (`commitB.branch` if `p1.y < p2.y`, else `commitA.branch`).
+fn should_reroute(
+    commit_a: &crate::model::gitgraph::Commit,
+    commit_b: &crate::model::gitgraph::Commit,
+    p1: &crate::layout::gitgraph::CommitGeom,
+    p2: &crate::layout::gitgraph::CommitGeom,
+    all_commits: &[crate::model::gitgraph::Commit],
+) -> bool {
+    let commit_b_is_furthest = p1.cy < p2.cy;
+    let branch_to_get_curve = if commit_b_is_furthest {
+        &commit_b.branch
+    } else {
+        &commit_a.branch
+    };
+    let lo = commit_a.seq.min(commit_b.seq);
+    let hi = commit_a.seq.max(commit_b.seq);
+    all_commits
+        .iter()
+        .any(|x| x.seq > lo && x.seq < hi && &x.branch == branch_to_get_curve)
+}
+
+/// Mirror upstream `findLane` — pick a y in the gap between `y1` and
+/// `y2` that is at least 10 away from any existing lane; mutates lanes.
+fn find_lane(y1: f64, y2: f64, lanes: &mut Vec<f64>) -> f64 {
+    let mut hi = y2;
+    for depth in 0..=5 {
+        let candidate = y1 + (y1 - hi).abs() / 2.0;
+        if depth == 5 {
+            return candidate;
+        }
+        let ok = lanes.iter().all(|lane| (*lane - candidate).abs() >= 10.0);
+        if ok {
+            lanes.push(candidate);
+            return candidate;
+        }
+        let diff = (y1 - hi).abs();
+        hi -= diff / 5.0;
+    }
+    unreachable!()
+}
+
+/// Rerouted arrow (LR mode only) — mirrors upstream `drawArrow` when
+/// `arrowNeedsRerouting`. Uses two 10×10 arc detours through a
+/// dynamically-allocated lane y in the inter-branch gap.
+fn build_arrow_path_rerouted(
+    pa: &crate::layout::gitgraph::CommitGeom,
+    pb: &crate::layout::gitgraph::CommitGeom,
+    _commit_b: &crate::model::gitgraph::Commit,
+    _commit_a: &crate::model::gitgraph::Commit,
+    lanes: &mut Vec<f64>,
+) -> String {
+    let p1x = pa.cx;
+    let p1y = pa.cy;
+    let p2x = pb.cx;
+    let p2y = pb.cy;
+    let radius = 10.0_f64;
+    let offset = 10.0_f64;
+    let line_y = if p1y < p2y {
+        find_lane(p1y, p2y, lanes)
+    } else {
+        find_lane(p2y, p1y, lanes)
+    };
+
+    if p1y < p2y {
+        // Source above dest — go down through `line_y`.
+        // arc = `A 10 10, 0, 0, 0,`, arc2 = `A 10 10, 0, 0, 1,`
+        format!(
+            "M {} {} L {} {} A {} {}, 0, 0, 0, {} {} L {} {} A {} {}, 0, 0, 1, {} {} L {} {}",
+            fmt_num(p1x), fmt_num(p1y),
+            fmt_num(p1x), fmt_num(line_y - radius),
+            fmt_num(radius), fmt_num(radius),
+            fmt_num(p1x + offset), fmt_num(line_y),
+            fmt_num(p2x - radius), fmt_num(line_y),
+            fmt_num(radius), fmt_num(radius),
+            fmt_num(p2x), fmt_num(line_y + offset),
+            fmt_num(p2x), fmt_num(p2y),
+        )
+    } else {
+        // Source below dest — go up through `line_y`.
+        format!(
+            "M {} {} L {} {} A {} {}, 0, 0, 1, {} {} L {} {} A {} {}, 0, 0, 0, {} {} L {} {}",
+            fmt_num(p1x), fmt_num(p1y),
+            fmt_num(p1x), fmt_num(line_y + radius),
+            fmt_num(radius), fmt_num(radius),
+            fmt_num(p1x + offset), fmt_num(line_y),
+            fmt_num(p2x - radius), fmt_num(line_y),
+            fmt_num(radius), fmt_num(radius),
+            fmt_num(p2x), fmt_num(line_y - offset),
+            fmt_num(p2x), fmt_num(p2y),
+        )
+    }
 }
 
 /// Build the `d=` attribute for one parent → commit arrow.

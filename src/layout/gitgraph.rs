@@ -108,11 +108,6 @@ pub fn layout(d: &GitGraphDiagram, _theme: &ThemeVariables) -> Result<GitGraphLa
             "gitGraph: TB/BT orientations not yet implemented".into(),
         ));
     }
-    if d.commits.iter().any(|c| matches!(c.kind, CommitKind::CherryPick)) {
-        return Err(crate::error::MermaidError::Unsupported(
-            "gitGraph: cherry-pick commit type not yet implemented".into(),
-        ));
-    }
 
     // Branch label widths — measured at 14px sans-serif (jsdom shim does
     // not honour CSS, so the bbox always reports the default-font width).
@@ -249,15 +244,12 @@ pub fn layout(d: &GitGraphDiagram, _theme: &ThemeVariables) -> Result<GitGraphLa
     // commit-labels (rect + text). For merge commits without `customId`
     // upstream skips the label entirely; `showCommitLabel: false` skips
     // every label diagram-wide.
-    if d.config.show_commit_label {
-        for (i, c) in commits.iter().enumerate() {
-            let commit = &d.commits[i];
-            if matches!(commit.kind, CommitKind::CherryPick) {
-                continue;
-            }
-            if matches!(commit.kind, CommitKind::Merge) && !commit.custom_id {
-                continue;
-            }
+    for (i, c) in commits.iter().enumerate() {
+        let commit = &d.commits[i];
+        let label_emitted = d.config.show_commit_label
+            && !matches!(commit.kind, CommitKind::CherryPick)
+            && !(matches!(commit.kind, CommitKind::Merge) && !commit.custom_id);
+        if label_emitted {
             let lw = label_widths[i];
             let lh = commit_label_text_height;
             acc(c.pos_with_offset - lw / 2.0 - py, c.cy + 13.5, lw + 2.0 * py, lh + 2.0 * py);
