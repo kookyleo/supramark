@@ -103,44 +103,105 @@ pub fn render(
     out.push_str(r#"<g class="commit-bullets">"#);
     for (i, c) in l.commits.iter().enumerate() {
         let commit = &d.commits[i];
-        out.push_str(&format!(
-            r#"<circle cx="{cx}" cy="{cy}" r="10" class="commit {id} commit0"></circle>"#,
-            cx = fmt_num(c.cx),
-            cy = fmt_num(c.cy),
-            id = escape_text(&commit.id),
-        ));
+        let id_esc = escape_text(&commit.id);
+        let type_class = commit.kind.class();
+        match commit.kind {
+            crate::model::gitgraph::CommitKind::Highlight => {
+                // outer rect 20x20 + inner rect 12x12 (default geometry,
+                // useReduxGeometry=false)
+                let ox = c.cx - 10.0;
+                let oy = c.cy - 10.0;
+                let ix = c.cx - 6.0;
+                let iy = c.cy - 6.0;
+                out.push_str(&format!(
+                    r#"<rect x="{ox}" y="{oy}" width="20" height="20" class="commit {id} commit-highlight0 {tc}-outer"></rect><rect x="{ix}" y="{iy}" width="12" height="12" class="commit {id} commit0 {tc}-inner"></rect>"#,
+                    ox = fmt_num(ox),
+                    oy = fmt_num(oy),
+                    ix = fmt_num(ix),
+                    iy = fmt_num(iy),
+                    id = id_esc,
+                    tc = type_class,
+                ));
+            }
+            _ => {
+                out.push_str(&format!(
+                    r#"<circle cx="{cx}" cy="{cy}" r="10" class="commit {id} commit0"></circle>"#,
+                    cx = fmt_num(c.cx),
+                    cy = fmt_num(c.cy),
+                    id = id_esc,
+                ));
+                if matches!(commit.kind, crate::model::gitgraph::CommitKind::Reverse) {
+                    let cv = 5.0_f64;
+                    out.push_str(&format!(
+                        r#"<path d="M {x1},{y1}L{x2},{y2}M{x1b},{y2b}L{x2b},{y1b}" class="commit {tc} {id} commit0"></path>"#,
+                        x1 = fmt_num(c.cx - cv),
+                        y1 = fmt_num(c.cy - cv),
+                        x2 = fmt_num(c.cx + cv),
+                        y2 = fmt_num(c.cy + cv),
+                        x1b = fmt_num(c.cx - cv),
+                        y2b = fmt_num(c.cy + cv),
+                        x2b = fmt_num(c.cx + cv),
+                        y1b = fmt_num(c.cy - cv),
+                        tc = type_class,
+                        id = id_esc,
+                    ));
+                }
+            }
+        }
     }
     out.push_str("</g>");
 
-    // ── Commit labels (rotated -45°) ─────────────────────────────────
+    // ── Commit labels ───────────────────────────────────────────────
+    // Two paths: rotated -45° (rotateCommitLabel=true, default) or
+    // axis-aligned text under the line (rotateCommitLabel=false).
     out.push_str(r#"<g class="commit-labels">"#);
+    let py = 2.0_f64;
     for (i, c) in l.commits.iter().enumerate() {
         let commit = &d.commits[i];
+        // HIGHLIGHT shows label like normal; REVERSE too. CHERRY_PICK and
+        // MERGE-without-customId don't render — but those aren't reachable
+        // here yet (layout filters them).
+        if matches!(commit.kind, crate::model::gitgraph::CommitKind::CherryPick) {
+            continue;
+        }
         let lw = l.commit_label_widths[i];
         let lh = l.commit_label_text_height;
-        let py = 2.0_f64;
-        let r_x = -7.5 - ((lw + 10.0) / 25.0) * 9.5;
-        let r_y = 10.0 + (lw / 25.0) * 8.5;
         let rect_x = c.pos_with_offset - lw / 2.0 - py;
         let rect_y = c.cy + 13.5;
         let rect_w = lw + 2.0 * py;
         let rect_h = lh + 2.0 * py;
         let text_x = c.pos_with_offset - lw / 2.0;
         let text_y = c.cy + 25.0;
-        out.push_str(&format!(
-            r#"<g transform="translate({rx}, {ry}) rotate(-45, {pos}, {cy})"><rect class="commit-label-bkg" x="{x}" y="{y}" width="{w}" height="{h}"></rect><text x="{tx}" y="{ty}" class="commit-label">{label}</text></g>"#,
-            rx = fmt_num(r_x),
-            ry = fmt_num(r_y),
-            pos = fmt_num(c.pos),
-            cy = fmt_num(c.cy),
-            x = fmt_num(rect_x),
-            y = fmt_num(rect_y),
-            w = fmt_num(rect_w),
-            h = fmt_num(rect_h),
-            tx = fmt_num(text_x),
-            ty = fmt_num(text_y),
-            label = escape_text(&commit.id),
-        ));
+        if d.config.rotate_commit_label {
+            let r_x = -7.5 - ((lw + 10.0) / 25.0) * 9.5;
+            let r_y = 10.0 + (lw / 25.0) * 8.5;
+            out.push_str(&format!(
+                r#"<g transform="translate({rx}, {ry}) rotate(-45, {pos}, {cy})"><rect class="commit-label-bkg" x="{x}" y="{y}" width="{w}" height="{h}"></rect><text x="{tx}" y="{ty}" class="commit-label">{label}</text></g>"#,
+                rx = fmt_num(r_x),
+                ry = fmt_num(r_y),
+                pos = fmt_num(c.pos),
+                cy = fmt_num(c.cy),
+                x = fmt_num(rect_x),
+                y = fmt_num(rect_y),
+                w = fmt_num(rect_w),
+                h = fmt_num(rect_h),
+                tx = fmt_num(text_x),
+                ty = fmt_num(text_y),
+                label = escape_text(&commit.id),
+            ));
+        } else {
+            // Non-rotated: empty <g> wrapper, then rect + text.
+            out.push_str(&format!(
+                r#"<g><rect class="commit-label-bkg" x="{x}" y="{y}" width="{w}" height="{h}"></rect><text x="{tx}" y="{ty}" class="commit-label">{label}</text></g>"#,
+                x = fmt_num(rect_x),
+                y = fmt_num(rect_y),
+                w = fmt_num(rect_w),
+                h = fmt_num(rect_h),
+                tx = fmt_num(text_x),
+                ty = fmt_num(text_y),
+                label = escape_text(&commit.id),
+            ));
+        }
     }
     out.push_str("</g>");
 

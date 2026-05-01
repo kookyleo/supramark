@@ -82,22 +82,18 @@ pub fn layout(d: &GitGraphDiagram, _theme: &ThemeVariables) -> Result<GitGraphLa
             "gitGraph: merge commits not yet implemented".into(),
         ));
     }
-    if !d.config.rotate_commit_label {
-        return Err(crate::error::MermaidError::Unsupported(
-            "gitGraph: rotateCommitLabel=false not yet implemented".into(),
-        ));
-    }
     if d.commits.iter().any(|c| !c.tags.is_empty()) {
         return Err(crate::error::MermaidError::Unsupported(
             "gitGraph: commit tags not yet implemented".into(),
         ));
     }
-    if d.commits
-        .iter()
-        .any(|c| c.kind != crate::model::gitgraph::CommitKind::Normal)
-    {
+    if d.commits.iter().any(|c| matches!(
+        c.kind,
+        crate::model::gitgraph::CommitKind::Merge
+            | crate::model::gitgraph::CommitKind::CherryPick
+    )) {
         return Err(crate::error::MermaidError::Unsupported(
-            "gitGraph: REVERSE/HIGHLIGHT commit types not yet implemented".into(),
+            "gitGraph: merge/cherry-pick commit types not yet implemented".into(),
         ));
     }
 
@@ -278,7 +274,8 @@ pub fn layout(d: &GitGraphDiagram, _theme: &ThemeVariables) -> Result<GitGraphLa
     // line spine
     acc(0.0, -2.0, max_pos, 0.0);
     // branch label rect (x,y,w,h)
-    let bkg_x = -bbox_w - 4.0 - 30.0;
+    let rotate_pad = if d.config.rotate_commit_label { 30.0 } else { 0.0 };
+    let bkg_x = -bbox_w - 4.0 - rotate_pad;
     let bkg_y = -bbox_h / 2.0 + 10.0;
     let bkg_w = bbox_w + 18.0;
     let bkg_h = bbox_h + 4.0;
