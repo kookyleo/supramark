@@ -48,6 +48,7 @@ pub mod flowchart;
 pub mod ishikawa;
 pub mod journey;
 pub mod kanban;
+pub mod mindmap;
 pub mod quadrant;
 pub mod requirement;
 pub mod sankey;

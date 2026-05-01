@@ -284,9 +284,24 @@ fn convert_with_id_inner(source: &str, id: &str) -> Result<String, MermaidError>
             let d = parser::c4::parse(source)?;
             render::svg_c4::render(&d, &theme, id)
         }
+        detect::DiagramKind::Mindmap => {
+            // Parser is wired (whitespace-indented tree), but layout
+            // and render are stubs: upstream uses `cose-bilkent`
+            // force-directed layout (cytoscape extension), which has
+            // no Rust port yet. Every mindmap fixture sits in
+            // `tests/known_ignored.txt` until that port lands.
+            let d = parser::mindmap::parse(source)?;
+            let effective_theme = if let Some(name) = d.theme_override.as_deref() {
+                theme::get_theme(name)
+            } else {
+                theme.clone()
+            };
+            let l = layout::mindmap::layout(&d, &effective_theme)?;
+            render::svg_mindmap::render(&d, &l, &effective_theme, id)
+        }
         detect::DiagramKind::Info => render::svg_info::render(&theme, id),
         other => Err(MermaidError::Unsupported(format!(
-            "diagram kind '{}' not yet implemented — Wave 7: sequence/gitgraph; mindmap TBD",
+            "diagram kind '{}' not yet implemented — Wave 7: sequence/gitgraph",
             other.id()
         ))),
     }

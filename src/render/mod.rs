@@ -19,6 +19,7 @@ pub mod svg_info;
 pub mod svg_ishikawa;
 pub mod svg_journey;
 pub mod svg_kanban;
+pub mod svg_mindmap;
 pub mod svg_packet;
 pub mod svg_pie;
 pub mod svg_quadrant;
