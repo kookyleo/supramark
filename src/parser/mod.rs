@@ -10,6 +10,7 @@ pub mod gantt;
 pub mod ishikawa;
 pub mod journey;
 pub mod kanban;
+pub mod mindmap;
 pub mod packet;
 pub mod pie;
 pub mod quadrant;
