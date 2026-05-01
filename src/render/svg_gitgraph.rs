@@ -1,15 +1,25 @@
-//! gitGraph SVG renderer — minimal port of upstream `gitGraphRenderer.ts`.
+//! gitGraph SVG renderer — port of upstream `gitGraphRenderer.ts` LR mode.
 //!
-//! Targets byte-exact parity with mermaid@11.14.0 for the linear /
-//! single-branch / no-tag / no-merge / non-rotated subset of fixtures.
-//! Anything more complex is rejected at the layout stage and falls
-//! through to the global Unsupported handler (which the byte-exact
-//! sweep treats via `tests/known_ignored.txt`).
+//! Targets byte-exact parity with mermaid@11.14.0 for:
+//!   - linear, single-branch fixtures
+//!   - multi-branch (per-lane spine + label)
+//!   - `merge` commits (double-circle bullet, curved cross-lane arrow)
+//!   - `tag:`, `type:` (REVERSE/HIGHLIGHT) modifiers, `commit-label`
+//!
+//! Out of scope (rejected at layout stage): TB/BT, cherry-pick,
+//! parallelCommits, redux geometry / non-default themes.
 
 use crate::error::Result;
 use crate::layout::gitgraph::GitGraphLayout;
-use crate::model::gitgraph::GitGraphDiagram;
+use crate::model::gitgraph::{CommitKind, GitGraphDiagram};
 use crate::theme::ThemeVariables;
+
+/// Mirror upstream `calcColorIndex(rawIndex, THEME_COLOR_LIMIT=8, useColorTheme=false)`.
+/// Default theme always falls into the simple `rawIndex % 8` branch.
+#[inline]
+fn color_idx(raw: usize) -> usize {
+    raw % 8
+}
 
 pub fn render(
     d: &GitGraphDiagram,
@@ -38,64 +48,98 @@ pub fn render(
     out.push_str(&style_block(id, theme));
 
     // ── First-pass placeholder groups (jsdom artefact) ───────────────
-    // Upstream does a pre-pass `drawCommits(modifyGraph=false)` to
-    // populate commitPos for the arrow-router; in the DOM that leaves
-    // empty <g class="commit-bullets"></g> + <g class="commit-labels">
-    // groups behind. Reference SVGs have these empty placeholders, plus
-    // a leading empty <g></g> from the per-branch label measurement.
+    // Upstream emits `<g></g>` once (the temporary measurement group),
+    // followed by empty `<g class="commit-bullets"></g>` and
+    // `<g class="commit-labels"></g>` from the first `drawCommits(false)` pass.
     out.push_str("<g></g>");
     out.push_str(r#"<g class="commit-bullets"></g>"#);
     out.push_str(r#"<g class="commit-labels"></g>"#);
 
-    // ── Branch group (line + label background + label) ───────────────
-    // Layout currently only supports the single-branch case, so this is
-    // straightforward.
-    let b = &l.branches[0];
-    let bbox_w = b.label_width;
-    let bbox_h = b.label_height;
-    let rotate_pad = if d.config.rotate_commit_label { 30.0 } else { 0.0 };
-    let bkg_x = -bbox_w - 4.0 - rotate_pad;
-    let bkg_y = -bbox_h / 2.0 + 10.0;
-    let bkg_w = bbox_w + 18.0;
-    let bkg_h = bbox_h + 4.0;
-    let spine_y = -2.0_f64;
-    let label_translate_x = -bbox_w - 14.0 - rotate_pad;
-    let label_translate_y = spine_y - bbox_h / 2.0 - 2.0;
+    // ── Branch group: line + label background + label per branch ─────
+    // `showBranches: false` skips the entire group entirely (mirroring
+    // upstream `if (gitGraphConfig.showBranches) drawBranches(...)`).
+    if d.config.show_branches {
+    out.push_str("<g>");
+    for bp in &l.branches {
+        let bbox_w = bp.label_width;
+        let bbox_h = bp.label_height;
+        let rotate_pad = if d.config.rotate_commit_label { 30.0 } else { 0.0 };
+        let bkg_x = -bbox_w - 4.0 - rotate_pad;
+        let bkg_y = -bbox_h / 2.0 + 10.0;
+        let bkg_w = bbox_w + 18.0;
+        let bkg_h = bbox_h + 4.0;
+        let spine_y = bp.pos - 2.0;
+        let label_translate_x = -bbox_w - 14.0 - rotate_pad;
+        let label_translate_y = spine_y - bbox_h / 2.0 - 2.0;
+        let bkg_translate_x = -19.0;
+        // Upstream sets `bkg.attr('transform', 'translate(-19, ' + (spineY - 12 - labelPaddingY/2) + ')')`
+        // labelPaddingY = 0 outside redux, so the second arg is `spineY - 12`.
+        let bkg_translate_y = spine_y - 12.0;
+        let cidx = color_idx(bp.index);
 
-    out.push_str(&format!(
-        r#"<g><line x1="0" y1="{sy}" x2="{maxp}" y2="{sy}" class="branch branch{idx}"></line>"#,
-        sy = fmt_num(spine_y),
-        maxp = fmt_num(l.max_pos),
-        idx = b.index,
-    ));
-    out.push_str(&format!(
-        r#"<rect class="branchLabelBkg label{idx}" style="" rx="4" ry="4" x="{x}" y="{y}" width="{w}" height="{h}" transform="translate(-19, -14)"></rect>"#,
-        idx = b.index,
-        x = fmt_num(bkg_x),
-        y = fmt_num(bkg_y),
-        w = fmt_num(bkg_w),
-        h = fmt_num(bkg_h),
-    ));
-    out.push_str(&format!(
-        r#"<g class="branchLabel"><g class="label branch-label{idx}" transform="translate({tx}, {ty})"><text><tspan xml:space="preserve" dy="1em" x="0" class="row">{name}</tspan></text></g></g></g>"#,
-        idx = b.index,
-        tx = fmt_num(label_translate_x),
-        ty = fmt_num(label_translate_y),
-        name = escape_text(&b.name),
-    ));
-
-    // ── Arrows (between consecutive commits on same branch) ──────────
-    out.push_str(r#"<g class="commit-arrows">"#);
-    for win in l.commits.windows(2) {
-        let a = &win[0];
-        let b = &win[1];
         out.push_str(&format!(
-            r#"<path d="M {ax} {ay} L {bx} {by}" class="arrow arrow0"></path>"#,
-            ax = fmt_num(a.cx),
-            ay = fmt_num(a.cy),
-            bx = fmt_num(b.cx),
-            by = fmt_num(b.cy),
+            r#"<line x1="0" y1="{sy}" x2="{maxp}" y2="{sy}" class="branch branch{idx}"></line>"#,
+            sy = fmt_num(spine_y),
+            maxp = fmt_num(l.max_pos),
+            idx = cidx,
         ));
+        out.push_str(&format!(
+            r#"<rect class="branchLabelBkg label{idx}" style="" rx="4" ry="4" x="{x}" y="{y}" width="{w}" height="{h}" transform="translate({tx}, {ty})"></rect>"#,
+            idx = cidx,
+            x = fmt_num(bkg_x),
+            y = fmt_num(bkg_y),
+            w = fmt_num(bkg_w),
+            h = fmt_num(bkg_h),
+            tx = fmt_num(bkg_translate_x),
+            ty = fmt_num(bkg_translate_y),
+        ));
+        out.push_str(&format!(
+            r#"<g class="branchLabel"><g class="label branch-label{idx}" transform="translate({tx}, {ty})"><text><tspan xml:space="preserve" dy="1em" x="0" class="row">{name}</tspan></text></g></g>"#,
+            idx = cidx,
+            tx = fmt_num(label_translate_x),
+            ty = fmt_num(label_translate_y),
+            name = escape_text(&bp.name),
+        ));
+    }
+    out.push_str("</g>");
+    }
+
+    // ── Arrows: walk commits in chronological order; for each commit
+    //    emit one path per parent edge. Mirrors upstream `drawArrows`.
+    out.push_str(r#"<g class="commit-arrows">"#);
+    for (i, c) in d.commits.iter().enumerate() {
+        for parent_id in &c.parents {
+            let parent_idx = match d.commits.iter().position(|cc| &cc.id == parent_id) {
+                Some(p) => p,
+                None => continue,
+            };
+            let pa = &l.commits[parent_idx];
+            let pb = &l.commits[i];
+            let parent_commit = &d.commits[parent_idx];
+            let line_def = build_arrow_path(pa, pb, c, parent_commit);
+            // Color class — see upstream `drawArrow` for the rules:
+            // - for non-merge edges: dest branch color
+            // - for merge edges where `commitA.id !== commitB.parents[0]`:
+            //   source branch color
+            // Color rule for LR (mirrors upstream `drawArrow`):
+            //   - default: destination branch color
+            //   - merge with non-primary parent: source branch color
+            // The "source-branch color when source-below-dest" override
+            // only applies in the *rerouted* path (for the 10×10 arc detour),
+            // which we don't yet emit.
+            let raw_idx = if matches!(c.kind, CommitKind::Merge)
+                && c.parents.first() != Some(parent_id)
+            {
+                pa.branch_index
+            } else {
+                pb.branch_index
+            };
+            out.push_str(&format!(
+                r#"<path d="{d}" class="arrow arrow{idx}"></path>"#,
+                d = line_def,
+                idx = color_idx(raw_idx),
+            ));
+        }
     }
     out.push_str("</g>");
 
@@ -104,36 +148,52 @@ pub fn render(
     for (i, c) in l.commits.iter().enumerate() {
         let commit = &d.commits[i];
         let id_esc = escape_text(&commit.id);
-        let type_class = commit.kind.class();
-        match commit.kind {
-            crate::model::gitgraph::CommitKind::Highlight => {
-                // outer rect 20x20 + inner rect 12x12 (default geometry,
-                // useReduxGeometry=false)
+        // Effective symbol type: `commit.customType ?? commit.type`.
+        let symbol = commit.custom_type.unwrap_or(commit.kind);
+        // typeClass mirrors `getCommitClassType` — derived from the
+        // effective symbol so a `merge ... type: REVERSE` emits
+        // `commit-reverse` rather than `commit-merge` on the cross path.
+        let type_class = symbol.class();
+        let cidx = color_idx(c.branch_index);
+        match symbol {
+            CommitKind::Highlight => {
                 let ox = c.cx - 10.0;
                 let oy = c.cy - 10.0;
                 let ix = c.cx - 6.0;
                 let iy = c.cy - 6.0;
                 out.push_str(&format!(
-                    r#"<rect x="{ox}" y="{oy}" width="20" height="20" class="commit {id} commit-highlight0 {tc}-outer"></rect><rect x="{ix}" y="{iy}" width="12" height="12" class="commit {id} commit0 {tc}-inner"></rect>"#,
+                    r#"<rect x="{ox}" y="{oy}" width="20" height="20" class="commit {id} commit-highlight{cidx} {tc}-outer"></rect><rect x="{ix}" y="{iy}" width="12" height="12" class="commit {id} commit{cidx} {tc}-inner"></rect>"#,
                     ox = fmt_num(ox),
                     oy = fmt_num(oy),
                     ix = fmt_num(ix),
                     iy = fmt_num(iy),
                     id = id_esc,
                     tc = type_class,
+                    cidx = cidx,
                 ));
             }
             _ => {
                 out.push_str(&format!(
-                    r#"<circle cx="{cx}" cy="{cy}" r="10" class="commit {id} commit0"></circle>"#,
+                    r#"<circle cx="{cx}" cy="{cy}" r="10" class="commit {id} commit{cidx}"></circle>"#,
                     cx = fmt_num(c.cx),
                     cy = fmt_num(c.cy),
                     id = id_esc,
+                    cidx = cidx,
                 ));
-                if matches!(commit.kind, crate::model::gitgraph::CommitKind::Reverse) {
+                if matches!(symbol, CommitKind::Merge) {
+                    out.push_str(&format!(
+                        r#"<circle cx="{cx}" cy="{cy}" r="6" class="commit {tc} {id} commit{cidx}"></circle>"#,
+                        cx = fmt_num(c.cx),
+                        cy = fmt_num(c.cy),
+                        id = id_esc,
+                        tc = type_class,
+                        cidx = cidx,
+                    ));
+                }
+                if matches!(symbol, CommitKind::Reverse) {
                     let cv = 5.0_f64;
                     out.push_str(&format!(
-                        r#"<path d="M {x1},{y1}L{x2},{y2}M{x1b},{y2b}L{x2b},{y1b}" class="commit {tc} {id} commit0"></path>"#,
+                        r#"<path d="M {x1},{y1}L{x2},{y2}M{x1b},{y2b}L{x2b},{y1b}" class="commit {tc} {id} commit{cidx}"></path>"#,
                         x1 = fmt_num(c.cx - cv),
                         y1 = fmt_num(c.cy - cv),
                         x2 = fmt_num(c.cx + cv),
@@ -144,6 +204,7 @@ pub fn render(
                         y1b = fmt_num(c.cy - cv),
                         tc = type_class,
                         id = id_esc,
+                        cidx = cidx,
                     ));
                 }
             }
@@ -151,11 +212,7 @@ pub fn render(
     }
     out.push_str("</g>");
 
-    // ── Commit labels (interleaved with tags) ──────────────────────
-    // Two paths: rotated -45° (rotateCommitLabel=true, default) or
-    // axis-aligned text under the line (rotateCommitLabel=false).
-    // Tags for a commit appear right after that commit's label in
-    // document order, matching the reference output.
+    // ── Commit labels (interleaved with tags) ───────────────────────
     out.push_str(r#"<g class="commit-labels">"#);
     let py = 2.0_f64;
     let px = 4.0_f64;
@@ -163,49 +220,52 @@ pub fn render(
     let h2 = tag_lh / 2.0;
     for (i, c) in l.commits.iter().enumerate() {
         let commit = &d.commits[i];
-        if matches!(commit.kind, crate::model::gitgraph::CommitKind::CherryPick) {
+        // Skip commit-label for cherry-pick + non-customId merge.
+        if matches!(commit.kind, CommitKind::CherryPick) {
             continue;
         }
-        let lw = l.commit_label_widths[i];
-        let lh = l.commit_label_text_height;
-        let rect_x = c.pos_with_offset - lw / 2.0 - py;
-        let rect_y = c.cy + 13.5;
-        let rect_w = lw + 2.0 * py;
-        let rect_h = lh + 2.0 * py;
-        let text_x = c.pos_with_offset - lw / 2.0;
-        let text_y = c.cy + 25.0;
-        if d.config.rotate_commit_label {
-            let r_x = -7.5 - ((lw + 10.0) / 25.0) * 9.5;
-            let r_y = 10.0 + (lw / 25.0) * 8.5;
-            out.push_str(&format!(
-                r#"<g transform="translate({rx}, {ry}) rotate(-45, {pos}, {cy})"><rect class="commit-label-bkg" x="{x}" y="{y}" width="{w}" height="{h}"></rect><text x="{tx}" y="{ty}" class="commit-label">{label}</text></g>"#,
-                rx = fmt_num(r_x),
-                ry = fmt_num(r_y),
-                pos = fmt_num(c.pos),
-                cy = fmt_num(c.cy),
-                x = fmt_num(rect_x),
-                y = fmt_num(rect_y),
-                w = fmt_num(rect_w),
-                h = fmt_num(rect_h),
-                tx = fmt_num(text_x),
-                ty = fmt_num(text_y),
-                label = escape_text(&commit.id),
-            ));
-        } else {
-            out.push_str(&format!(
-                r#"<g><rect class="commit-label-bkg" x="{x}" y="{y}" width="{w}" height="{h}"></rect><text x="{tx}" y="{ty}" class="commit-label">{label}</text></g>"#,
-                x = fmt_num(rect_x),
-                y = fmt_num(rect_y),
-                w = fmt_num(rect_w),
-                h = fmt_num(rect_h),
-                tx = fmt_num(text_x),
-                ty = fmt_num(text_y),
-                label = escape_text(&commit.id),
-            ));
+        let skip_label = (matches!(commit.kind, CommitKind::Merge) && !commit.custom_id)
+            || !d.config.show_commit_label;
+        if !skip_label {
+            let lw = l.commit_label_widths[i];
+            let lh = l.commit_label_text_height;
+            let rect_x = c.pos_with_offset - lw / 2.0 - py;
+            let rect_y = c.cy + 13.5;
+            let rect_w = lw + 2.0 * py;
+            let rect_h = lh + 2.0 * py;
+            let text_x = c.pos_with_offset - lw / 2.0;
+            let text_y = c.cy + 25.0;
+            if d.config.rotate_commit_label {
+                let r_x = -7.5 - ((lw + 10.0) / 25.0) * 9.5;
+                let r_y = 10.0 + (lw / 25.0) * 8.5;
+                out.push_str(&format!(
+                    r#"<g transform="translate({rx}, {ry}) rotate(-45, {pos}, {cy})"><rect class="commit-label-bkg" x="{x}" y="{y}" width="{w}" height="{h}"></rect><text x="{tx}" y="{ty}" class="commit-label">{label}</text></g>"#,
+                    rx = fmt_num(r_x),
+                    ry = fmt_num(r_y),
+                    pos = fmt_num(c.pos),
+                    cy = fmt_num(c.cy),
+                    x = fmt_num(rect_x),
+                    y = fmt_num(rect_y),
+                    w = fmt_num(rect_w),
+                    h = fmt_num(rect_h),
+                    tx = fmt_num(text_x),
+                    ty = fmt_num(text_y),
+                    label = escape_text(&commit.id),
+                ));
+            } else {
+                out.push_str(&format!(
+                    r#"<g><rect class="commit-label-bkg" x="{x}" y="{y}" width="{w}" height="{h}"></rect><text x="{tx}" y="{ty}" class="commit-label">{label}</text></g>"#,
+                    x = fmt_num(rect_x),
+                    y = fmt_num(rect_y),
+                    w = fmt_num(rect_w),
+                    h = fmt_num(rect_h),
+                    tx = fmt_num(text_x),
+                    ty = fmt_num(text_y),
+                    label = escape_text(&commit.id),
+                ));
+            }
         }
 
-        // Tags for this commit (rendered in REVERSE order — upstream's
-        // `for (const tagValue of commit.tags.reverse())`).
         if !commit.tags.is_empty() {
             let mut max_w = 0.0_f64;
             for t in &commit.tags {
@@ -257,7 +317,6 @@ pub fn render(
     // ── Title (gitTitleText) ─────────────────────────────────────────
     if let Some(title) = d.meta.title.as_deref() {
         if !title.is_empty() {
-            // titleTopMargin defaults to 25 for gitGraph upstream.
             out.push_str(&format!(
                 r#"<text text-anchor="middle" x="{x}" y="-25" class="gitTitleText">{t}</text>"#,
                 x = fmt_num(l.title_x),
@@ -270,17 +329,91 @@ pub fn render(
     Ok(out)
 }
 
+/// Build the `d=` attribute for one parent → commit arrow.
+///
+/// Mirrors upstream `drawArrow` for LR mode, non-redux geometry. Only
+/// the non-rerouted case is implemented for now (no obstacles between
+/// p1 and p2 on the `branchToGetCurve`); rerouting (smaller 10×10 arc
+/// detour) is a follow-up.
+fn build_arrow_path(
+    pa: &crate::layout::gitgraph::CommitGeom,
+    pb: &crate::layout::gitgraph::CommitGeom,
+    commit_b: &crate::model::gitgraph::Commit,
+    _commit_a: &crate::model::gitgraph::Commit,
+) -> String {
+    let p1x = pa.cx;
+    let p1y = pa.cy;
+    let p2x = pb.cx;
+    let p2y = pb.cy;
+    let radius = 20.0_f64;
+    let offset = 20.0_f64;
+    let is_merge_secondary = matches!(commit_b.kind, CommitKind::Merge)
+        && commit_b.parents.first().map(|s| s.as_str()) != Some(_commit_a.id.as_str());
+
+    if (p1y - p2y).abs() < f64::EPSILON {
+        // Same lane.
+        return format!("M {} {} L {} {}", fmt_num(p1x), fmt_num(p1y), fmt_num(p2x), fmt_num(p2y));
+    }
+
+    if p1y < p2y {
+        // Source above dest — descend then arc (clockwise CCW=0). Either:
+        //   - merge with non-primary parent: `M p1 L p2.x-r p1.y A r r 0 0 1 p2.x p1.y+off L p2`
+        //     (horizontal first then arc down-right)
+        //   - normal: `M p1 L p1.x p2.y-r A r r 0 0 0 p1.x+off p2.y L p2`
+        if is_merge_secondary {
+            // p1.y < p2.y, secondary parent: horizontal, arc down.
+            format!(
+                "M {} {} L {} {} A {} {}, 0, 0, 1, {} {} L {} {}",
+                fmt_num(p1x), fmt_num(p1y),
+                fmt_num(p2x - radius), fmt_num(p1y),
+                fmt_num(radius), fmt_num(radius),
+                fmt_num(p2x), fmt_num(p1y + offset),
+                fmt_num(p2x), fmt_num(p2y),
+            )
+        } else {
+            // Normal downward: vertical, arc right.
+            format!(
+                "M {} {} L {} {} A {} {}, 0, 0, 0, {} {} L {} {}",
+                fmt_num(p1x), fmt_num(p1y),
+                fmt_num(p1x), fmt_num(p2y - radius),
+                fmt_num(radius), fmt_num(radius),
+                fmt_num(p1x + offset), fmt_num(p2y),
+                fmt_num(p2x), fmt_num(p2y),
+            )
+        }
+    } else {
+        // p1.y > p2.y — source below dest (rising arrow).
+        if is_merge_secondary {
+            // Secondary parent rising: horizontal then arc up.
+            format!(
+                "M {} {} L {} {} A {} {}, 0, 0, 0, {} {} L {} {}",
+                fmt_num(p1x), fmt_num(p1y),
+                fmt_num(p2x - radius), fmt_num(p1y),
+                fmt_num(radius), fmt_num(radius),
+                fmt_num(p2x), fmt_num(p1y - offset),
+                fmt_num(p2x), fmt_num(p2y),
+            )
+        } else {
+            // Normal upward: vertical then arc.
+            format!(
+                "M {} {} L {} {} A {} {}, 0, 0, 1, {} {} L {} {}",
+                fmt_num(p1x), fmt_num(p1y),
+                fmt_num(p1x), fmt_num(p2y + radius),
+                fmt_num(radius), fmt_num(radius),
+                fmt_num(p1x + offset), fmt_num(p2y),
+                fmt_num(p2x), fmt_num(p2y),
+            )
+        }
+    }
+}
+
 /// Format a number the way d3/jsdom does in mermaid output:
 ///   - integral values render without a decimal point ("0", "150").
-///   - fractional values keep their full precision (no trimming) so
-///     the bytes match upstream.
+///   - fractional values keep their full precision so the bytes match.
 fn fmt_num(v: f64) -> String {
     if v.fract() == 0.0 && v.is_finite() {
         format!("{}", v as i64)
     } else {
-        // Match JS Number.toString — `format!("{}", v)` for f64 in Rust
-        // yields the shortest round-trip representation, which aligns
-        // with V8 / Node for the values we produce here.
         format!("{}", v)
     }
 }
@@ -322,8 +455,7 @@ fn minify_font_family(s: &str) -> String {
 }
 
 /// Compose the gitGraph CSS block — port of upstream
-/// `diagrams/git/styles.js` with the default theme branch only
-/// (the only one we need for the byte-exact subset we currently support).
+/// `diagrams/git/styles.js` with the default theme branch.
 fn style_block(id: &str, theme: &ThemeVariables) -> String {
     let ff_raw = theme
         .font_family
@@ -363,9 +495,6 @@ fn style_block(id: &str, theme: &ThemeVariables) -> String {
         .as_deref()
         .unwrap_or("10px");
 
-    // Default-theme git color palette (12 entries, cycled mod 8). These come
-    // from theme/default.rs; no need to look them up unless explicitly set
-    // — the defaults match upstream exactly.
     const GIT0: [&str; 8] = [
         "hsl(240, 100%, 46.2745098039%)",
         "hsl(60, 100%, 43.5294117647%)",
@@ -396,7 +525,6 @@ fn style_block(id: &str, theme: &ThemeVariables) -> String {
         eb = error_bkg, et = error_text, lc = line_color,
     ));
 
-    // 12 sets of branch-label / commit / commit-highlight / label / arrow.
     for i in 0..12 {
         let ci = i % 8;
         css.push_str(&format!(
@@ -415,8 +543,6 @@ fn style_block(id: &str, theme: &ThemeVariables) -> String {
         tc = text_color, pc = primary_color,
     ));
 
-    // Neo-look fragment (always emitted, even on default theme — upstream
-    // does this unconditionally inside the styles function).
     css.push_str(&format!(
         "#{id} .node .neo-node{{stroke:{nb};}}#{id} [data-look=\"neo\"].node rect,#{id} [data-look=\"neo\"].cluster rect,#{id} [data-look=\"neo\"].node polygon{{stroke:{nb};filter:drop-shadow(1px 2px 2px rgba(185, 185, 185, 1));}}#{id} [data-look=\"neo\"].node path{{stroke:{nb};stroke-width:1px;}}#{id} [data-look=\"neo\"].node .outer-path{{filter:drop-shadow(1px 2px 2px rgba(185, 185, 185, 1));}}#{id} [data-look=\"neo\"].node .neo-line path{{stroke:{nb};filter:none;}}#{id} [data-look=\"neo\"].node circle{{stroke:{nb};filter:drop-shadow(1px 2px 2px rgba(185, 185, 185, 1));}}#{id} [data-look=\"neo\"].node circle .state-start{{fill:{mb};}}#{id} [data-look=\"neo\"].icon-shape .icon{{fill:{nb};filter:drop-shadow(1px 2px 2px rgba(185, 185, 185, 1));}}#{id} [data-look=\"neo\"].icon-shape .icon-neo path{{stroke:{nb};filter:drop-shadow(1px 2px 2px rgba(185, 185, 185, 1));}}#{id} :root{{--mermaid-font-family:{ff};}}",
         nb = node_border, mb = "#000000", ff = ff,
