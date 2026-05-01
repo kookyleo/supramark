@@ -47,7 +47,6 @@ ext_fixtures/demos/state/07.mmd	Multi-level nested cluster (First contains inner
 ext_fixtures/cypress/venn/02.mmd	3-circle layout with size-symmetric inputs (1/1/1, 0.4/0.4/0.4, 0.16) makes Nelder-Mead converge to a slightly different simplex point than V8 (~e-5 in centre coords); even with libm-routed transcendentals matching V8 fdlibm exactly, fx-vec ties on symmetric initial simplex select different branches.
 ext_fixtures/cypress/venn/03.mmd	Same as 02: 3-circle size-symmetric Nelder-Mead degeneracy (3 circles + title). libm crate matches V8 atan2/acos/sqrt/sin/cos byte-for-byte but symmetric simplex still diverges.
 ext_fixtures/cypress/venn/06.mmd	Foreign-object text-node rendering not yet ported (text "..." inside set/union).
-ext_fixtures/cypress/venn/07.mmd	Style fill color path uses khroma's hex→hsl→darken → emits hsl-string; our adjust_l only handles HSL inputs.
 ext_fixtures/cypress/venn/10.mmd	Foreign-object text-node rendering not yet ported.
 ext_fixtures/cypress/venn/11.mmd	Foreign-object text-node rendering with per-node style colors not yet ported.
 ext_fixtures/cypress/venn/13.mmd	Combined: text nodes + style fill darken (hex→hsl) + 3-circle symmetric Nelder-Mead divergence.
