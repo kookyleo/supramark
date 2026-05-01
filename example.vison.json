@@ -1,0 +1,47 @@
+{
+  "version": "1",
+  "type": "container",
+  "style": {
+    "padding": 16,
+    "backgroundColor": "#FFFFFF",
+    "borderRadius": 12,
+    "width": 340,
+    "gap": 12,
+    "borderWidth": 1,
+    "borderColor": "#E5E5E5"
+  },
+  "children": [
+    {
+      "type": "container",
+      "style": { "flexDirection": "row", "alignItems": "center", "gap": 8 },
+      "children": [
+        {
+          "type": "image",
+          "props": { "src": "https://api.dicebear.com/7.x/bottts/svg?seed=vison", "width": 40, "aspectRatio": 1 },
+          "style": { "borderRadius": 20, "width": 40, "height": 40 }
+        },
+        {
+          "type": "text",
+          "props": { "text": "Vison Assistant" },
+          "style": { "fontSize": 16, "fontWeight": "600", "color": "#1A1A1A" }
+        }
+      ]
+    },
+    {
+      "type": "divider",
+      "style": { "margin": 4, "borderColor": "#F0F0F0" }
+    },
+    {
+      "type": "markdown",
+      "props": {
+        "content": "### 部署报告\n服务已成功上线。主要更新点：\n- **性能优化**: 提升了 20%\n- **安全性**: 修复了 XSS 漏洞"
+      },
+      "style": { "fontSize": 14, "color": "#4A4A4A" }
+    },
+    {
+      "type": "image",
+      "props": { "src": "https://images.unsplash.com/photo-1614741118887-7a4ee193a5fa?w=800", "width": 308, "aspectRatio": 1.77 },
+      "style": { "borderRadius": 8, "width": "100%", "aspectRatio": 1.77 }
+    }
+  ]
+}
