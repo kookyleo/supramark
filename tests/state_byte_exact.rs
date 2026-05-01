@@ -280,6 +280,20 @@ fn cypress_33() {
     assert_byte_exact("ext_fixtures/cypress/state/33");
 }
 
+/// Two composite states S1 and S2 with cross-boundary edges (S1→S2 and
+/// sub1→sub4). Both edges get anchor-rewritten to the same (sub1, sub4)
+/// pair in the outer dagre, making them parallel multiedges. Byte-exactness
+/// requires that the dagre geometric binding order matches upstream: the
+/// non-rewritten leaf edge (sub1→sub4) must be added to dagre before the
+/// anchor-rewritten cluster edge (S1→S2 → sub1→sub4), mirroring upstream's
+/// `adjustClustersAndEdges` which removes and re-adds cluster edges at the
+/// end of the edge list. The fix stable-partitions edges in
+/// `build_graph_filtered_ex` so anchor-rewritten edges come last.
+#[test]
+fn cypress_34() {
+    assert_byte_exact("ext_fixtures/cypress/state/34");
+}
+
 /// Single TB column of ten composite states whose long titles
 /// (`StateN_____________`) widen each cluster's outer rect via
 /// `expand_cluster_width_for_label`. Frontmatter declares `look: default`

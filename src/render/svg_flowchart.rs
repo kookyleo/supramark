@@ -2325,7 +2325,15 @@ fn isolated_inner_leaf_node_order(
     let subgraph_ids: HashSet<&str> = d.subgraphs.iter().map(|s| s.id.as_str()).collect();
 
     // Build insertion order matching upstream getData() scoped to this cluster:
-    //   reversed child subgraphs, then member vertices in declaration order.
+    //   reversed child subgraphs, then vertices in global declaration order.
+    // Upstream's adjustClustersAndEdges + copy(extractor) mutates outer-graph
+    // _children[clusterId] key order; the observable effect inside an
+    // isolated cluster is that the inner dagre pass's graph.children()
+    // reflects that key order.  We mirror that here: reversed non-isolated
+    // subgraphs first, then leaf vertices in the order they appear in
+    // getData's nodes list (= reversed subgraphs + declaration-order
+    // vertices).  The isolated-inner rendering uses the DFS walk on this
+    // insertion list to match the hierarchy traversal order.
     let mut insertion: Vec<String> = Vec::new();
     for sg in d.subgraphs.iter().rev() {
         if !node_idx.contains_key(sg.id.as_str()) {

@@ -394,12 +394,70 @@ fn build_graph_filtered_ex<'a>(
         std::collections::HashMap::new()
     };
 
-    for edge in &data.edges {
-        // When an edge was originally cluster-to-cluster (orig_start/orig_end
-        // are both cluster ids present in the graph), use those original ids.
-        // This ensures that after isolated-cluster retargeting (A→B becomes
-        // a→i, and a,i are excluded), the cluster super-nodes A and B still
-        // receive the edge in the outer graph.
+    // Stable-partition edges so that anchor-rewritten edges come LAST,
+    // but ONLY for diagram types where this matches upstream's
+    // `adjustClustersAndEdges` edge-reinsertion order. For flowchart,
+    // upstream processes edges in declaration order without reordering
+    // cluster-endpoint edges to the end. For state, upstream's
+    // adjustClustersAndEdges removes and re-adds cluster edges, pushing
+    // them to the end of the edge list, which affects dagre's geometric
+    // binding order for parallel multiedges (e.g. state cy/34).
+    let do_partition = data
+        .diagram_type
+        .as_deref()
+        .map(|t| t.starts_with("state"))
+        .unwrap_or(false);
+    let edge_order: Vec<usize> = if do_partition {
+        // Stable-partition: anchor-rewritten edges come last.
+        let mut non_rewritten: Vec<usize> = Vec::new();
+        let mut rewritten: Vec<usize> = Vec::new();
+        for (idx, edge) in data.edges.iter().enumerate() {
+            let orig_src = edge.extra.get("orig_start").map(|s| s.as_str());
+            let orig_dst = edge.extra.get("orig_end").map(|s| s.as_str());
+            let (effective_src, effective_dst) = if let (Some(os), Some(od)) = (orig_src, orig_dst) {
+                if g.has_node(os) && g.has_node(od) {
+                    (os, od)
+                } else {
+                    (edge_source(edge).unwrap_or(""), edge_target(edge).unwrap_or(""))
+                }
+            } else {
+                (edge_source(edge).unwrap_or(""), edge_target(edge).unwrap_or(""))
+            };
+            if excluded.contains(effective_src) || excluded.contains(effective_dst) {
+                continue;
+            }
+            let dagre_src: &str = if !isolated_cluster_ids.contains(effective_src) {
+                cluster_anchors
+                    .get(effective_src)
+                    .map(|s| s.as_str())
+                    .unwrap_or(effective_src)
+            } else {
+                effective_src
+            };
+            let dagre_dst: &str = if !isolated_cluster_ids.contains(effective_dst) {
+                cluster_anchors
+                    .get(effective_dst)
+                    .map(|s| s.as_str())
+                    .unwrap_or(effective_dst)
+            } else {
+                effective_dst
+            };
+            if excluded.contains(dagre_src) || excluded.contains(dagre_dst) {
+                continue;
+            }
+            if dagre_src != effective_src || dagre_dst != effective_dst {
+                rewritten.push(idx);
+            } else {
+                non_rewritten.push(idx);
+            }
+        }
+        non_rewritten.into_iter().chain(rewritten).collect()
+    } else {
+        (0..data.edges.len()).collect()
+    };
+
+    for idx in edge_order {
+        let edge = &data.edges[idx];
         let orig_src = edge.extra.get("orig_start").map(|s| s.as_str());
         let orig_dst = edge.extra.get("orig_end").map(|s| s.as_str());
         let (effective_src, effective_dst): (&str, &str) =
@@ -3083,27 +3141,6 @@ pub fn layout(data: &LayoutData, _theme: &ThemeVariables) -> Result<LayoutResult
             for sub in inner.sub_isolated.values() {
                 gather_inner_self_loops(sub, helpers, segments);
             }
-        }
-
-        let mut helpers = Vec::new();
-        let mut segments = Vec::new();
-        for inner in isolated_layouts.values() {
-            gather_inner_self_loops(inner, &mut helpers, &mut segments);
-        }
-        if !helpers.is_empty() {
-            log::debug!(
-                "dagre_bridge: exposing {} self-loop helper node(s) from isolated inner pass",
-                helpers.len()
-            );
-            all_nodes.extend(helpers);
-        }
-        if !segments.is_empty() {
-            log::debug!(
-                "dagre_bridge: exposing {} cyclic-special sub-edge(s) from isolated inner pass",
-                segments.len()
-            );
-            let refined = routing::refine_edges(&all_nodes, &segments);
-            all_edges.extend(refined);
         }
     }
     {
