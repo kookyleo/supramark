@@ -27,6 +27,34 @@ pub mod theme;
 
 pub use error::MermaidError;
 
+/// Mirror `tests/support/generate_ref.mjs#renumberCounterIds` —
+/// renumber matched `(prefix, counter)` pairs by first-appearance
+/// order, splicing them back with `sep`. Used at SVG output time so
+/// our render matches the normalised reference: upstream's mermaid
+/// uses module-level counters that accumulate across batch renders;
+/// `generate_ref` then renumbers by first-appearance per-SVG so the
+/// output is stable. We must apply the same pass to our output —
+/// otherwise our per-render sequential counters (e.g. classCounter
+/// 0,1,2…) match the *literal* upstream values only when the upstream
+/// batch happened to start at 0, which depends on fixture ordering.
+fn renumber_counter_ids(svg: &str, re: &regex::Regex, sep: &str) -> String {
+    use std::collections::HashMap;
+    let mut map: HashMap<String, usize> = HashMap::new();
+    let mut next = 0usize;
+    re.replace_all(svg, |caps: &regex::Captures| {
+        let id = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+        let counter = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+        let key = format!("{}:{}", id, counter);
+        let v = *map.entry(key).or_insert_with(|| {
+            let cur = next;
+            next += 1;
+            cur
+        });
+        format!("{}{}{}", id, sep, v)
+    })
+    .into_owned()
+}
+
 /// Convert mermaid source text (`.mmd`) into SVG.
 ///
 /// The `id` argument becomes the root `<svg id="..">` attribute and is
@@ -41,6 +69,17 @@ pub fn convert_with_id(source: &str, id: &str) -> Result<String, MermaidError> {
     // `packet.showBits`, `themeVariables.pieOuterStrokeWidth`). Doing
     // it this way lets Wave 1 agents keep one API boundary —
     // `parse(&str)` — without a Config parameter.
+    let svg = convert_with_id_inner(source, id)?;
+    // Apply the same per-SVG counter normalisation that
+    // `generate_ref.mjs` runs over upstream's reference output. Only
+    // `classId-\w+-N` is relevant today — class diagrams are the only
+    // implemented family whose IDs leak a module-level counter.
+    static CLASS_ID_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re = CLASS_ID_RE.get_or_init(|| regex::Regex::new(r"(classId-\w+)-(\d+)").unwrap());
+    Ok(renumber_counter_ids(&svg, re, "-"))
+}
+
+fn convert_with_id_inner(source: &str, id: &str) -> Result<String, MermaidError> {
     let pre = preprocess::preprocess(source)?;
     let theme_name = pre.config.theme.as_deref().unwrap_or("default");
     let mut theme = theme::get_theme(theme_name);
