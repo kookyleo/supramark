@@ -2303,7 +2303,7 @@ fn node_parent_is(node_id: Option<&str>, cluster_id: &str, l: &FlowchartLayout) 
 /// cluster's inner dagre pass. The order is:
 /// 1. DFS into non-isolated child clusters first (their leaves appear before
 ///    the cluster's direct leaves)
-/// 2. Direct leaf members in subgraph declaration order
+/// 2. Direct leaf members in their containing subgraph's local declaration order
 /// 3. Synthetic/helper nodes not in the diagram model fall back to their
 ///    position in `l.nodes` (JS key-order fallback)
 ///
@@ -2324,16 +2324,19 @@ fn isolated_inner_leaf_node_order(
         .collect();
     let subgraph_ids: HashSet<&str> = d.subgraphs.iter().map(|s| s.id.as_str()).collect();
 
-    // Build insertion order matching upstream getData() scoped to this cluster:
-    //   reversed child subgraphs, then vertices in global declaration order.
-    // Upstream's adjustClustersAndEdges + copy(extractor) mutates outer-graph
-    // _children[clusterId] key order; the observable effect inside an
-    // isolated cluster is that the inner dagre pass's graph.children()
-    // reflects that key order.  We mirror that here: reversed non-isolated
-    // subgraphs first, then leaf vertices in the order they appear in
-    // getData's nodes list (= reversed subgraphs + declaration-order
-    // vertices).  The isolated-inner rendering uses the DFS walk on this
-    // insertion list to match the hierarchy traversal order.
+    let mut seen: HashSet<String> = HashSet::new();
+    let push_unique = |insertion: &mut Vec<String>, seen: &mut HashSet<String>, id: &str| {
+        if seen.insert(id.to_string()) {
+            insertion.push(id.to_string());
+        }
+    };
+
+    // Build insertion order matching upstream's extractor/copy step scoped to
+    // this isolated cluster. Non-isolated child clusters are inserted before
+    // leaf members. When such a child cluster exists, upstream's copy path
+    // observes the local `subgraph ... end` body order for direct leaves
+    // (fixture 134: `a` before `b`). Leaf-only isolated clusters preserve
+    // getData's global first-seen vertex order instead (fixture 135).
     let mut insertion: Vec<String> = Vec::new();
     for sg in d.subgraphs.iter().rev() {
         if !node_idx.contains_key(sg.id.as_str()) {
@@ -2345,22 +2348,64 @@ fn isolated_inner_leaf_node_order(
         if l.isolated_cluster_ids.contains(&sg.id) {
             continue;
         }
-        insertion.push(sg.id.clone());
+        push_unique(&mut insertion, &mut seen, &sg.id);
     }
-    for v in &d.vertices {
-        if subgraph_ids.contains(v.id.as_str()) {
-            continue;
+
+    let has_non_isolated_cluster_child = l.nodes.iter().any(|n| {
+        n.parent_id.as_deref() == Some(cluster_id)
+            && n.is_group
+            && !l.isolated_cluster_ids.contains(&n.id)
+    });
+
+    if has_non_isolated_cluster_child {
+        let mut scoped_subgraph_ids: Vec<&str> = vec![cluster_id];
+        for sg in &d.subgraphs {
+            if l.isolated_cluster_ids.contains(&sg.id) {
+                continue;
+            }
+            if is_descendant_of(&sg.id, cluster_id, l) {
+                scoped_subgraph_ids.push(sg.id.as_str());
+            }
         }
-        if !node_idx.contains_key(v.id.as_str()) {
-            continue;
+        for sid in scoped_subgraph_ids {
+            let Some(sg) = d.subgraphs.iter().find(|s| s.id == sid) else {
+                continue;
+            };
+            for member in &sg.members {
+                if subgraph_ids.contains(member.as_str()) {
+                    continue;
+                }
+                if !node_idx.contains_key(member.as_str()) {
+                    continue;
+                }
+                if !is_descendant_of(member, cluster_id, l) {
+                    continue;
+                }
+                if is_in_isolated_sub_cluster_of(member, cluster_id, l) {
+                    continue;
+                }
+                push_unique(&mut insertion, &mut seen, member);
+            }
         }
-        if !is_descendant_of(&v.id, cluster_id, l) {
-            continue;
+    } else {
+        // With only leaf children, upstream preserves the original getData
+        // vertex insertion order. Fixture 135 depends on this: subnet members
+        // are declared as compute/lb locally, but lb was first seen globally.
+        for v in &d.vertices {
+            if subgraph_ids.contains(v.id.as_str()) {
+                continue;
+            }
+            if !node_idx.contains_key(v.id.as_str()) {
+                continue;
+            }
+            if !is_descendant_of(&v.id, cluster_id, l) {
+                continue;
+            }
+            if is_in_isolated_sub_cluster_of(&v.id, cluster_id, l) {
+                continue;
+            }
+            push_unique(&mut insertion, &mut seen, &v.id);
         }
-        if is_in_isolated_sub_cluster_of(&v.id, cluster_id, l) {
-            continue;
-        }
-        insertion.push(v.id.clone());
     }
 
     let pos: HashMap<&str, usize> = insertion

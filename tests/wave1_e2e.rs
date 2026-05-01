@@ -213,14 +213,6 @@ const KNOWN_PARTIAL: &[&str] = &[
     // NOT yet re-run those derivations when `cScale*` is overridden
     // (owned by `theme::color`; dedicated ticket — out of scope here).
     "ext_fixtures/cypress/timeline/12",
-    // flowchart/134: leaf node DOM order inside isolated cluster differs
-    // from reference (a/b swap). Root cause: upstream `recursiveRender`
-    // uses Promise.all with multi-layer async/await (insertNode →
-    // shapeHandler → drawRect → labelHelper), producing a DOM insert
-    // order dictated by V8 microtask scheduling that is deterministic
-    // but not reproducible in Rust. Visual output is identical; only
-    // the <g> element serialization order differs.
-    "ext_fixtures/cypress/flowchart/134",
 ];
 const TIMELINE_CYPRESS_SKIP: bool = false;
 

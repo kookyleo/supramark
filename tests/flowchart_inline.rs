@@ -254,6 +254,13 @@ fn flowchart_byte_exact_sweep() {
 }
 
 #[test]
+fn flowchart_134_isolated_cluster_dom_order_is_byte_exact() {
+    let rel = "ext_fixtures/cypress/flowchart/134";
+    let (ok, diff) = run_one(rel).unwrap();
+    assert!(ok, "{rel}: {diff}");
+}
+
+#[test]
 fn flowchart_single_diff_report() {
     let rel_buf = std::env::var("FLOWCHART_DIFF_REL")
         .unwrap_or_else(|_| "ext_fixtures/cypress/flowchart/137".to_string());
