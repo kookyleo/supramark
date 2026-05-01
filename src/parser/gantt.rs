@@ -19,7 +19,7 @@ use crate::model::gantt::{GanttDiagram, Section, Task};
 
 /// Tags that can appear in task data (matched case-insensitively,
 /// as a whole token in the comma-separated data).
-const TASK_TAGS: &[&str] = &["active", "done", "crit", "milestone"];
+const TASK_TAGS: &[&str] = &["active", "done", "crit", "milestone", "vert"];
 
 pub fn parse(source: &str) -> Result<GanttDiagram> {
     let mut d = GanttDiagram {
@@ -249,6 +249,7 @@ fn parse_task(name: &str, data: &str, section_idx: usize, auto_id_counter: &mut 
     let mut active = false;
     let mut critical = false;
     let mut milestone = false;
+    let mut vert = false;
 
     let mut found_tag = true;
     while found_tag {
@@ -264,6 +265,7 @@ fn parse_task(name: &str, data: &str, section_idx: usize, auto_id_counter: &mut 
                     "done" => done = true,
                     "crit" => critical = true,
                     "milestone" => milestone = true,
+                    "vert" => vert = true,
                     _ => {}
                 }
                 parts.remove(0);
@@ -321,6 +323,7 @@ fn parse_task(name: &str, data: &str, section_idx: usize, auto_id_counter: &mut 
         active,
         critical,
         milestone,
+        vert,
         section: section_idx,
         classes: Vec::new(),
     }

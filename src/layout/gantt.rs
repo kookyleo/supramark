@@ -158,9 +158,14 @@ pub fn layout(d: &GanttDiagram, _theme: &ThemeVariables) -> Result<GanttLayout> 
         "%Y-%m-%d".to_string()
     };
 
-    // Tick generation — d3-axis defaults to ~10 ticks. Pick a daily/etc
-    // interval whose count is closest to 10.
-    let axis_ticks = generate_ticks(min_ms, max_ms, &axis_format, &d.date_format);
+    // Tick generation — honor `tickInterval` if provided, otherwise
+    // fall back to d3-style closest-to-10 selection.
+    let axis_ticks = if let Some(ti) = d.tick_interval.as_deref() {
+        generate_ticks_fixed(min_ms, max_ms, &axis_format, ti, &d.weekday)
+            .unwrap_or_else(|| generate_ticks(min_ms, max_ms, &axis_format, &d.date_format))
+    } else {
+        generate_ticks(min_ms, max_ms, &axis_format, &d.date_format)
+    };
 
     // Exclude ranges.
     let exclude_ranges = if d.excludes.is_empty() && d.includes.is_empty() {
@@ -410,7 +415,7 @@ fn resolve_tasks(d: &GanttDiagram) -> Vec<ResolvedTask> {
             active: t.active,
             critical: t.critical,
             milestone: t.milestone,
-            vert: false,
+            vert: t.vert,
             section_idx: t.section,
             section_name,
             classes: t.classes.clone(),
@@ -501,6 +506,194 @@ fn get_end_date(
 }
 
 // ── Tick generation ──────────────────────────────────────────────────
+
+/// Honour an explicit `tickInterval` directive.
+/// Pattern: `^([1-9]\d*)(millisecond|second|minute|hour|day|week|month)$`.
+fn generate_ticks_fixed(
+    min_ms: f64,
+    max_ms: f64,
+    axis_format: &str,
+    tick_interval: &str,
+    weekday: &str,
+) -> Option<Vec<AxisTick>> {
+    let tick_interval = tick_interval.trim();
+    let bytes = tick_interval.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i == 0 {
+        return None;
+    }
+    let n: u32 = tick_interval[..i].parse().ok()?;
+    if n == 0 {
+        return None;
+    }
+    let unit = &tick_interval[i..];
+
+    // MAX_TICK_COUNT 10000 check.
+    let unit_ms = match unit {
+        "millisecond" => 1.0,
+        "second" => 1000.0,
+        "minute" => 60_000.0,
+        "hour" => 3_600_000.0,
+        "day" => 86_400_000.0,
+        "week" => 7.0 * 86_400_000.0,
+        "month" => 30.0 * 86_400_000.0,
+        _ => return None,
+    };
+    let estimated = ((max_ms - min_ms) / (unit_ms * n as f64)).ceil();
+    if estimated > 10_000.0 {
+        return None;
+    }
+
+    let mut v: Vec<f64> = Vec::new();
+    match unit {
+        "millisecond" | "second" | "minute" => {
+            let step = unit_ms * n as f64;
+            let s = (min_ms / step).ceil() * step;
+            let mut t = s;
+            while t <= max_ms + 0.5 {
+                v.push(t);
+                t += step;
+            }
+        }
+        "hour" => {
+            // d3 timeHour.every(k) anchors hour-of-day to multiples of k from 0.
+            let day_ms = 86_400_000.0;
+            let hour_ms = 3_600_000.0;
+            // Find first hour-aligned tick at hour H where H % n == 0 and t >= min.
+            let day_start = (min_ms / day_ms).floor() * day_ms;
+            let mut t = day_start;
+            // advance to first hour multiple in/after min.
+            while t < min_ms {
+                t += hour_ms * n as f64;
+            }
+            // ensure alignment to multiple of n hours from day_start.
+            let hours_from_day = ((t - day_start) / hour_ms).round() as i32;
+            let aligned = (hours_from_day / n as i32) * n as i32;
+            t = day_start + (aligned as f64) * hour_ms;
+            while t < min_ms {
+                t += hour_ms * n as f64;
+            }
+            while t <= max_ms + 0.5 {
+                v.push(t);
+                t += hour_ms * n as f64;
+            }
+        }
+        "day" => {
+            // Already handled by general d-branch; replicate here for fixed.
+            let day_ms = 86_400_000.0;
+            let (y0, m0, _, _, _, _, _) = ms_to_date(min_ms);
+            let mut y = y0;
+            let mut m = m0;
+            let mut done = false;
+            while !done && y <= 9999 {
+                let dim = days_in_month(y, m);
+                let mut anchor_day: u32 = 1;
+                while anchor_day <= dim {
+                    let t = date_to_ms(y, m, anchor_day, 0, 0, 0, 0);
+                    if t > max_ms + 0.5 {
+                        done = true;
+                        break;
+                    }
+                    if t >= min_ms {
+                        v.push(t);
+                    }
+                    anchor_day += n;
+                }
+                m += 1;
+                if m > 12 {
+                    m = 1;
+                    y += 1;
+                }
+            }
+            let _ = day_ms;
+        }
+        "week" => {
+            // Week aligned to `weekday` config (default sunday).
+            let day_ms = 86_400_000.0;
+            let week_step = 7.0 * day_ms * n as f64;
+            // anchor: nearest weekday start before/at min.
+            let target_dow_iso = match weekday {
+                "monday" => 1,
+                "tuesday" => 2,
+                "wednesday" => 3,
+                "thursday" => 4,
+                "friday" => 5,
+                "saturday" => 6,
+                _ => 7, // sunday
+            };
+            // 1970-01-01 was Thursday=4 ISO. Compute offset.
+            let anchor_ms = anchor_for_iso_weekday(target_dow_iso);
+            let n_iter = ((min_ms - anchor_ms) / week_step).ceil();
+            let mut t = anchor_ms + n_iter * week_step;
+            while t <= max_ms + 0.5 {
+                v.push(t);
+                t += week_step;
+            }
+        }
+        "month" => {
+            let mult = n;
+            let (y0, m0, _, _, _, _, _) = ms_to_date(min_ms);
+            let mut y = y0;
+            let mut m = m0;
+            // round up to next month if min not on month boundary.
+            let min_floor = date_to_ms(y, m, 1, 0, 0, 0, 0);
+            if min_floor < min_ms {
+                m += mult;
+                while m > 12 {
+                    m -= 12;
+                    y += 1;
+                }
+            }
+            loop {
+                let t = date_to_ms(y, m, 1, 0, 0, 0, 0);
+                if t > max_ms + 0.5 {
+                    break;
+                }
+                v.push(t);
+                m += mult;
+                while m > 12 {
+                    m -= 12;
+                    y += 1;
+                }
+                if y > 9999 {
+                    break;
+                }
+            }
+        }
+        _ => return None,
+    }
+
+    let ticks: Vec<AxisTick> = v
+        .into_iter()
+        .map(|t| AxisTick {
+            time_ms: t,
+            label: format_time(t, axis_format),
+        })
+        .collect();
+    Some(ticks)
+}
+
+fn anchor_for_iso_weekday(target_dow: u32) -> f64 {
+    // Find a known timestamp where weekday = target_dow.
+    // 1970-01-04 (Sunday=7), 1970-01-05 (Monday=1), 1970-01-06 (Tuesday=2),
+    // 1970-01-07 (Wednesday=3), 1970-01-01 (Thursday=4),
+    // 1970-01-02 (Friday=5), 1970-01-03 (Saturday=6).
+    let day_ms = 86_400_000.0;
+    let offset_days = match target_dow {
+        1 => 4, // Monday
+        2 => 5, // Tuesday
+        3 => 6, // Wednesday
+        4 => 0, // Thursday (epoch itself)
+        5 => 1, // Friday
+        6 => 2, // Saturday
+        7 => 3, // Sunday
+        _ => 3,
+    };
+    (offset_days as f64) * day_ms
+}
 
 fn generate_ticks(min_ms: f64, max_ms: f64, axis_format: &str, _date_format: &str) -> Vec<AxisTick> {
     if !min_ms.is_finite() || !max_ms.is_finite() || max_ms <= min_ms {

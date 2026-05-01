@@ -53,19 +53,26 @@ pub fn render(
     // Grid (axis) group.
     emit_grid(&mut out, layout, h);
 
+    // Pre-sort tasks: original order is sorted by start time, then
+    // vert tasks moved to the end (upstream `theArray.sort(vert)`).
+    let mut emit_tasks: Vec<&ResolvedTask> = layout.tasks.iter().collect();
+    emit_tasks.sort_by(|a, b| match (a.vert, b.vert) {
+        (false, true) => std::cmp::Ordering::Less,
+        (true, false) => std::cmp::Ordering::Greater,
+        _ => std::cmp::Ordering::Equal,
+    });
+
     // Section background rects group.
     out.push_str("<g>");
-    emit_section_backgrounds(&mut out, layout);
+    emit_section_backgrounds(&mut out, layout, &emit_tasks);
     out.push_str("</g>");
 
     // Tasks group: rects + texts.
     out.push_str("<g>");
-    let mut emitted_rects: Vec<(usize, &ResolvedTask)> = Vec::new();
-    for t in &layout.tasks {
+    for t in &emit_tasks {
         emit_task_rect(&mut out, t, layout, id);
-        emitted_rects.push((t.order, t));
     }
-    for t in &layout.tasks {
+    for t in &emit_tasks {
         emit_task_text(&mut out, t, layout, id, w, &layout.tasks);
     }
     out.push_str("</g>");
@@ -170,17 +177,18 @@ fn emit_grid(out: &mut String, layout: &GanttLayout, h: i32) {
 
 // ── Section background rects ─────────────────────────────────────────
 
-fn emit_section_backgrounds(out: &mut String, layout: &GanttLayout) {
+fn emit_section_backgrounds(out: &mut String, layout: &GanttLayout, emit_tasks: &[&ResolvedTask]) {
     let gap = l::BAR_HEIGHT + l::BAR_GAP;
     let top_pad = l::TOP_PADDING;
     let w = layout.width;
     let right_pad = l::RIGHT_PADDING;
 
     // Upstream uses uniqueTaskOrderIds. For non-compact mode each task
-    // has a unique order, so this is just every task once.
+    // has a unique order, so this is just every task in the
+    // vert-sorted array once.
     let mut seen: Vec<usize> = Vec::new();
     let mut tasks_in_order_order: Vec<&ResolvedTask> = Vec::new();
-    for t in &layout.tasks {
+    for t in emit_tasks {
         if !seen.contains(&t.order) {
             seen.push(t.order);
             tasks_in_order_order.push(t);
@@ -232,15 +240,25 @@ fn emit_task_rect(out: &mut String, t: &ResolvedTask, layout: &GanttLayout, id: 
     } else {
         (ts_start + side_pad) as f64
     };
-    let y = i as i32 * gap + top_pad;
+    let y = if t.vert {
+        l::GRID_LINE_START_PADDING
+    } else {
+        i as i32 * gap + top_pad
+    };
 
     let width: f64 = if t.milestone {
         bar_height as f64
+    } else if t.vert {
+        0.08 * bar_height as f64
     } else {
         (ts_render_end - ts_start) as f64
     };
 
-    let height = bar_height;
+    let height = if t.vert {
+        layout.tasks.len() as i32 * (l::BAR_HEIGHT + l::BAR_GAP) + l::BAR_HEIGHT * 2
+    } else {
+        bar_height
+    };
 
     // transform-origin: cx px cy px
     let cx = ts_start as f64 + side_pad as f64 + 0.5 * (ts_end - ts_start) as f64;
@@ -358,8 +376,9 @@ fn emit_task_text(
     };
 
     let y: f64 = if t.vert {
-        // Out-of-scope feature; leave at 0.
         l::GRID_LINE_START_PADDING as f64
+            + (layout.tasks.len() as f64) * (l::BAR_HEIGHT + l::BAR_GAP) as f64
+            + 60.0
     } else {
         let i = t.order;
         i as f64 * gap as f64 + bar_height as f64 / 2.0 + (font_size as f64 / 2.0 - 2.0) + top_pad as f64
