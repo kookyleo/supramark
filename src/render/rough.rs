@@ -299,12 +299,13 @@ impl RoughGenerator {
             if o.fill_style == "solid" {
                 sets.push(solid_fill_polygon(&[&points[..]], o, &mut rng));
             } else {
-                // Hachure is out of scope for the attribute-bearing ER
-                // box (which always runs with fillStyle=solid). Fall
-                // back to producing the same polygon as the solid case
-                // to keep downstream integrations non-panicking; a
-                // future wave can port `scan-line-hachure.js`.
-                sets.push(solid_fill_polygon(&[&points[..]], o, &mut rng));
+                // Hachure (or any non-solid pattern routed through
+                // `getFiller(...)`). For the patterns mermaid uses
+                // (`hachure`), we run the scan-line algorithm against
+                // the rectangle's 4 vertices.
+                let polys: Vec<Vec<[f64; 2]>> = vec![points.iter().map(|p| [p[0], p[1]]).collect()];
+                let lines = polygon_hachure_lines(&polys, o, &mut rng);
+                sets.push(hachure_fill_sketch(&lines, o, &mut rng));
             }
         }
         if o.stroke != "none" {
@@ -333,7 +334,10 @@ impl RoughGenerator {
                 // Mimic the JS: `solidFillPolygon([points], o)`.
                 sets.push(solid_fill_points(&[points], o, &mut rng));
             } else {
-                sets.push(solid_fill_points(&[points], o, &mut rng));
+                let polys: Vec<Vec<[f64; 2]>> =
+                    vec![points.iter().map(|(x, y)| [*x, *y]).collect()];
+                let lines = polygon_hachure_lines(&polys, o, &mut rng);
+                sets.push(hachure_fill_sketch(&lines, o, &mut rng));
             }
         }
         if o.stroke != "none" {
@@ -1038,6 +1042,337 @@ fn offset_opt(x: f64, o: &RoughOptions, rg: f64, rng: &mut RoughRandom) -> f64 {
     offset(-x, x, o, rg, rng)
 }
 
+// ── Hachure fill (scan-line) ─────────────────────────────────────────
+//
+// Port of `node_modules/hachure-fill/bin/hachure.js` (`hachureLines` +
+// `straightHachureLines`) and `roughjs/bin/fillers/scan-line-hachure.js`
+// (`polygonHachureLines`). Used by mermaid for `look: handDrawn` shapes
+// such as the ishikawa head & label boxes and the venn circles.
+//
+// The algorithm:
+//   1. Rotate every polygon vertex around (0, 0) by `hachureAngle + 90`
+//      (so horizontal scan-lines become the desired hachure direction
+//      after the inverse rotation at the end).
+//   2. Build a list of edges (skipping horizontal ones), sorted by the
+//      smaller-y endpoint, then by x at that endpoint, then by ymax.
+//   3. Scan downward in unit-y steps; at each y, splice in newly
+//      activated edges, drop edges whose ymax has been passed, sort by
+//      current x, and pair them up into horizontal line segments.
+//   4. Step y by `hachureStepOffset`; advance each active edge's x by
+//      `hachureStepOffset * islope`. Fill on every iteration when
+//      `hachureStepOffset != 1`, else only on iterations divisible by
+//      `gap` (so the loop can crawl one pixel at a time but still emit
+//      sparse hachures — matching upstream byte-exactly).
+//   5. Inverse-rotate every line endpoint by `-angle`.
+//
+// `polygonHachureLines` derives `gap`, `angle`, and `skipOffset` from
+// `RoughOptions`, including the `roughness >= 1` && `random > 0.7`
+// branch — that random pull DOES advance the shared RNG, so callers
+// must use the same `RoughRandom` instance threaded through the
+// outline / fill chain.
+
+/// Convert polar (deg) rotation to a [`(cos, sin)`] pair, matching JS's
+/// `Math.cos((Math.PI / 180) * deg)` byte-for-byte (Rust's `f64::cos`
+/// shares the same fdlibm-compatible result on every fixture probed).
+#[inline]
+fn rot_cs(deg: f64) -> (f64, f64) {
+    let radians = (std::f64::consts::PI / 180.0) * deg;
+    (radians.cos(), radians.sin())
+}
+
+/// In-place rotate `points` around `(cx, cy)` by `deg`. Mirrors
+/// `hachure-fill/bin/hachure.js::rotatePoints`.
+fn rotate_points(points: &mut [[f64; 2]], cx: f64, cy: f64, deg: f64) {
+    if deg == 0.0 || points.is_empty() {
+        return;
+    }
+    let (cos, sin) = rot_cs(deg);
+    for p in points.iter_mut() {
+        let x = p[0];
+        let y = p[1];
+        p[0] = (x - cx) * cos - (y - cy) * sin + cx;
+        p[1] = (x - cx) * sin + (y - cy) * cos + cy;
+    }
+}
+
+/// In-place rotate every endpoint of every line in `lines` around
+/// `(cx, cy)` by `deg`. Mirrors `hachure-fill/bin/hachure.js::rotateLines`.
+fn rotate_lines(lines: &mut [[[f64; 2]; 2]], cx: f64, cy: f64, deg: f64) {
+    if deg == 0.0 || lines.is_empty() {
+        return;
+    }
+    let (cos, sin) = rot_cs(deg);
+    for line in lines.iter_mut() {
+        for p in line.iter_mut() {
+            let x = p[0];
+            let y = p[1];
+            p[0] = (x - cx) * cos - (y - cy) * sin + cx;
+            p[1] = (x - cx) * sin + (y - cy) * cos + cy;
+        }
+    }
+}
+
+/// Internal edge record used by the scan-line algorithm.
+#[derive(Debug, Clone, Copy)]
+struct Edge {
+    ymin: f64,
+    ymax: f64,
+    /// x at `ymin` — moves by `islope * stepOffset` each iteration.
+    x: f64,
+    /// Inverse slope (`(p2.x - p1.x) / (p2.y - p1.y)`).
+    islope: f64,
+}
+
+/// Active-edge entry — wraps an [`Edge`] with the y at which it
+/// activated (unused by upstream past activation, but kept to match the
+/// shape of the JS object 1:1).
+#[derive(Debug, Clone, Copy)]
+struct ActiveEdge {
+    edge: Edge,
+}
+
+/// Generate hachure scan-lines for a list of polygons. Mirrors
+/// `hachure-fill/bin/hachure.js::hachureLines` with `polygons` already
+/// in the `Vec<Vec<[f64; 2]>>` shape. Returns line segments
+/// `[[x1, y1], [x2, y2]]`. The caller owns the polygon vertices; this
+/// fn does not mutate them (it works on internal copies).
+pub fn hachure_lines(
+    polygons: &[Vec<[f64; 2]>],
+    hachure_gap: f64,
+    hachure_angle: f64,
+    hachure_step_offset: f64,
+) -> Vec<[[f64; 2]; 2]> {
+    let angle = hachure_angle;
+    let gap = hachure_gap.max(0.1);
+
+    // Rotate every polygon by `angle` around (0, 0).
+    let mut polygons_rot: Vec<Vec<[f64; 2]>> = polygons.to_vec();
+    if angle != 0.0 {
+        for poly in &mut polygons_rot {
+            rotate_points(poly, 0.0, 0.0, angle);
+        }
+    }
+    let mut lines = straight_hachure_lines(&polygons_rot, gap, hachure_step_offset);
+    if angle != 0.0 {
+        rotate_lines(&mut lines, 0.0, 0.0, -angle);
+    }
+    lines
+}
+
+/// Inner half of [`hachure_lines`] — assumes the polygons have already
+/// been rotated so that scan-lines are horizontal. Mirrors
+/// `straightHachureLines` byte-for-byte.
+fn straight_hachure_lines(
+    polygons: &[Vec<[f64; 2]>],
+    gap: f64,
+    hachure_step_offset: f64,
+) -> Vec<[[f64; 2]; 2]> {
+    // Close any open polygons by appending a copy of the first vertex.
+    let mut vertex_array: Vec<Vec<[f64; 2]>> = Vec::new();
+    for polygon in polygons {
+        let mut vertices = polygon.clone();
+        if vertices.is_empty() {
+            continue;
+        }
+        let first = vertices[0];
+        let last = *vertices.last().unwrap();
+        if first[0] != last[0] || first[1] != last[1] {
+            vertices.push([first[0], first[1]]);
+        }
+        if vertices.len() > 2 {
+            vertex_array.push(vertices);
+        }
+    }
+    let mut lines: Vec<[[f64; 2]; 2]> = Vec::new();
+    let gap = gap.max(0.1);
+
+    // Build edge table.
+    let mut edges: Vec<Edge> = Vec::new();
+    for vertices in &vertex_array {
+        for i in 0..(vertices.len() - 1) {
+            let p1 = vertices[i];
+            let p2 = vertices[i + 1];
+            if p1[1] != p2[1] {
+                let ymin = p1[1].min(p2[1]);
+                let ymax = p1[1].max(p2[1]);
+                let x = if ymin == p1[1] { p1[0] } else { p2[0] };
+                let islope = (p2[0] - p1[0]) / (p2[1] - p1[1]);
+                edges.push(Edge {
+                    ymin,
+                    ymax,
+                    x,
+                    islope,
+                });
+            }
+        }
+    }
+    edges.sort_by(|e1, e2| {
+        if e1.ymin < e2.ymin {
+            std::cmp::Ordering::Less
+        } else if e1.ymin > e2.ymin {
+            std::cmp::Ordering::Greater
+        } else if e1.x < e2.x {
+            std::cmp::Ordering::Less
+        } else if e1.x > e2.x {
+            std::cmp::Ordering::Greater
+        } else if e1.ymax == e2.ymax {
+            std::cmp::Ordering::Equal
+        } else if e1.ymax < e2.ymax {
+            // upstream: `(e1.ymax - e2.ymax) / Math.abs((e1.ymax - e2.ymax))`
+            // which is -1 when e1.ymax < e2.ymax, +1 otherwise.
+            std::cmp::Ordering::Less
+        } else {
+            std::cmp::Ordering::Greater
+        }
+    });
+
+    if edges.is_empty() {
+        return lines;
+    }
+
+    let mut active_edges: Vec<ActiveEdge> = Vec::new();
+    let mut y = edges[0].ymin;
+    let mut iteration: i64 = 0;
+
+    // Convert edges to a deque-friendly Vec we drain from the front
+    // (matches `splice(0, ix + 1)`).
+    let mut pending: std::collections::VecDeque<Edge> = edges.into_iter().collect();
+
+    while !active_edges.is_empty() || !pending.is_empty() {
+        // Promote any edges whose ymin <= y into the active set.
+        if !pending.is_empty() {
+            // Find the largest contiguous prefix where ymin <= y.
+            let mut count = 0usize;
+            for e in &pending {
+                if e.ymin > y {
+                    break;
+                }
+                count += 1;
+            }
+            for _ in 0..count {
+                if let Some(edge) = pending.pop_front() {
+                    active_edges.push(ActiveEdge { edge });
+                }
+            }
+        }
+
+        // Drop active edges whose ymax has been passed.
+        active_edges.retain(|ae| ae.edge.ymax > y);
+
+        // Sort active edges by their current x.
+        active_edges.sort_by(|a, b| {
+            if a.edge.x < b.edge.x {
+                std::cmp::Ordering::Less
+            } else if a.edge.x > b.edge.x {
+                std::cmp::Ordering::Greater
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        });
+
+        // Emit fills.
+        let emit = if hachure_step_offset != 1.0 {
+            true
+        } else {
+            // `iteration % gap === 0` — JS uses Number % Number which
+            // for integer iteration & integer-rounded gap is plain
+            // modulo. Upstream rounds gap with Math.round but the
+            // polygonHachureLines wrapper does that before calling us.
+            (iteration as f64) % gap == 0.0
+        };
+        if emit && active_edges.len() > 1 {
+            let mut i = 0usize;
+            while i + 1 < active_edges.len() {
+                let ce = active_edges[i].edge;
+                let ne = active_edges[i + 1].edge;
+                lines.push([
+                    [ce.x.round(), y],
+                    [ne.x.round(), y],
+                ]);
+                i += 2;
+            }
+        }
+
+        y += hachure_step_offset;
+        for ae in active_edges.iter_mut() {
+            ae.edge.x += hachure_step_offset * ae.edge.islope;
+        }
+        iteration += 1;
+    }
+    lines
+}
+
+/// Wrapper for [`hachure_lines`] that derives `gap`, `angle`, and
+/// `skip_offset` from the rough options bag. Mirrors
+/// `roughjs/bin/fillers/scan-line-hachure.js::polygonHachureLines`.
+///
+/// The `roughness >= 1 && random > 0.7` branch consumes one
+/// `RoughRandom::next()` pull — the caller MUST pass the active RNG so
+/// downstream offsets stay byte-aligned with upstream.
+pub fn polygon_hachure_lines(
+    polygons: &[Vec<[f64; 2]>],
+    o: &RoughOptions,
+    rng: &mut RoughRandom,
+) -> Vec<[[f64; 2]; 2]> {
+    let angle = o.hachure_angle + 90.0;
+    let mut gap = o.hachure_gap;
+    if gap < 0.0 {
+        gap = o.stroke_width * 4.0;
+    }
+    gap = gap.max(0.1).round();
+    let mut skip_offset = 1.0_f64;
+    if o.roughness >= 1.0 {
+        // Upstream: `(o.randomizer?.next() || Math.random()) > 0.7`.
+        // Our RoughRandom returns 0 when seed=0 with no fallback — that
+        // hits the falsy branch too. Either way, we consume the pull.
+        let r = rng.next();
+        if r > 0.7 {
+            skip_offset = gap;
+        }
+    }
+    if skip_offset == 0.0 {
+        skip_offset = 1.0;
+    }
+    hachure_lines(polygons, gap, angle, skip_offset)
+}
+
+/// Render an `OpSet` of type `FillSketch` from a list of hachure lines.
+/// Mirrors `HachureFiller.renderLines` — each line becomes a doubled
+/// stroke (`_doubleLine` in `filling: true` mode). The same RNG must be
+/// threaded through here as was used for the outline so stroke + fill
+/// jitter remain byte-for-byte aligned with upstream.
+pub fn hachure_fill_sketch(
+    lines: &[[[f64; 2]; 2]],
+    o: &RoughOptions,
+    rng: &mut RoughRandom,
+) -> OpSet {
+    let mut ops: Vec<Op> = Vec::with_capacity(lines.len() * 8);
+    for line in lines {
+        ops.extend(double_line_filling(
+            line[0][0], line[0][1], line[1][0], line[1][1], o, rng,
+        ));
+    }
+    OpSet {
+        op_type: OpSetType::FillSketch,
+        ops,
+    }
+}
+
+/// `_doubleLine(.., filling = true)` — the variant the hachure filler
+/// invokes via `helper.doubleLineOps`. Identical to [`double_line`]
+/// except it routes through `disable_multi_stroke_fill` instead of
+/// `disable_multi_stroke`.
+fn double_line_filling(
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    o: &RoughOptions,
+    rng: &mut RoughRandom,
+) -> Vec<Op> {
+    double_line(x1, y1, x2, y2, o, true, rng)
+}
+
 // ── `solidFillPolygon` — fills from maxRandomnessOffset ──────────────
 fn solid_fill_polygon<P: AsRef<[[f64; 2]]>>(
     polys: &[P],
@@ -1610,5 +1945,193 @@ mod tests {
         // 12th r-value in our reference table (0-indexed 11): r12.
         let expect_r12 = 0.1067594592459500_f64;
         assert!((rng.next() - expect_r12).abs() < 1e-15);
+    }
+
+    // ── Hachure scan-line fill ────────────────────────────────────
+    fn approx_lines_eq(got: &[[[f64; 2]; 2]], want: &[[[f64; 2]; 2]], eps: f64) -> bool {
+        if got.len() != want.len() {
+            return false;
+        }
+        for (g, w) in got.iter().zip(want.iter()) {
+            for k in 0..2 {
+                for j in 0..2 {
+                    if (g[k][j] - w[k][j]).abs() > eps {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    #[test]
+    fn hachure_axis_aligned_square_angle_zero() {
+        // Reference from upstream `hachureLines` (Node):
+        //   square=[[[0,0],[10,0],[10,10],[0,10]]], gap=4, angle=0, step=1
+        //   → [[[0,0],[10,0]], [[0,4],[10,4]], [[0,8],[10,8]]]
+        let polys = vec![vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]];
+        let got = hachure_lines(&polys, 4.0, 0.0, 1.0);
+        let want = vec![
+            [[0.0, 0.0], [10.0, 0.0]],
+            [[0.0, 4.0], [10.0, 4.0]],
+            [[0.0, 8.0], [10.0, 8.0]],
+        ];
+        assert!(approx_lines_eq(&got, &want, 1e-12), "got = {got:?}");
+    }
+
+    #[test]
+    fn hachure_axis_aligned_square_angle_49() {
+        // Reference from upstream `hachureLines`:
+        //   square=[[[0,0],[10,0],[10,10],[0,10]]], gap=4, angle=49, step=1
+        let polys = vec![vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]];
+        let got = hachure_lines(&polys, 4.0, 49.0, 1.0);
+        let want: Vec<[[f64; 2]; 2]> = vec![
+            [[0.0, 0.0], [0.0, 0.0]],
+            [
+                [-0.2614568240614483, 6.397784017075889],
+                [4.98701540786261, 0.36010737529371317],
+            ],
+            [
+                [1.4452634388486247, 10.531439293483462],
+                [10.630089844715727, -0.03449482963534578],
+            ],
+            [
+                [7.0883378757017415, 10.136837088554403],
+                [10.36863302065428, 6.363289187440543],
+            ],
+        ];
+        assert!(approx_lines_eq(&got, &want, 1e-12), "got = {got:?}");
+    }
+
+    #[test]
+    fn hachure_triangle_angle_zero_gap5() {
+        // tri=[[[0,0],[20,0],[10,20]]], gap=5, angle=0, step=1
+        let polys = vec![vec![[0.0, 0.0], [20.0, 0.0], [10.0, 20.0]]];
+        let got = hachure_lines(&polys, 5.0, 0.0, 1.0);
+        let want = vec![
+            [[0.0, 0.0], [20.0, 0.0]],
+            [[3.0, 5.0], [18.0, 5.0]],
+            [[5.0, 10.0], [15.0, 10.0]],
+            [[8.0, 15.0], [13.0, 15.0]],
+        ];
+        assert!(approx_lines_eq(&got, &want, 1e-12), "got = {got:?}");
+    }
+
+    #[test]
+    fn hachure_triangle_angle_30() {
+        let polys = vec![vec![[0.0, 0.0], [20.0, 0.0], [10.0, 20.0]]];
+        let got = hachure_lines(&polys, 5.0, 30.0, 1.0);
+        let want: Vec<[[f64; 2]; 2]> = vec![
+            [[0.0, 0.0], [0.0, 0.0]],
+            [
+                [2.4999999999999996, 4.330127018922194],
+                [10.294228634059948, -0.16987298107780546],
+            ],
+            [
+                [4.133974596215561, 9.160254037844387],
+                [19.72243186433546, 0.16025403784438907],
+            ],
+            [
+                [6.633974596215561, 13.49038105676658],
+                [16.160254037844386, 7.990381056766581],
+            ],
+            [
+                [9.133974596215559, 17.820508075688775],
+                [11.732050807568875, 16.320508075688775],
+            ],
+        ];
+        assert!(approx_lines_eq(&got, &want, 1e-12), "got = {got:?}");
+    }
+
+    #[test]
+    fn hachure_box_centered_angle_49() {
+        // 60×20 box centred at origin, gap=5, angle=49 (= -41+90).
+        let polys = vec![vec![[-30.0, -10.0], [30.0, -10.0], [30.0, 10.0], [-30.0, 10.0]]];
+        let got = hachure_lines(&polys, 5.0, 49.0, 1.0);
+        let want: Vec<[[f64; 2]; 2]> = vec![
+            [[-29.911645205994922, -10.101640563649964], [-29.911645205994922, -10.101640563649964]],
+            [[-30.074451478824106, -2.293087937360795], [-23.513861188919034, -9.840183739588515]],
+            [[-30.23725775165329, 5.515464688928372], [-16.460018142852636, -10.33343649574984]],
+            [[-27.77582790852044, 10.305178994326454], [-10.062234125776747, -10.071979671688391]],
+            [[-21.378043891444555, 10.566635818387901], [-3.664450108700858, -9.810522847626943]],
+            [[-14.980259874368665, 10.82809264244935], [3.3893929373655385, -10.303775603788267]],
+            [[-7.926416828302268, 10.334839886288027], [9.787176954441428, -10.042318779726818]],
+            [[-1.5286328112263794, 10.596296710349474], [16.184960971517317, -9.780861955665369]],
+            [[4.86915120584951, 10.857753534410923], [23.238804017583714, -10.274114711826694]],
+            [[11.922994251915906, 10.3645007782496], [29.636588034659603, -10.012657887765243]],
+            [[18.320778268991795, 10.625957602311047], [30.785899819811434, -3.7135244219216226]],
+            [[24.718562286067684, 10.887414426372494], [30.623093546982247, 4.095028204367548]],
+        ];
+        assert!(approx_lines_eq(&got, &want, 1e-12), "got = {got:?}");
+    }
+
+    #[test]
+    fn polygon_hachure_lines_default_options_consume_one_rng_pull_when_roughness_ge_1() {
+        // o.roughness defaults to 1.0 → hits the `roughness >= 1` branch
+        // which pulls one rng.next(). After the pull the LCG seed should
+        // have advanced exactly once.
+        let o = RoughOptions::default();
+        let mut rng = RoughRandom::new(1);
+        let polys = vec![vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]];
+        let _ = polygon_hachure_lines(&polys, &o, &mut rng);
+        // First two pulls of seed=1 were 0.0000224779359996, 0.0850324486382306.
+        // After polygon_hachure_lines (consuming 1 pull), the next pull
+        // should be the 2nd value.
+        let next = rng.next();
+        let want = 0.0850324486382306_f64;
+        assert!((next - want).abs() < 1e-15, "next = {next}");
+    }
+
+    #[test]
+    fn polygon_hachure_lines_skip_offset_used_when_random_above_07() {
+        // Cross-check against upstream `polygonHachureLines` (Node):
+        //   seed=1: rng pull 2.25e-5 < 0.7 → skip_offset=1 → 10 lines.
+        //   seed=2: rng pull 0.94… > 0.7  → skip_offset=gap=4 → 10 lines.
+        // Both branches produce the same coverage (every gap-th y); the
+        // probe is that *neither* path panics or emits a wildly wrong
+        // count.
+        let mut rng_low = RoughRandom::new(1);
+        let mut rng_high = RoughRandom::new(2);
+        let mut o = RoughOptions::default();
+        o.hachure_gap = 4.0;
+        o.hachure_angle = 0.0;
+        o.roughness = 1.0;
+        let polys = vec![vec![[0.0, 0.0], [40.0, 0.0], [40.0, 40.0], [0.0, 40.0]]];
+        let lines_low = polygon_hachure_lines(&polys, &o, &mut rng_low);
+        let lines_high = polygon_hachure_lines(&polys, &o, &mut rng_high);
+        assert_eq!(lines_low.len(), 10, "low = {lines_low:?}");
+        assert_eq!(lines_high.len(), 10, "high = {lines_high:?}");
+    }
+
+    #[test]
+    fn hachure_fill_sketch_emits_double_lines() {
+        // Empty input → empty FillSketch.
+        let mut o = RoughOptions::default();
+        o.seed = 1;
+        let mut rng = RoughRandom::new(1);
+        let lines: Vec<[[f64; 2]; 2]> = vec![];
+        let sk = hachure_fill_sketch(&lines, &o, &mut rng);
+        assert!(matches!(sk.op_type, OpSetType::FillSketch));
+        assert_eq!(sk.ops.len(), 0);
+
+        // Single line at y=0 from (0,0) to (10,0). disable_multi_stroke_fill
+        // = false → 2 halves × (1 move + 1 bcurve) = 4 ops.
+        let mut rng2 = RoughRandom::new(1);
+        let sk2 = hachure_fill_sketch(&[[[0.0, 0.0], [10.0, 0.0]]], &o, &mut rng2);
+        assert_eq!(sk2.ops.len(), 4);
+    }
+
+    #[test]
+    fn rectangle_with_hachure_fill_emits_fillsketch_set() {
+        let mut o = RoughOptions::default();
+        o.fill = Some("#fff".into());
+        o.fill_style = "hachure".into();
+        o.seed = 1;
+        let mut rc = RoughGenerator::new();
+        let d = rc.rectangle(-30.0, -10.0, 60.0, 20.0, &o);
+        // 1 fill-sketch + 1 stroke outline.
+        assert_eq!(d.sets.len(), 2);
+        assert_eq!(d.sets[0].op_type, OpSetType::FillSketch);
+        assert_eq!(d.sets[1].op_type, OpSetType::Path);
     }
 }
