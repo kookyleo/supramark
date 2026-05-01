@@ -506,12 +506,8 @@ fn emit_section_labels(out: &mut String, layout: &GanttLayout) {
         let dy = -((rows.len() as f64 - 1.0) / 2.0);
 
         let y = if i > 0 {
-            let mut pg = prev_gap;
-            for j in 0..i {
-                pg += layout.category_heights[j].1 as i32 * gap;
-            }
-            // Wait, upstream js: `if (i > 0) { for (j..i) { prevGap += occurrences[i-1][1]; return ...; } }`
-            // The upstream prev_gap is buggy and only reads i-1. Let me follow exactly.
+            // Upstream js: `if (i > 0) { for (j..i) { prevGap += occurrences[i-1][1]; return ...; } }`
+            // The upstream prev_gap is buggy and only reads i-1.
             // Actually looking again:
             //   if (i > 0) {
             //     for (let j = 0; j < i; j++) {

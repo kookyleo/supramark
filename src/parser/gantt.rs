@@ -547,7 +547,10 @@ gantt
         assert_eq!(d.sections[0].name, "Section");
         assert_eq!(d.tasks.len(), 2);
         assert_eq!(d.tasks[0].id.as_deref(), Some("a1"));
-        assert_eq!(d.tasks[0].name, "A task");
+        // Trailing whitespace is preserved verbatim — upstream's
+        // `[^:\n]+` jison rule keeps it, and the renderer relies on
+        // the bbox of the literal text for its outside-label branch.
+        assert_eq!(d.tasks[0].name.trim_end(), "A task");
         assert_eq!(d.tasks[0].start.as_deref(), Some("2014-01-01"));
         assert_eq!(d.tasks[0].end.as_deref(), Some("30d"));
         assert_eq!(d.tasks[1].start.as_deref(), Some("after a1"));
