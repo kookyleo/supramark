@@ -745,8 +745,20 @@ pub fn render(
         } else {
             to_bounds - 1.0
         };
+        // sequenceRenderer.ts:666-697 — for bidirectional + autonumber,
+        // the start shifts by `SEQUENCE_NUMBER_RADIUS * 2 = 12`. For
+        // standard left→right arrows (non-reverse), it shifts by
+        // `SEQUENCE_NUMBER_RADIUS = 6`.
         let line_x1 = if seq_index.is_some() {
-            startx + 6.0
+            if is_bidir {
+                if is_arrow_to_right {
+                    startx + 12.0
+                } else {
+                    startx - 6.0
+                }
+            } else {
+                startx + 6.0
+            }
         } else {
             startx
         };
