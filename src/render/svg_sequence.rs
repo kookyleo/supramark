@@ -1906,19 +1906,35 @@ fn split_br(s: &str) -> Vec<&str> {
     out
 }
 
+/// Resolve `#word;` / `#NNN;` placeholders in `s` to the same intermediate
+/// form upstream `encodeEntities` produces (`utils.ts`):
+///
+///   `#word;` → `ﬂ°word¶ß`   (U+FB02 LATIN SMALL LIGATURE FL,
+///                             U+00B0 DEGREE SIGN, word,
+///                             U+00B6 PILCROW SIGN, U+00DF SHARP S)
+///   `#NNN;`  → `ﬂ°°NNN¶ß`   (extra U+00B0 marks numeric codepoint)
+///
+/// Upstream measures actor descriptions / message text in this
+/// post-`encodeEntities` form via canvas/getBBox — so glyph advances
+/// for `ﬂ°…¶ß` (not the eventual `&lt;`/`<`) drive actor box widths.
+/// Restoring this for our DejaVu glyph-sum metric keeps actor widths
+/// byte-exact for fixtures whose labels embed `#lt;`/`#gt;`/`#colon;`
+/// (e.g. `tests/ext_fixtures/demos/sequence/03.mmd`).
 fn resolve_hash_entities_for_measure(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = String::with_capacity(s.len());
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'#' {
-            if let Some((rep, next)) = try_consume_hash_entity(bytes, i) {
-                match rep.as_str() {
-                    "&lt;" => out.push('<'),
-                    "&gt;" => out.push('>'),
-                    "&amp;" => out.push('&'),
-                    other => out.push_str(other),
+            if let Some((name, is_num, next)) = try_consume_hash_entity_name(bytes, i) {
+                out.push('\u{FB02}'); // ﬂ
+                out.push('\u{B0}'); // °
+                if is_num {
+                    out.push('\u{B0}'); // extra ° marks numeric form
                 }
+                out.push_str(name);
+                out.push('\u{B6}'); // ¶
+                out.push('\u{DF}'); // ß
                 i = next;
                 continue;
             }
@@ -1927,6 +1943,30 @@ fn resolve_hash_entities_for_measure(s: &str) -> String {
         i += 1;
     }
     out
+}
+
+/// Like `try_consume_hash_entity` but returns the inner name and a numeric
+/// flag instead of the rendered `&...;` replacement. Used by the
+/// width-measurement encoder above.
+fn try_consume_hash_entity_name(bytes: &[u8], i: usize) -> Option<(&str, bool, usize)> {
+    if bytes.get(i)? != &b'#' {
+        return None;
+    }
+    let start = i + 1;
+    let mut end = start;
+    while end < bytes.len() && bytes[end] != b';' {
+        let b = bytes[end];
+        if !b.is_ascii_alphanumeric() && b != b'_' {
+            return None;
+        }
+        end += 1;
+    }
+    if end >= bytes.len() || end == start {
+        return None;
+    }
+    let name = std::str::from_utf8(&bytes[start..end]).ok()?;
+    let is_num = name.bytes().all(|b| b.is_ascii_digit());
+    Some((name, is_num, end + 1))
 }
 
 /// Number formatter mirroring d3's "drop trailing zeroes" behaviour, used
