@@ -1,6 +1,8 @@
 # 阶段进展
 
-截至 Wave 8（c4 11/11 + sequence 27/150 + gantt year-tick + mindmap single-node + dagre stadium polygon + roughjs path/hachure groundwork + venn libm/khroma 修正）。
+截至 Wave 9 起步（W6 +1 净，关键发现：mindmap 全靠 cose-bilkent，flowchart linkStyle 残余依赖 third-class bug 链）。
+
+最新：1135 → **1136/1136 byte-exact**。
 
 > 本项目只维护中文版 PROGRESS。
 
@@ -35,6 +37,18 @@
 - **sequence phase 2 +23**（4 → 27/150）：actor stickman / `<br>` 多行 / 单行 note / ZWS 占位 / `wrap-label` + `@{ "alias": ... }` / `mirrorActors=false` / 空 items diagram。
 - **mindmap single-node +7**（0 → 7/25）：probe-derived `centre = (W/2+15, H/2+15)` cose-bilkent 单节点 fast path + 完整 SVG envelope（viewBox + 12 套 section CSS + marker defs + drop-shadow filter）+ default/rect/icon labelBkg 形状。多节点物理引擎仍待移植（~3000 LOC）。
 - **roughjs hachure**：移植 hachure-fill scan-line 算法（530 行 + 9 byte-exact 单测），groundwork 入库；ishikawa/04 + venn/10/11/12 真正解锁还需 `rough.path()` getBBox 模拟器 + ellipse 移植。
+
+### Wave 6（4 路并行：sequence p3 / mindmap tidy-tree / rough ellipse / flowchart linkStyle）
+
+净增 +1 byte-exact，但澄清了 3 个关键技术阻塞：
+
+- **W6-A sequence p3 +1**（27 → 28/150）：cypress/86 byte-exact —— per-actor width 派生自 description text width（`max(conf.width, textWidth(desc, actorFont) + 2*wrapPadding)`，`fontSize=16`、`Open Sans`），加 `->`/`-->` 开口箭头变体（无 marker-end，dotted 加 `messageLine1` + `stroke-dasharray: 3,3`）。剩余 122 sequence fixture 多为 exotic-arrow（`<<-->>` / `()->`）和 activation 组合，单 fixture 价值低。
+- **W6-B mindmap tidy-tree 0 unlock**：诊断出 mermaid 11.14.0 distribution 没注册 tidy-tree loader —— 即使 frontmatter 写 `layout: tidy-tree` 也回退到 cose-bilkent。所以 mindmap 剩余 18 fixtures 全部都需要完整 cose-bilkent 物理引擎移植（~3000+ LOC，多日工作）。tidy-tree 路径不存在。
+- **W6-C rough ellipse + bbox sim 0 unlock**：980 行 ellipse/circle/path/bbox_of_sets 基础设施验证过（vs Node 20 + roughjs@4.6 byte-exact），但因主仓 rough.rs 已演进，cherry-pick 冲突太复杂未合。venn/10/11/12 不是 handDrawn（agent 实测，是 foreignObject text + Nelder-Mead FP 问题），ishikawa/04 才是真正的 handDrawn 目标。
+- **W6-D flowchart linkStyle 0 unlock 但关键诊断**：Bug 1（`linkStyle` color dedup last-wins）+ Bug 2（asymmetric shape padding 缺、`>text]` polygon endpoint offset）已修，但每个原 fixture 现在都暴露下一层 bug：
+  - edge-label `+0.5` X drift（90/91/223/224, demos 34/35/63）
+  - 缺 `color:#…` 在 `<g class="label">`（group_style threading bug）（105/144/239, demos 38/39/40/41）
+  - 缺 `edge.animation` 字段（113/237）—— 在 src/model/flowchart.rs
 
 ### 工程方法论
 
