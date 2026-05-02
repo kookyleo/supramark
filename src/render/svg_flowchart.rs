@@ -4279,6 +4279,13 @@ fn traverse_edge_midpoint(pts: &[(f64, f64)]) -> Option<(f64, f64)> {
 /// same clip + traverse on the dagre points. Returns `None` when the edge
 /// is not cluster-bound or the path has no points to traverse, in which
 /// case the renderer falls back to dagre's `label_x`/`label_y`.
+///
+/// Additionally, upstream's `insertEdge` flags `pointsHasChanged = true` when
+/// the dagre midpoint coordinate (rounded to int) does not appear as a
+/// substring in the rendered `d=` attribute (after rounding all decimals).
+/// This is the `isLabelCoordinateInPath` check (utils.ts:289). When the basis
+/// curve interpolation moves the visual midpoint away from the dagre control
+/// point, the label is recomputed via `calcLabelPosition` on the polyline.
 fn recompute_edge_label_position(e: &UEdge, l: &FlowchartLayout) -> Option<(f64, f64)> {
     let pts_ref = e.points.as_ref()?;
     if pts_ref.len() < 2 {
@@ -4313,8 +4320,19 @@ fn recompute_edge_label_position(e: &UEdge, l: &FlowchartLayout) -> Option<(f64,
             .iter()
             .zip(pts_before.iter())
             .any(|(a, b)| (a.0 - b.0).abs() > 1e-6 || (a.1 - b.1).abs() > 1e-6);
+    // When the path was not cluster-clipped, run the upstream
+    // `isLabelCoordinateInPath` check: the dagre midpoint (the polyline
+    // point at `points[len/2]`, rounded to int) must appear as a substring
+    // in the rendered d= attribute (also with all decimals rounded). When
+    // it does NOT, upstream sets `pointsHasChanged = true` and recomputes
+    // via `calcLabelPosition`.
     if !path_actually_changed {
-        return None;
+        let mid_idx = pts.len() / 2;
+        let mid_pt = pts[mid_idx];
+        let d_attr = build_rendered_d_for_label_check(e, &pts);
+        if label_coordinate_in_d(mid_pt, &d_attr) {
+            return None;
+        }
     }
     if pts.len() < 2 {
         return None;
@@ -4325,6 +4343,44 @@ fn recompute_edge_label_position(e: &UEdge, l: &FlowchartLayout) -> Option<(f64,
     } else {
         Some((round_to_5(x), round_to_5(y)))
     }
+}
+
+/// Build the rendered `d=` attribute approximation for the upstream
+/// `isLabelCoordinateInPath` check. Mirrors `render_edge_path`'s curve-and-
+/// offset pipeline minus the marker-offset step (the upstream check uses
+/// `svgPath.attr("d")` which DOES include offsets — but the resulting
+/// substring test only cares whether the rounded midpoint coord appears
+/// anywhere in the path, which the curve interpolation drives the most).
+fn build_rendered_d_for_label_check(e: &UEdge, pts: &[(f64, f64)]) -> String {
+    let mut points: Vec<Point> = pts.iter().map(|&(x, y)| Point { x, y }).collect();
+    let arrow_end = e.arrow_type_end.as_deref().unwrap_or("none");
+    let arrow_start = e.arrow_type_start.as_deref().unwrap_or("none");
+    apply_marker_offsets(&mut points, arrow_end, arrow_start);
+    let curve = e.curve.as_deref().unwrap_or("basis");
+    let ctype = edges::CurveType::parse(curve).unwrap_or(edges::CurveType::Basis);
+    edges::build_path(&points, ctype)
+}
+
+/// Port of upstream `utils.isLabelCoordinateInPath` (utils.ts:289).
+///
+/// Round the candidate point and every decimal token in the `d=` string to
+/// integers, then test whether either rounded coordinate appears anywhere as
+/// a substring in the path. Returns `true` when the dagre-computed midpoint
+/// is "found" in the rendered path (no recompute needed).
+fn label_coordinate_in_d(point: (f64, f64), d_attr: &str) -> bool {
+    use std::sync::OnceLock;
+    static DECIMAL_RE: OnceLock<regex::Regex> = OnceLock::new();
+    let re =
+        DECIMAL_RE.get_or_init(|| regex::Regex::new(r"(\d+\.\d+)").expect("valid decimal regex"));
+    let sanitized = re.replace_all(d_attr, |caps: &regex::Captures<'_>| {
+        caps[1]
+            .parse::<f64>()
+            .map(|v| v.round().to_string())
+            .unwrap_or_else(|_| caps[1].to_string())
+    });
+    let rounded_x = point.0.round().to_string();
+    let rounded_y = point.1.round().to_string();
+    sanitized.contains(&rounded_x) || sanitized.contains(&rounded_y)
 }
 
 fn fmt_num(v: f64) -> String {

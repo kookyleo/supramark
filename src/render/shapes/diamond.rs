@@ -12,7 +12,7 @@
 //!   label-container`) and a `transform="translate(-s/2+0.5, s/2)"`.
 //! - The closing tag is `></polygon>`.
 
-use super::types::{fmt_num, get_node_classes, xml_escape, xml_escape_label};
+use super::types::{build_inline_style, fmt_num, get_node_classes, xml_escape, xml_escape_label};
 use crate::error::Result;
 use crate::layout::unified::types::Node;
 use crate::theme::ThemeVariables;
@@ -96,8 +96,17 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
         node_ty = fmt_num(node_ty),
     ));
     // Upstream insertPolygonShape: class="label-container", not "basic label-container".
+    // Upstream's question.ts then conditionally appends `style="..."` from
+    // `nodeStyles` (built via `styles2String` from the node's style directive),
+    // but ONLY when non-empty. Mirror that with `build_inline_style`.
+    let node_style = build_inline_style(node.css_styles.as_deref().unwrap_or(&[]));
+    let style_attr = if node_style.is_empty() {
+        String::new()
+    } else {
+        format!(r#" style="{}""#, node_style)
+    };
     out.push_str(&format!(
-        r#"<polygon points="{pts_attr}" class="label-container" transform="translate({tx}, {ty})"></polygon>"#,
+        r#"<polygon points="{pts_attr}" class="label-container" transform="translate({tx}, {ty})"{style_attr}></polygon>"#,
         tx = fmt_num(tx),
         ty = fmt_num(ty),
     ));
