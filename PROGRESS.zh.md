@@ -1,8 +1,59 @@
 # 阶段进展
 
-截至 Wave 7 收尾。
+截至 2026-05-02，Wave 11 收尾后清空 known_ignored 暴露真实差距。
 
-**最新：1135 → 1136 (Wave 6) → 1145/1145 byte-exact (Wave 7, +9)**。
+**当前指标：1184 / 1328 byte-exact（约 89.2%）**。
+
+- 1184 = 实际逐字节通过的 fixture 数（11 路 wave 累计推进）
+- 1328 = sweep_all 处理的 fixture 总数（剔除 ELK opt-in 后的全集）
+- 差额 144 = 旧 known_ignored 中曾被遮蔽的真失败，已暴露
+- ELK fixtures 仍由 `is_elk()` 程序性过滤，不再走 known_ignored
+
+旧记录（按时间倒序）：1099 → 1135 → 1136 (Wave 6) → 1145 (W7) → 1151 (W8) → 1161 (W9) → 1179 (W10) → 1184 (W11)。
+
+## known_ignored 清空（2026-05-02）
+
+应用户要求把当时仍在列表里的 146 条全部清空，让 sweep_all 暴露所有真实失败。`tests/known_ignored.txt` 现仅保留头部说明。
+
+清空后 sweep_all 失败分布（共 144 项）：
+
+| 类别 | 通过 / 总数 | 失败数 |
+|---|---:|---:|
+| cypress/sequence | 40 / 140 | 100 |
+| cypress/mindmap | 6 / 23 | 17 |
+| demos/flowchart | 57 / 65 | 8 |
+| demos/sequence | 4 / 10 | 6 |
+| cypress/flowchart | 188 / 192 | 4 |
+| demos/venn | 8 / 12 | 4 |
+| cypress/gantt | 41 / 43 | 2 |
+| demos/gantt | 8 / 10 | 2 |
+| demos/mindmap | 1 / 2 | 1 |
+| 其它（含 demos/class/08） | 1183 残数 | 0~少量 |
+
+剩余阻塞按性质归类：
+
+1. **架构性（合计 ~118）**
+   - 100 sequence —— 上游 sequenceRenderer.ts + svgDraw.ts 重渲染器（4K+ LOC），剩余 fixture 都需 activation / autonumber / actor_type / wrap / loop_alt / par 等组合特性。继续推进必须 probe-driven，按 diff_at 选最小差异 fixture（W7-A retry 已验证此方法论）。
+   - 17 mindmap multi-node —— W11-D 已落 cose-bilkent 骨架（660+1313 LOC），但缺 reduceTrees / FR-grid / Coarsening 多级缩放；node 位置差大，边 d= 直线非 curveBasis。
+   - 1 demos/mindmap/01 —— 同上。
+
+2. **依赖未实现（合计 ~13）**
+   - 6 demos/flowchart 42-47 —— KaTeX `$$...$$` 公式渲染，需要 KaTeX renderer 端口。
+   - 3 cypress/flowchart 116/117/118 —— Icon shapes（`@{ icon: "aws:..." }`），需要 ~500 个图标 SVG path 注册表。
+   - 3 demos/venn 10/11/12 —— `look: handDrawn` + foreignObject 文本节点，需要 rough ellipse + path bbox 模拟器（W6-C / W8-B 已部分铺就）。
+   - 1 demos/venn/04 —— 4 sets × 6 pairwise 触发 constrainedMDS，依赖 V8 PRNG 状态。
+
+3. **样式 threading 残留（合计 ~3）**
+   - 2 demos/flowchart 41 + cypress/flowchart 144 —— Doublecircle 在内联 style 时缺 `style=` 属性。
+   - 1 demos/flowchart 65 —— Stadium + thick arrows + linkStyle/classDef 走 rough.js 渲染。
+
+4. **环境性 / 上游 quirk（合计 ~6）**
+   - 4 gantt（cypress/05/39, demos/06/07）—— V8 `new Date()` 对畸形 / 时区 / `%s` epoch 的特殊处理，不打算复刻。
+   - 1 demos/class/08 —— 上游 fixture 与上游 jison 解析器互不兼容（fixture 文本对应 demos 但 grammar 拒绝）。
+   - 1 cypress/flowchart/46 —— `flowchart-elk LR` 走 ELK opt-in 后端，已是非目标（被 `is_elk()` 过滤而非 known_ignored）。
+
+> 本项目只维护中文版 PROGRESS。
+
 
 ## Wave 7 进展（4 路并行）
 
@@ -28,14 +79,14 @@
 
 | 指标 | 值 |
 |---|---:|
-| Diagram 完整 byte-exact（≥99%） | **21 / 24** |
-| Diagram parser/layout/render 可调用（含 stub 或部分） | **24 / 24** |
+| Diagram 完整 byte-exact（≥99%） | **22 / 25** |
+| Diagram parser/layout/render 可调用 | **25 / 25** |
 | 完全未实现 diagram | **0** |
-| sweep_all byte-exact 通过率（排除 known_ignored 后） | **1135 / 1135 = 100%** |
-| 已 known_ignored fixture 总数 | 195（sequence 123 + flowchart 27 + mindmap 18 + venn 18 + 其它 9） |
-| Lib unit 测试 | **648 passed / 0 failed / 0 ignored** |
+| sweep_all byte-exact 通过率（known_ignored 已清空） | **1184 / 1328 ≈ 89.2%** |
+| 暴露的失败 fixture | 144（sequence 106 + mindmap 18 + flowchart 12 + venn 4 + gantt 4） |
+| Lib unit 测试 | **664 passed / 0 failed / 0 ignored** |
 | Cargo check warnings | ≤10（pre-existing dead_code） |
-| 项目代码总行数 | ~70,000 行 |
+| 项目代码总行数 | ~75,000 行 |
 
 ## Wave 8 进展（本轮新增 +182：953 → 1135 byte-exact）
 
@@ -150,30 +201,37 @@
     在 single-file 模式下重生，使 `cnt` / `classCounter` 每次从 0 开始；删除 svg_block
     的 `fixture_parse_state` 偏移表。block 27/33 → 33/33，class 220/225 → 224/225。
 
-## 已完整 byte-exact 的 diagram（17/23）
+## 各 diagram 当前 byte-exact 状态（2026-05-02 sweep_all 实测）
 
-| Diagram | 方式 | Fixtures byte-exact |
-|---|---|---:|
-| pie | 内置 (d3.pie + d3.arc) | 14 / 14 |
-| packet | 内置 (bit-field grid) | 5 / 5 |
-| radar | 内置 (polygon math) | 7 / 7 |
-| ishikawa | 内置 (fishbone 几何) | 17 / 18 |
-| journey | 内置 (bar layout + arc score) | 11 / 11 |
-| timeline | 内置（TD + LR 双模式） | 17 / 17 |
-| quadrant | 内置 (d3.scaleLinear) | 16 / 16 |
-| xychart | 内置 (d3.scaleBand + scaleLinear) | 55 / 56 |
-| wardley | 内置 (landscape plot) | 12 / 12 |
-| sankey | 自 port d3-sankey 0.12.3 | 3 / 3 |
-| treemap | 自 port d3-hierarchy squarify | 30 / 30 |
-| kanban | 内置 (column + card 网格) | 11 / 11 |
-| flowchart | dagre + 自循环 helper（含嵌套孤立子图） | 224 / 224 |
-| er | dagre + relationship | 80 / 80 |
-| block | dagre + 块布局 + cnt/PRNG 复刻 | 33 / 33 |
-| requirement | dagre + 需求/关系 | 44 / 44 |
-| class | dagre + classBox shape + classId 重编号 | 224 / 225 |
-| state | dagre + state shape | 82 / 82 |
-| — | — | — |
-| **小计** | — | **1209 / 1210** |
+| Diagram | 方式 | cypress | demos | 阻塞 |
+|---|---|---:|---:|---|
+| pie | 内置 (d3.pie + d3.arc) | 10/10 | 3/3 | — |
+| packet | 内置 (bit-field grid) | 5/5 | — | — |
+| radar | 内置 (polygon math) | 6/6 | 1/1 | — |
+| ishikawa | 内置 (fishbone) + handDrawn (rough) | 13/13 | 5/5 | — |
+| journey | 内置 (bar layout + arc score) | 10/10 | 1/1 | — |
+| timeline | 内置（TD + LR 双模式） | 14/14 | 3/3 | — |
+| quadrant | 内置 (d3.scaleLinear) | 14/14 | 2/2 | — |
+| xychart | 内置 (d3.scaleBand + scaleLinear) | 37/37 | 19/19 | — |
+| wardley | 内置 (landscape plot) | 6/6 | 6/6 | — |
+| sankey | 自 port d3-sankey 0.12.3 | 1/1 | 2/2 | — |
+| treemap | 自 port d3-hierarchy squarify | 28/28 | 2/2 | — |
+| kanban | 内置 (column + card 网格) | 11/11 | — | — |
+| c4 | bespoke layout + svgDraw | — | 5/5 | — |
+| flowchart | dagre + 嵌套孤立子图 + linkStyle | **188/192** | **57/65** | KaTeX × 6, icon shapes × 3, doublecircle style × 2, stadium rough × 1, ELK × 1 |
+| er | dagre + relationship | 73/73 | 7/7 | — |
+| block | dagre + 块布局 + cnt/PRNG 复刻 | 33/33 | — | — |
+| requirement | dagre + 需求/关系 | 43/43 | 1/1 | — |
+| class | dagre + classBox + classId 重编号 | **225/225** | **12/12** | — |
+| state | dagre + state shape | 72/72 | 10/10 | — |
+| gitGraph | bespoke commits + branches + parallelCommits + multi-line | 105/105 | 24/24 | — |
+| gantt | d3-time tick + Sunday-aligned + REVERSE/HIGHLIGHT + tickInterval | 41/43 | 8/10 | V8 `new Date()` 时区 quirk × 4 |
+| venn | Nelder-Mead simplex + V8 hypot + theme | 16/16 | 8/12 | constrainedMDS × 1, handDrawn × 3 |
+| sequence | scaffold + 部分特性 | **40/140** | **4/10** | 大量 activation / autonumber / wrap / loop_alt / par 组合（probe-driven） |
+| mindmap | 单节点 fast path + 多节点骨架 | **6/23** | **1/2** | cose-bilkent reduceTrees / FR-grid / Coarsening / curveBasis edge / Base64 data-points |
+| **总计** | — | 1003 / 1126 | 181 / 202 | sweep_all 1184 / 1328 |
+
+注：上表数据来自 `cargo run --bin sweep_all`（2026-05-02），cypress 1003/1126 + demos 181/202 = 1184/1328。
 
 ## Wave 7 · Stratum 3 渲染层进展
 
@@ -210,20 +268,33 @@
 27. **空 edge label 高度** —— 上游空边标签的高度是 line-height（~16.3px），不是 0。
 28. **flowchart vertex counter** —— 上游 `flowDb.vertexCounter++` 在每次 `ensureVertex` 时递增，包括 start/stop 节点，影响 dom_id 后缀。
 
-## 下一步
+## 下一步（2026-05-02 重排）
 
-### 实现 diagram 收尾（共余 4 处真实差异）
+清空 known_ignored 后，144 项暴露失败按攻关性价比排序：
 
-1. **demos/state/07** —— viewBox 宽度差 7.167px（"the first composite" 标签度量？）
-2. **cypress/class/221** —— 多行 backtick class 名称的 viewBox 与 height 差异
-3. **cypress/xychart/35** —— 单 ULP 浮点差（`...3` vs `...2`），算术顺序问题
-4. **demos/ishikawa/04** —— `look: handDrawn` 模式未实现（rough.js）
+### 高性价比（单 fixture 价值高、实现路径清晰）
 
-### 未实现 diagram（Wave 7+）
+1. **demos/flowchart 41 + cypress/flowchart 144（doublecircle style threading）** —— 复用 W7-B 的 group_style threading 模式，把 `nodeStyles` 接到 doublecircle 内层 `<circle>` 与外层 `<g>`。约 1-2 个 commit。
+2. **cypress/gantt 05/39 + demos/gantt 06/07（V8 `new Date()` quirk）** —— 性价比低，建议保持环境性 ignore（虽然 known_ignored 已清空，可考虑改成 Rust 端 `#[ignore]` 或 sweep_all 程序性过滤）。
 
-- **gantt** 骨架已有，需完善 renderer（chrono 依赖、43+10 fixtures）
-- **mindmap**（tidy-tree layout，23+2 fixtures）
-- **sequence** / **c4** / **gitGraph** / **venn**（合计 ~310 fixtures）
+### 中性价比（需要某个独立模块端到端就位）
+
+3. **demos/flowchart 65（stadium + thick + linkStyle 走 rough.js）** —— rough.path emission 已有（W10-B），缺 stadium body 接入 + linkStyle 间距同步。
+4. **demos/venn 04 (constrainedMDS)** —— 需复刻 V8 PRNG state；估值 1-2 commit 但需 PRNG 注入框架。
+5. **demos/venn 10/11/12 (handDrawn)** —— rough ellipse + path bbox 模拟器（W6-C / W8-B 90% 已铺）；接最后一公里。
+
+### 低性价比 / 大工程（需多日、多 wave）
+
+6. **100 cypress/sequence + 6 demos/sequence** —— 必须 probe-driven。每个 fixture 需 0.5-2 commit 不等，平均回报较低（每个 fixture 都是孤立组合）。已知 W7-A retry 模型（按 diff_at 选最小差异）有效。
+7. **17 cypress/mindmap + 1 demos/mindmap（cose-bilkent 多节点）** —— W11-D 落骨架后还差 reduceTrees / FR-grid bucket / Coarsening / curveBasis edge / Base64 data-points 五大件，每件几百 LOC。预计需 3-5 wave 集中投入。
+8. **6 demos/flowchart 42-47 (KaTeX)** —— 需要 KaTeX 渲染器端口（数百 LOC + 大量 font metrics）；建议作为独立 Phase 决策。
+9. **3 cypress/flowchart 116-118 (icon shapes)** —— 需要 ~500 个 AWS icon SVG path 注册表；建议作为独立 Phase 决策。
+10. **1 demos/class/08（上游自相矛盾 fixture）** —— 上游自身 jison parser 拒绝其 fixture 文本，无法 byte-exact，建议在 sweep_all 程序性过滤。
+
+### 维度建议
+
+- **保留 known_ignored.txt 文件结构**（仅清空内容），避免 sweep_all 失去未来标注能力。已加注释说明 2026-05-02 清空动作。
+- **环境性 / 上游自相矛盾**项（6 个 gantt timezone + class/08）建议按"程序性过滤而非 ignore 列表"原则，或重新写入 known_ignored 并附明确"环境性"标签。
 
 ## Wave 8 进展（4 路并行）
 

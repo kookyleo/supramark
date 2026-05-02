@@ -4,16 +4,19 @@
 
 本文档记录依赖分析与分期计划。随着 diagram 逐一上线，会演化成支持矩阵。
 
-## 当前状态
+## 当前状态（2026-05-02）
 
-本项目处于**骨架阶段**，尚无任何 diagram 类型落地。执行 `cargo check` 可确认 workspace 构建通过。
+25 种 diagram 全部接通，已进入**收敛阶段**。`cargo test` 绿；sweep_all **1184 / 1328 ≈ 89.2% byte-exact**。
 
 | | |
 |---|---|
 | 上游版本 | `mermaid@11.14.0`（`2b9d054d`） |
-| 已支持图表 | 0 / 25 |
-| Reference 测试 | 0 |
+| 已接通 diagram | **25 / 25**（含 sequence / mindmap / c4 / gitGraph 等全部） |
+| 已 byte-exact（≥99% pass） | 22 / 25 |
+| Reference 测试 | 1328 条（cypress 1126 + demos 202），known_ignored 已清空 |
+| Lib unit tests | 664 / 0 / 0 |
 | Layout 后端 | [`dagre-rs`](https://github.com/kookyleo/dagre-rs)（pinned，完整 dagre.js port） |
+| 详细进展 | 见 [PROGRESS.zh.md](PROGRESS.zh.md) |
 
 ## 上游依赖勘察
 
@@ -41,93 +44,93 @@
 | `ts-dedent` | 字符串字面量缩进处理 | 用 stdlib。 |
 | `@braintree/sanitize-url` / `@iconify/utils` | URL / 图标辅助 | 按需 port 最小子集。 |
 
-## Diagram 类型矩阵（v11.14.0，25 种面向用户的类型）
+## Diagram 支持矩阵（2026-05-02 实测）
 
-"Parser" 列标注上游用的是 jison（18 种）还是 langium（7 种）。所有 parser 我们都会重写为 Rust，这列只是说明上游是哪种 grammar。
+按 byte-exact 通过率分组。所有 25 种 diagram 都已 parser/layout/render 接通；下面括号 `cypress/demos` 数字来自最新 `sweep_all`。
 
-### Tier 1 —— 内置 layout、最简单优先（11）
+### 已 100% byte-exact（17）
 
-无外部 layout 引擎，纯几何 + 文字摆放。
+| 图表 | cypress | demos |
+|---|---:|---:|
+| pie | 10/10 | 3/3 |
+| packet | 5/5 | — |
+| radar | 6/6 | 1/1 |
+| ishikawa（含 `look:handDrawn`） | 13/13 | 5/5 |
+| user-journey | 10/10 | 1/1 |
+| timeline | 14/14 | 3/3 |
+| quadrant | 14/14 | 2/2 |
+| xychart | 37/37 | 19/19 |
+| wardley | 6/6 | 6/6 |
+| sankey | 1/1 | 2/2 |
+| treemap | 28/28 | 2/2 |
+| kanban | 11/11 | — |
+| c4 | — | 5/5 |
+| er | 73/73 | 7/7 |
+| block | 33/33 | — |
+| requirement | 43/43 | 1/1 |
+| state | 72/72 | 10/10 |
+| class | 225/225 | 12/12 |
+| gitGraph | 105/105 | 24/24 |
 
-| 图表 | 起始 | Parser | 备注 |
-|---|---|---|---|
-| pie | `pie` | langium | 单环、百分比 label。 |
-| xychart | `xychart-beta` | jison | 2D 坐标系 + 柱/折线。 |
-| sankey | `sankey-beta` | jison | 需要 port `d3-sankey` 算法。 |
-| sequence | `sequenceDiagram` | jison | 参与者泳道 + 消息路由。 |
-| gantt | `gantt` | jison | 日期轴 + 任务条，用到 `dayjs`。 |
-| gitGraph | `gitGraph` | langium | 分支 / 提交点布局。 |
-| user-journey | `journey` | jison | 任务 + emoji / 分数列。 |
-| timeline | `timeline` | jison | 横向带状 + 事件。 |
-| quadrant-chart | `quadrantChart` | jison | 固定 2×2 网格 + 点放置。 |
-| requirement | `requirementDiagram` | jison | 块 + 类型化关系。 |
-| packet | `packet-beta` | langium | 位域网格。 |
+注：上面表格 17 个 diagram 已 100%。
 
-### Tier 2 —— 内置 layout、中等复杂度（9）
+### 已 ≥95% byte-exact（5）
 
-| 图表 | 起始 | Parser | 备注 |
-|---|---|---|---|
-| mindmap | `mindmap` | jison | 类 tidy-tree 内置布局。 |
-| kanban | `kanban` | jison | 列 + 卡片网格。 |
-| block | `block-beta` | jison | 嵌套 block 网格 + 跨列。 |
-| treemap | `treemap` | langium | 矩形分割。 |
-| radar | `radar-beta` | langium | 极坐标 + 多轴。 |
-| wardley | `wardley` | langium | （beta）2D 画布 + 演化轴。 |
-| ishikawa | `ishikawa` | jison | （鱼骨图）对角分支。 |
-| venn | `venn` | jison | 需 port `venn.js` 算法。 |
-| c4 | `C4Context`/`C4Container`/`C4Component` | jison | 叠加在 class / component 之上的渲染覆盖。 |
+| 图表 | 通过 | 阻塞 |
+|---|---:|---|
+| flowchart | 188/192 cy + 57/65 dm | KaTeX × 6, doublecircle style × 2, icon shapes × 3, stadium rough × 1, ELK opt-in × 1 |
+| gantt | 41/43 cy + 8/10 dm | V8 `new Date()` 时区 quirk × 4（环境性） |
+| venn | 16/16 cy + 8/12 dm | constrainedMDS × 1, handDrawn × 3 |
 
-### Tier 3 —— dagre 驱动（4）
+### 部分 byte-exact，主要工作量集中（3）
 
-使用 `dagre-rs` 作为 layout 后端。需要 `intersectPolygon` / `intersectRect` 辅助（小，直接从上游 port）。
+| 图表 | 通过 | 阻塞 |
+|---|---:|---|
+| sequence | 40/140 cy + 4/10 dm | 上游 sequenceRenderer.ts + svgDraw.ts ~4K LOC，剩余 fixture 需 activation / autonumber / wrap / loop_alt / par 等组合特性。继续推进必须 probe-driven 按 diff_at 选最小差异 fixture |
+| mindmap | 6/23 cy + 1/2 dm | cose-bilkent 物理引擎已落骨架（W11-D），缺 reduceTrees / FR-grid bucket / Coarsening / curveBasis edge / Base64 data-points |
 
-| 图表 | 起始 | Parser | 备注 |
-|---|---|---|---|
-| flowchart | `flowchart`/`graph` | jison | 使用率最高的类型。 |
-| class | `classDiagram` | jison | 带成员行的矩形。 |
-| state | `stateDiagram`/`stateDiagram-v2` | jison | 组合状态、fork/join。 |
-| er | `erDiagram` | jison | 实体表 + 类型化连线。 |
-
-### Tier 4 —— MVP 推迟 / 不支持（1）
+### 不在范围内 / 推迟（1）
 
 | 图表 | 起始 | Parser | 原因 |
 |---|---|---|---|
-| architecture | `architecture-beta` | langium | 需要 `cytoscape-cose-bilkent`/`-fcose`，无 Rust port。Tier 1-3 稳定后再评估。 |
+| architecture | `architecture-beta` | langium | 需要 `cytoscape-cose-bilkent` / `-fcose`，本仓库 mindmap 复用一部分 cose-bilkent 但 architecture 需 fcose（更复杂的科学优化），暂不实现 |
 
 ### 辅助型（非用户可见）
 
 `error` / `info` / `common` / `treeView` —— 上游内部辅助，此处无需 port。
 
-## 分期执行计划
+## 已落地的关键能力
 
-1. **Phase 0 —— 骨架（已完成）**：Cargo.toml、lib / main 空壳、LICENSE、本计划。
+| 能力 | 实现状态 | 备注 |
+|---|---|---|
+| dagre 后端 | ✓ kookyleo/dagre-rs（vendored） | 含嵌套孤立子图 / cluster 自循环 / iso_desc edge 分区 |
+| 5 套主题 | ✓ default / base / dark / forest / neutral | venn / sequence / class theme propagation 已落 |
+| 字体度量（DejaVu / sans-serif jsdom shim） | ✓ | 共用 plantuml-little baked 表 |
+| stylis CSS preprocessor | ✓ 用于主题段 | |
+| khroma 颜色（lighten/darken/isDark） | ✓ |  |
+| rough.js engine | ✓ rectangle/polygon/line/path/ellipse/circle/hachure/bbox_of_sets | ishikawa handDrawn 已端到端使用 |
+| KaTeX | ✗ 6 demos/flowchart 阻塞 | 待独立 Phase |
+| Icon shapes（iconify） | ✗ 3 cypress/flowchart 阻塞 | 待独立 Phase |
+| ELK 后端 | ✗ 非目标 | 程序性过滤 |
 
-2. **Phase 1 —— reference 管线**：在 `tests/support/` 下搭确定性 ref-SVG 生成器，走你选的激进路径：Node + QuickJS/wasm + 上游 mermaid + 极简 DOM shim，共享和 Rust 侧一致的字体度量表。定义 `MERMAID_LITTLE_TEST_BACKEND` 环境变量，模仿 `PLANTUML_LITTLE_TEST_BACKEND`。
+## 不在范围内（v1）
 
-3. **Phase 2 —— 字体度量**：把 DejaVu Sans / DejaVu Sans Mono 的 glyph advance 烘焙进 `src/font_data.rs`，两边共用同一张表，`textLength` 逐字一致。
+- ELK layout（上游 opt-in，后期看需求再加；本仓库 `is_elk()` 程序性过滤而非 ignore 列表）
+- Architecture 图（依赖 cytoscape-fcose 完整移植）
+- KaTeX 公式渲染（待独立 Phase；当前 6 fixture 阻塞）
+- 完整 `@iconify` 图标库（待独立 Phase；当前 3 fixture 阻塞）
 
-4. **Phase 3 —— 三层 fixtures**：
-   - `tests/fixtures/<diagram>/*.mmd` —— 手写最小样例，每种 1~3 份。
-   - `tests/ext_fixtures/<diagram>/*.mmd` —— 从上游 `demos/*.html` 抽取。
-   - `tests/ext_fixtures/e2e/<diagram>/*.mmd` —— 从上游 `cypress/integration/rendering/*.spec.*` 抽取。
+## Phase 路线图（历史 → 当前）
 
-5. **Phase 4 —— 按 diagram 逐类实现**：
-   先 Tier 1（layout 风险最低），再 Tier 2，再 Tier 3（dagre 路径），Tier 4 推迟。每个 diagram 的落地包含：
-   - parser + AST
-   - layout（built-in 或 dagre-backed）
-   - renderer 输出 SVG 字节
-   - 对 Phase-1 管线的 ref 测试全绿
+Phase 0-4（骨架 → reference 管线 → 字体度量 → fixtures → 逐 diagram 实现）已在 11 路 wave 累计推进中全部落地。当前最新状态见 [PROGRESS.zh.md](PROGRESS.zh.md)。
 
-6. **Phase 5 —— `packages/web/` wasm 构建**：
-   镜像 plantuml-little 的 `@kookyleo/plantuml-little-web` —— 暴露 wasm-bindgen 接口，让 Rust 核心能在浏览器 / Node 里跑，供想在浏览器内渲染、又不想带上游 mermaid.js 整包体积的用户使用。
+收敛阶段未完成项：
 
-## 不在范围内（MVP）
-
-- ELK layout（上游 opt-in，后期看需求再加）
-- Architecture 图（依赖 cytoscape）
-- KaTeX 公式渲染（占位）
-- rough.js 手绘风格（占位）
-- 完整 `@iconify` 图标库（仅按需 port）
+- **Sequence 收尾** —— probe-driven 推进剩余 100 cypress + 6 demos sequence fixtures。
+- **Mindmap 多节点收尾** —— cose-bilkent reduceTrees / FR-grid bucket / Coarsening / curveBasis edge / Base64 data-points 五大件接力（W11-D 后续）。
+- **KaTeX Phase** —— port KaTeX 渲染器子集，解锁 6 demos/flowchart fixtures（独立决策）。
+- **Icon shapes Phase** —— 注册 ~500 AWS / iconify SVG path，解锁 3 cypress/flowchart fixtures（独立决策）。
+- **`packages/web/` wasm 构建** —— parity 收敛后，对齐 plantuml-little 的 `@kookyleo/plantuml-little-web`。
 
 ## 测试方法学
 

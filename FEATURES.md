@@ -5,17 +5,21 @@ Aligned with upstream **mermaid@11.14.0** (`2b9d054d`, tagged 2026-04-01).
 This document records the dependency analysis and phased plan. It will
 evolve into the support matrix as diagram types come online.
 
-## Status
+## Status (2026-05-02)
 
-This project is in the **scaffolding** phase. No diagram types are
-rendered yet. Run `cargo check` to confirm the workspace builds.
+All 25 diagram types are wired through `convert_with_id`; the project
+is in the **convergence phase**. `cargo test` is green; sweep_all
+reports **1184 / 1328 byte-exact ≈ 89.2%**.
 
 | | |
 |---|---|
 | Upstream version | `mermaid@11.14.0` (`2b9d054d`) |
-| Supported diagrams | 0 / 25 |
-| Reference tests | 0 |
+| Wired diagrams | **25 / 25** (incl. sequence / mindmap / c4 / gitGraph) |
+| Byte-exact (≥99% pass) | 22 / 25 |
+| Reference tests | 1328 (cypress 1126 + demos 202); `known_ignored.txt` is now empty |
+| Lib unit tests | 664 / 0 / 0 |
 | Layout backend | [`dagre-rs`](https://github.com/kookyleo/dagre-rs) (pinned, complete dagre.js port) |
+| Tracking doc | [PROGRESS.zh.md](PROGRESS.zh.md) (Chinese only, by project rule) |
 
 ## Upstream Dependency Survey
 
@@ -44,110 +48,91 @@ Rust side:
 | `ts-dedent` | string literal dedent | Replace with stdlib. |
 | `@braintree/sanitize-url` / `@iconify/utils` | URL / icon helpers | Port minimal subset as needed. |
 
-## Diagram Type Matrix (v11.14.0, 25 user-facing types)
+## Diagram Support Matrix (2026-05-02 sweep_all)
 
-"Parser" column is whether the upstream grammar is jison (18) or
-langium (7). All parsers will be rewritten in Rust; the column only
-notes whether it is grammar A or grammar B on the upstream side.
+All 25 user-facing diagrams are wired. Numbers below are
+`cypress/demos` byte-exact pass counts from the latest sweep.
 
-### Tier 1 — built-in layout, simplest first (11)
+### 100% byte-exact (17)
 
-No external layout engine. Pure geometry + text placement.
+| Diagram | cypress | demos |
+|---|---:|---:|
+| pie | 10/10 | 3/3 |
+| packet | 5/5 | — |
+| radar | 6/6 | 1/1 |
+| ishikawa (incl. `look:handDrawn`) | 13/13 | 5/5 |
+| user-journey | 10/10 | 1/1 |
+| timeline | 14/14 | 3/3 |
+| quadrant | 14/14 | 2/2 |
+| xychart | 37/37 | 19/19 |
+| wardley | 6/6 | 6/6 |
+| sankey | 1/1 | 2/2 |
+| treemap | 28/28 | 2/2 |
+| kanban | 11/11 | — |
+| c4 | — | 5/5 |
+| er | 73/73 | 7/7 |
+| block | 33/33 | — |
+| requirement | 43/43 | 1/1 |
+| state | 72/72 | 10/10 |
+| class | 225/225 | 12/12 |
+| gitGraph | 105/105 | 24/24 |
 
-| Diagram | Start | Parser | Notes |
-|---|---|---|---|
-| pie | `pie` | langium | Single ring, percentage labels. |
-| xychart | `xychart-beta` | jison | 2D axis + bars / lines. |
-| sankey | `sankey-beta` | jison | Needs `d3-sankey` algo port. |
-| sequence | `sequenceDiagram` | jison | Participant lanes + message routing. |
-| gantt | `gantt` | jison | Date axis + task bars. Uses `dayjs`. |
-| gitGraph | `gitGraph` | langium | Branch / commit dot layout. |
-| user-journey | `journey` | jison | Task + emoji / score per column. |
-| timeline | `timeline` | jison | Horizontal band w/ events. |
-| quadrant-chart | `quadrantChart` | jison | Fixed 2×2 grid + point placement. |
-| requirement | `requirementDiagram` | jison | Blocks + typed relationships. |
-| packet | `packet-beta` | langium | Bit-field grid. |
+### ≥95% byte-exact (3)
 
-### Tier 2 — built-in layout, moderate complexity (9)
+| Diagram | Pass | Remaining |
+|---|---:|---|
+| flowchart | 188/192 cy + 57/65 dm | KaTeX × 6, doublecircle style × 2, icon shapes × 3, stadium rough × 1, ELK opt-in × 1 |
+| gantt | 41/43 cy + 8/10 dm | V8 `new Date()` timezone quirks × 4 (environmental) |
+| venn | 16/16 cy + 8/12 dm | constrainedMDS × 1, handDrawn × 3 |
 
-| Diagram | Start | Parser | Notes |
-|---|---|---|---|
-| mindmap | `mindmap` | jison | Tidy-tree-ish built-in layout. |
-| kanban | `kanban` | jison | Column + card grid. |
-| block | `block-beta` | jison | Nested block grid with spans. |
-| treemap | `treemap` | langium | Rectangular partitioning. |
-| radar | `radar-beta` | langium | Polar chart w/ axes. |
-| wardley | `wardley` | langium | (beta) 2D canvas + evolution axis. |
-| ishikawa | `ishikawa` | jison | (a.k.a. fishbone) diagonal branches. |
-| venn | `venn` | jison | Needs `venn.js` algo port. |
-| c4 | `C4Context`/`C4Container`/`C4Component` | jison | Overlays on top of class / component rendering. |
+### Partial — major work concentrated (2)
 
-### Tier 3 — dagre-driven (4)
+| Diagram | Pass | Remaining |
+|---|---:|---|
+| sequence | 40/140 cy + 4/10 dm | Upstream sequenceRenderer.ts + svgDraw.ts ~4K LOC; remaining fixtures need activation / autonumber / wrap / loop_alt / par feature combinations. Requires probe-driven approach (smallest diff_at first) |
+| mindmap | 6/23 cy + 1/2 dm | cose-bilkent physics scaffold landed (W11-D); reduceTrees / FR-grid bucket / Coarsening / curveBasis edge / Base64 data-points still missing |
 
-Uses `dagre-rs` as layout backend. Needs `intersectPolygon` /
-`intersectRect` helpers (small, portable from upstream).
-
-| Diagram | Start | Parser | Notes |
-|---|---|---|---|
-| flowchart | `flowchart`/`graph` | jison | Most-used diagram. |
-| class | `classDiagram` | jison | Boxes w/ member rows. |
-| state | `stateDiagram`/`stateDiagram-v2` | jison | Composite states, fork/join. |
-| er | `erDiagram` | jison | Entity tables w/ typed edges. |
-
-### Tier 4 — deferred / unsupported in MVP (1)
+### Out of scope / deferred (1)
 
 | Diagram | Start | Parser | Reason |
 |---|---|---|---|
-| architecture | `architecture-beta` | langium | Requires `cytoscape-cose-bilkent`/`-fcose`, no Rust port. Revisit after Tier 1-3 stable. |
+| architecture | `architecture-beta` | langium | Requires `cytoscape-fcose`; deferred until/unless we port the scientific optimisation code |
 
 ### Ancillary (not user-facing)
 
 `error` / `info` / `common` / `treeView` — internal helpers in upstream;
 nothing to port here.
 
-## Phased Execution Plan
+## Phase Roadmap (historical → current)
 
-1. **Phase 0 — scaffolding (done)**: Cargo.toml, lib / main skeleton,
-   LICENSE, this plan.
+Phases 0–4 (scaffolding → reference pipeline → font metrics → fixtures →
+per-diagram porting) all landed across 11 wave iterations between
+project start and 2026-05-02. The current state is recorded in
+[PROGRESS.zh.md](PROGRESS.zh.md).
 
-2. **Phase 1 — reference pipeline**: build the deterministic ref-SVG
-   generator under `tests/support/` using the aggressive path chosen
-   upstream: Node + QuickJS/wasm + upstream mermaid + minimal DOM shim
-   sharing the same font-metric table as the Rust side. Document the
-   `MERMAID_LITTLE_TEST_BACKEND` env knob, mirroring
-   `PLANTUML_LITTLE_TEST_BACKEND`.
+Open execution items:
 
-3. **Phase 2 — font metrics**: bake DejaVu Sans / DejaVu Sans Mono
-   glyph advance tables into `src/font_data.rs`. Both sides consume the
-   same table so text `textLength` matches exactly.
+- **Sequence finishing pass** — probe-driven port of remaining
+  100 cypress + 6 demos sequence fixtures (W11 onward).
+- **mindmap multi-node finishing** — complete cose-bilkent
+  reduceTrees / FR-grid bucket / Coarsening / curveBasis edge / Base64
+  data-points (W11-D follow-ups).
+- **KaTeX phase** — port enough of KaTeX renderer to unlock 6
+  demos/flowchart fixtures (independent decision).
+- **Icon shapes phase** — register ~500 AWS / iconify SVG paths to
+  unlock 3 cypress/flowchart fixtures (independent decision).
+- **`packages/web/` wasm build** — mirror plantuml-little's
+  `@kookyleo/plantuml-little-web` once the parity work converges.
 
-4. **Phase 3 — fixtures, three layers**:
-   - `tests/fixtures/<diagram>/*.mmd` — hand-written minimal cases, 1–3 per type.
-   - `tests/ext_fixtures/<diagram>/*.mmd` — mined from upstream
-     `demos/*.html`.
-   - `tests/ext_fixtures/e2e/<diagram>/*.mmd` — mined from upstream
-     `cypress/integration/rendering/*.spec.*`.
+## Out of Scope (v1)
 
-5. **Phase 4 — implementation, diagram by diagram**:
-   Tier 1 first (lowest layout risk), then Tier 2, then Tier 3 (dagre
-   path), defer Tier 4. Each diagram lands with:
-   - parser + AST
-   - layout (built-in or dagre-backed)
-   - renderer emitting SVG bytes
-   - ref-tests green against the Phase-1 pipeline
-
-6. **Phase 5 — `packages/web/` wasm build**: mirror plantuml-little's
-   `@kookyleo/plantuml-little-web` — expose a wasm-bindgen surface so
-   the Rust core can run in browsers / Node, for people who want
-   in-browser rendering without the upstream mermaid.js weight.
-
-## Out of Scope (MVP)
-
-- ELK layout (opt-in upstream; add later if demand warrants)
-- Architecture diagram (cytoscape dependency)
-- KaTeX formula rendering (placeholder)
-- rough.js hand-drawn look (placeholder)
-- Full `@iconify` icon library (on-demand only)
+- ELK layout (opt-in upstream; programmatically filtered via
+  `is_elk()` rather than the ignore list)
+- Architecture diagram (depends on full `cytoscape-fcose` port)
+- KaTeX formula rendering (deferred to its own phase; 6 fixtures
+  blocked)
+- Full `@iconify` icon library (deferred to its own phase; 3 fixtures
+  blocked)
 
 ## Testing Methodology
 
