@@ -27,15 +27,8 @@ ext_fixtures/demos/flowchart/39.mmd	Asymmetric `>...]` shape (rect_left_inv_arro
 ext_fixtures/demos/flowchart/40.mmd	Asymmetric `>...]` shape (rect_left_inv_arrow) renders as rough-js `<path>` family in upstream regardless of look; byte-exact parity requires porting rough.js path emission for that shape.
 ext_fixtures/demos/flowchart/41.mmd	Asymmetric `>...]` shape (rect_left_inv_arrow) renders as rough-js `<path>` family in upstream regardless of look; byte-exact parity requires porting rough.js path emission for that shape.
 ext_fixtures/demos/flowchart/65.mmd	Stadium + thick arrows + linkStyle/classDef uses roughjs rendering; byte-exact parity requires porting roughjs rendering algorithm.
-ext_fixtures/cypress/venn/06.mmd	Foreign-object text-node rendering not yet ported (text "..." inside set/union).
-ext_fixtures/cypress/venn/10.mmd	Foreign-object text-node rendering not yet ported.
-ext_fixtures/cypress/venn/11.mmd	Foreign-object text-node rendering with per-node style colors not yet ported.
-ext_fixtures/cypress/venn/13.mmd	Combined: text nodes + style fill darken (hex→hsl). Geometry matches via greedy pair-only loss filter + libm; foreignObject text node still pending.
-ext_fixtures/cypress/venn/16.mmd	Combined: text nodes + style fill (hex darken).
 ext_fixtures/demos/venn/03.mmd	`theme: 'dark'` style block + 3-circle symmetric Nelder-Mead divergence.
 ext_fixtures/demos/venn/04.mmd	4 sets × 6 pairwise overlaps = 10 areas — triggers constrainedMDS layout which uses Math.random for initial guess; not reproducible without the V8 PRNG state.
-ext_fixtures/demos/venn/06.mmd	Foreign-object text nodes + style colors (rgba/rgb/hex/named).
-ext_fixtures/demos/venn/07.mmd	`useDebugLayout: true` plus many text nodes (debug rectangles/circles not ported).
 ext_fixtures/demos/venn/08.mmd	`theme: 'forest'` style block + 3-circle symmetric Nelder-Mead divergence.
 ext_fixtures/demos/venn/09.mmd	`theme: 'neutral'` style block has different `.marker` / `.neo-*` rules; theme propagation incomplete.
 ext_fixtures/demos/venn/10.mmd	`look: handDrawn` uses roughjs.
@@ -120,10 +113,7 @@ ext_fixtures/cypress/sequence/18.mmd	MVP scope: sequence features [actor_type] n
 ext_fixtures/cypress/sequence/19.mmd	MVP scope: sequence features [loop_alt,par,note,activation,actor_type,br] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
 ext_fixtures/cypress/sequence/20.mmd	MVP scope: sequence features [loop_alt,par,note,activation,actor_type,br] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
 ext_fixtures/cypress/sequence/21.mmd	MVP scope: sequence features [activation] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
-ext_fixtures/cypress/sequence/22.mmd	MVP scope: sequence features [activation] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
-ext_fixtures/cypress/sequence/23.mmd	MVP scope: sequence features [activation] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
 ext_fixtures/cypress/sequence/24.mmd	MVP scope: sequence features [activation] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
-ext_fixtures/cypress/sequence/25.mmd	MVP scope: sequence features [activation] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
 ext_fixtures/cypress/sequence/26.mmd	MVP scope: sequence features [note,activation] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
 ext_fixtures/cypress/sequence/27.mmd	MVP scope: sequence features [loop_alt,activation] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.
 ext_fixtures/cypress/sequence/28.mmd	MVP scope: sequence features [activation,actor_type] not yet ported. Scaffold parse + layout + render in place; full byte-exact output requires upstream sequenceRenderer.ts + svgDraw.ts port.

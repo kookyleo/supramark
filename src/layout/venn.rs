@@ -82,17 +82,25 @@ pub struct AreaLayout {
     pub circles: Vec<Circle>,
     /// Path d=… (already includes the leading `\n`).
     pub path: String,
-    /// Text centre (Math.floor in JS).
+    /// Text centre (Math.floor in JS) — for the visible venn-circle/intersection label.
     pub text_x: i64,
     pub text_y: i64,
-    /// Raw float text centre (matches upstream `area.text.x/y` from
-    /// venn.js's `computeTextCentres`). Used by the text-node
-    /// foreignObject placement which needs the unfloored values.
+    /// Raw float text centre — UNUSED for visible label. Kept for future use.
     pub text_x_f: f64,
     pub text_y_f: f64,
     /// Set the label uses for the circle case (single-set: id; otherwise empty
     /// unless data.label is set).
     pub render_label: String,
+    /// Per-area circles re-scaled with the venn config padding (default 8).
+    /// Used ONLY by the text-node `foreignObject` positioning, mirroring
+    /// upstream's separate `venn.layout(..., {padding: config.padding ?? 15})`
+    /// call where the merged config supplies `padding=8` while the
+    /// `VennDiagram` component (visible circles) hardcodes `padding=15`.
+    pub text_node_circles: Vec<Circle>,
+    /// Text centre computed from the padding=8 circles, raw float.
+    /// Mirrors `area.text.x/y` from the upstream `layout()` helper.
+    pub text_node_centre_x: f64,
+    pub text_node_centre_y: f64,
 }
 
 pub fn layout(d: &VennDiagram, theme: &ThemeVariables) -> Result<VennLayout> {
@@ -101,7 +109,14 @@ pub fn layout(d: &VennDiagram, theme: &ThemeVariables) -> Result<VennLayout> {
     let reference_w = 1600.0_f64;
     let scale = svg_w / reference_w;
     let title_h = if d.meta.title.is_some() { 48.0 * scale } else { 0.0 };
-    let padding = 15.0_f64;
+    // VennDiagram component's hardcoded internal default — drives the
+    // visible circles, paths, and label positions.
+    let padding_visible = 15.0_f64;
+    // Mermaid venn config default — drives the SECOND `venn.layout(...)`
+    // call upstream uses to compute text-node `foreignObject` positions.
+    // This value comes from `defaultConfig.venn.padding = 8` and is NOT
+    // overridable through .mmd syntax (no init/config block in venn-beta).
+    let padding_text_node = 8.0_f64;
 
     // Filter out empty sets (size==0 single-element subsets) and any
     // unions referencing them. (mirrors `chart` in diagram.js).
@@ -124,6 +139,7 @@ pub fn layout(d: &VennDiagram, theme: &ThemeVariables) -> Result<VennLayout> {
         .collect();
 
     let mut circle_map: BTreeMap<String, Circle> = BTreeMap::new();
+    let mut circle_map_text_node: BTreeMap<String, Circle> = BTreeMap::new();
 
     if !areas_vec.is_empty() {
         // --- venn() ---
@@ -172,10 +188,15 @@ pub fn layout(d: &VennDiagram, theme: &ThemeVariables) -> Result<VennLayout> {
         }
         let initial = initial;
 
-        // 4) normalize
+        // 4) normalize — used by both scale calls.
         let normalized = normalize_solution(&initial, std::f64::consts::PI / 2.0);
-        // 5) scale to view
-        circle_map = scale_solution(&normalized, svg_w, svg_h - title_h, padding);
+        // 5a) scale to view with padding=15 (VennDiagram component).
+        circle_map = scale_solution(&normalized, svg_w, svg_h - title_h, padding_visible);
+        // 5b) scale to view with padding=8 (config.venn.padding default) for
+        // text-node positioning. Mirrors the second `venn.layout(...)` call
+        // upstream uses to populate `layoutByKey`.
+        circle_map_text_node =
+            scale_solution(&normalized, svg_w, svg_h - title_h, padding_text_node);
 
         // Use original (post-filter) areas only — not augmented — for output.
         areas_vec = sets
@@ -197,7 +218,11 @@ pub fn layout(d: &VennDiagram, theme: &ThemeVariables) -> Result<VennLayout> {
 
     // For text-centre computation, also need a list of ALL areas (to mirror
     // upstream computeTextCentres which iterates the original areas).
+    // Visible label centres come from the padding=15 circles…
     let text_centres = compute_text_centres(&circle_map, &areas_vec);
+    // …text-node centres come from the padding=8 circles.
+    let text_centres_text_node =
+        compute_text_centres(&circle_map_text_node, &areas_vec);
 
     for a in &areas_vec {
         let circles_for_area: Vec<Circle> = a
@@ -212,6 +237,15 @@ pub fn layout(d: &VennDiagram, theme: &ThemeVariables) -> Result<VennLayout> {
         let path = arcs_to_path(&arcs, None);
         let key = a.sets.join(",");
         let centre = text_centres.get(&key).copied().unwrap_or((0.0, 0.0));
+        let centre_tn = text_centres_text_node
+            .get(&key)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        let circles_for_text_node: Vec<Circle> = a
+            .sets
+            .iter()
+            .filter_map(|id| circle_map_text_node.get(id).copied())
+            .collect();
         let render_label = if let Some(l) = labels_by_key.get(&key) {
             l.clone()
         } else if a.sets.len() == 1 {
@@ -230,6 +264,9 @@ pub fn layout(d: &VennDiagram, theme: &ThemeVariables) -> Result<VennLayout> {
             text_x_f: centre.0,
             text_y_f: centre.1,
             render_label,
+            text_node_circles: circles_for_text_node,
+            text_node_centre_x: centre_tn.0,
+            text_node_centre_y: centre_tn.1,
         });
     }
 

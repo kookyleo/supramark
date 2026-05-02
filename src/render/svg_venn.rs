@@ -215,18 +215,46 @@ fn render_text_nodes(
             None => continue, // upstream's `if (!area?.text)` guard
         };
 
-        let center_x = area.text_x_f;
-        let center_y = area.text_y_f;
+        // Use the padding=8 circles + their text centres for text-node
+        // positioning. Upstream's `renderTextNodes` reads `area.text.x/y` and
+        // `area.circles` from `layoutByKey`, which is built from the second
+        // `venn.layout(...)` call (padding sourced from `config.venn.padding`,
+        // default 8) — distinct from the visible `VennDiagram` circles
+        // (hardcoded padding 15).
+        let center_x = area.text_node_centre_x;
+        let center_y = area.text_node_centre_y;
+        let circles_for_radii = &area.text_node_circles;
         // Math.min over circle radii (NaN if empty — no text would render then).
-        let min_radius = area
-            .circles
+        let min_radius = circles_for_radii
             .iter()
             .map(|c| c.radius)
             .fold(f64::INFINITY, f64::min);
-        let inner_radius_raw = area
-            .circles
+        // ECMAScript Math.hypot(a, b) — V8 follows the spec's iterative
+        // Kahan-summed algorithm for >2 args but for the 2-arg case it
+        // directly evaluates `max * sqrt(1 + (min/max)²)`. This differs
+        // from libm's `hypot` (fdlibm hi/lo splitting) by up to 1 ULP on
+        // pathological inputs (e.g. one arg ≪ the other). Use the V8
+        // formulation here so triple-intersection text-node sizes match
+        // byte-for-byte.
+        let v8_hypot = |a: f64, b: f64| -> f64 {
+            let aa = a.abs();
+            let bb = b.abs();
+            if aa.is_infinite() || bb.is_infinite() {
+                return f64::INFINITY;
+            }
+            if aa.is_nan() || bb.is_nan() {
+                return f64::NAN;
+            }
+            let (hi, lo) = if aa > bb { (aa, bb) } else { (bb, aa) };
+            if hi == 0.0 {
+                return 0.0;
+            }
+            let r = lo / hi;
+            hi * libm::sqrt(1.0 + r * r)
+        };
+        let inner_radius_raw = circles_for_radii
             .iter()
-            .map(|c| c.radius - ((center_x - c.x).hypot(center_y - c.y)))
+            .map(|c| c.radius - v8_hypot(center_x - c.x, center_y - c.y))
             .fold(f64::INFINITY, f64::min);
         let mut inner_radius = if inner_radius_raw.is_finite() {
             inner_radius_raw.max(0.0)
@@ -315,7 +343,12 @@ fn render_text_nodes(
                 "display: flex; width: 100%; height: 100%; white-space: normal; align-items: center; justify-content: center; text-align: center; overflow-wrap: normal; word-break: normal;",
             );
             if let Some(c) = &text_color {
-                span_style.push_str(&format!(" color: {c};"));
+                // Mirror jsdom/CSSOM serialisation: a hex literal passed to
+                // `el.style.color = '#ff0000'` round-trips back as
+                // `rgb(255, 0, 0)`. Named colours and rgb()/rgba()/hsl()
+                // already pass through unchanged.
+                let normalized = normalize_color_for_span(c);
+                span_style.push_str(&format!(" color: {normalized};"));
             }
 
             let label_text = node.label.clone().unwrap_or_else(|| node.id.clone());
@@ -409,6 +442,73 @@ fn num_int(v: f64) -> String {
         format!("{}", v as i64)
     } else {
         format!("{v}")
+    }
+}
+
+/// Convert hex colour literals (`#rgb`, `#rrggbb`, `#rrggbbaa`) into the
+/// `rgb(r, g, b)` / `rgba(r, g, b, a)` form that jsdom (and any
+/// CSS-Object-Model conformant browser) returns when reading back a
+/// `style.color = '#…'` assignment.
+///
+/// Non-hex inputs (named colours, existing `rgb()`/`rgba()`/`hsl()`
+/// declarations) are returned untouched.
+fn normalize_color_for_span(c: &str) -> String {
+    let s = c.trim();
+    if !s.starts_with('#') {
+        return c.to_string();
+    }
+    let body = &s[1..];
+    let parse_hex = |h: &str| -> Option<u8> { u8::from_str_radix(h, 16).ok() };
+    match body.len() {
+        3 => {
+            let r = parse_hex(&body[0..1]);
+            let g = parse_hex(&body[1..2]);
+            let b = parse_hex(&body[2..3]);
+            if let (Some(r), Some(g), Some(b)) = (r, g, b) {
+                let r = r * 17;
+                let g = g * 17;
+                let b = b * 17;
+                return format!("rgb({r}, {g}, {b})");
+            }
+            c.to_string()
+        }
+        6 => {
+            let r = parse_hex(&body[0..2]);
+            let g = parse_hex(&body[2..4]);
+            let b = parse_hex(&body[4..6]);
+            if let (Some(r), Some(g), Some(b)) = (r, g, b) {
+                return format!("rgb({r}, {g}, {b})");
+            }
+            c.to_string()
+        }
+        8 => {
+            let r = parse_hex(&body[0..2]);
+            let g = parse_hex(&body[2..4]);
+            let b = parse_hex(&body[4..6]);
+            let a = parse_hex(&body[6..8]);
+            if let (Some(r), Some(g), Some(b), Some(a)) = (r, g, b, a) {
+                let alpha = (a as f64) / 255.0;
+                // CSS serialises alpha to canonical rounded form. Match the
+                // shape jsdom emits: 3 fractional digits trimmed.
+                let alpha_str = format_alpha(alpha);
+                return format!("rgba({r}, {g}, {b}, {alpha_str})");
+            }
+            c.to_string()
+        }
+        _ => c.to_string(),
+    }
+}
+
+fn format_alpha(a: f64) -> String {
+    if a == 1.0 {
+        "1".to_string()
+    } else if a == 0.0 {
+        "0".to_string()
+    } else {
+        // jsdom preserves a sane number of digits; round to 3 then strip.
+        let s = format!("{:.3}", a);
+        let trimmed = s.trim_end_matches('0').trim_end_matches('.');
+        trimmed.to_string()
     }
 }
 
