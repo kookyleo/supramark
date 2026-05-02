@@ -443,6 +443,26 @@ impl RoughGenerator {
                 } else {
                     sets.push(solid_fill_polygon(&polys, o, &mut rng));
                 }
+            } else if o.fill_style == "cross-hatch" {
+                // `HatchFiller.fillPolygons` — hachure twice (at angle
+                // and angle+90) and concat ops into one FillSketch.
+                // JS mutates the polygon list in-place between passes
+                // (rotate-and-unrotate accumulates float drift); we do
+                // the same via `_mut` variants so byte-exact output is
+                // preserved.
+                let mut polys_m = polys.clone();
+                let lines1 = polygon_hachure_lines_mut(&mut polys_m, o, &mut rng);
+                let set1 = hachure_fill_sketch(&lines1, o, &mut rng);
+                let mut o2 = o.clone();
+                o2.hachure_angle += 90.0;
+                let lines2 = polygon_hachure_lines_mut(&mut polys_m, &o2, &mut rng);
+                let set2 = hachure_fill_sketch(&lines2, &o2, &mut rng);
+                let mut combined = set1.ops;
+                combined.extend(set2.ops);
+                sets.push(OpSet {
+                    op_type: OpSetType::FillSketch,
+                    ops: combined,
+                });
             } else {
                 // Pattern (hachure) fill — scan the union of polygons.
                 let lines = polygon_hachure_lines(&polys, o, &mut rng);
@@ -736,6 +756,27 @@ fn path_absolutize(segs: &[RawSeg]) -> Vec<RawSeg> {
                 cy = data[3];
                 out.push(RawSeg { key: 'Q', data });
             }
+            'A' => {
+                out.push(seg.clone());
+                cx = seg.data[5];
+                cy = seg.data[6];
+            }
+            'a' => {
+                cx += seg.data[5];
+                cy += seg.data[6];
+                out.push(RawSeg {
+                    key: 'A',
+                    data: vec![
+                        seg.data[0],
+                        seg.data[1],
+                        seg.data[2],
+                        seg.data[3],
+                        seg.data[4],
+                        cx,
+                        cy,
+                    ],
+                });
+            }
             'Z' | 'z' => {
                 out.push(RawSeg {
                     key: 'Z',
@@ -814,6 +855,48 @@ fn path_normalize(segs: &[RawSeg]) -> Vec<RawSeg> {
                 cx = x;
                 cy = y;
             }
+            'A' => {
+                // Mirrors path-data-parser/normalize.js: arc → cubic
+                // bezier(s) via `arcToCubicCurves`. Mermaid's venn
+                // intersection paths exercise this branch (`d` contains
+                // multiple `A` segments stitched together).
+                let r1 = seg.data[0].abs();
+                let r2 = seg.data[1].abs();
+                let angle = seg.data[2];
+                let large_arc_flag = seg.data[3];
+                let sweep_flag = seg.data[4];
+                let x = seg.data[5];
+                let y = seg.data[6];
+                if r1 == 0.0 || r2 == 0.0 {
+                    out.push(RawSeg {
+                        key: 'C',
+                        data: vec![cx, cy, x, y, x, y],
+                    });
+                    cx = x;
+                    cy = y;
+                } else if cx != x || cy != y {
+                    let curves = arc_to_cubic_curves(
+                        cx,
+                        cy,
+                        x,
+                        y,
+                        r1,
+                        r2,
+                        angle,
+                        large_arc_flag,
+                        sweep_flag,
+                        None,
+                    );
+                    for curve in curves {
+                        out.push(RawSeg {
+                            key: 'C',
+                            data: curve,
+                        });
+                    }
+                    cx = x;
+                    cy = y;
+                }
+            }
             'Z' => {
                 out.push(seg.clone());
                 cx = subx;
@@ -825,6 +908,201 @@ fn path_normalize(segs: &[RawSeg]) -> Vec<RawSeg> {
         }
     }
     out
+}
+
+/// Decompose an SVG arc segment into a sequence of cubic bezier curves.
+/// Direct port of `arcToCubicCurves` in
+/// `path-data-parser/lib/normalize.js`. Returns a list of 6-element
+/// `Vec<f64>` curves `[c1x, c1y, c2x, c2y, x, y]` matching `C`'s data.
+/// Internally uses [`arc_inner`] which mirrors the JS function 1:1
+/// (recursive frame returns 2-tuples, outer rotates and packs into
+/// 6-tuples).
+fn arc_to_cubic_curves(
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    r1: f64,
+    r2: f64,
+    angle: f64,
+    large_arc_flag: f64,
+    sweep_flag: f64,
+    recursive: Option<[f64; 4]>,
+) -> Vec<Vec<f64>> {
+    arc_inner(
+        x1,
+        y1,
+        x2,
+        y2,
+        r1,
+        r2,
+        angle,
+        large_arc_flag,
+        sweep_flag,
+        recursive,
+    )
+}
+
+#[inline]
+fn arc_rotate(x: f64, y: f64, angle_rad: f64) -> (f64, f64) {
+    let c = angle_rad.cos();
+    let s = angle_rad.sin();
+    (x * c - y * s, x * s + y * c)
+}
+
+#[inline]
+fn round_to_9(v: f64) -> f64 {
+    // Mirror JS `parseFloat(v.toFixed(9))`. The std formatter rounds
+    // half-to-even; JS toFixed rounds half-away-from-zero. The inputs
+    // here (asin args clipped to ±1) round identically under both
+    // modes, so the std formatter suffices.
+    let s = format!("{:.9}", v);
+    s.parse::<f64>().unwrap_or(v)
+}
+
+/// Direct 1:1 port of `arcToCubicCurves` — keeps the recursive-frame
+/// return shape (2-tuples) and the outer-frame return shape (6-tuples)
+/// distinct via the `recursive` flag, but encodes both in a single
+/// `Vec<Vec<f64>>` (length-2 entries are intermediate points; length-6
+/// entries are final curves). The outer call always returns length-6
+/// entries.
+#[allow(clippy::too_many_arguments)]
+fn arc_inner(
+    mut x1: f64,
+    mut y1: f64,
+    mut x2: f64,
+    mut y2: f64,
+    mut r1: f64,
+    mut r2: f64,
+    angle: f64,
+    large_arc_flag: f64,
+    sweep_flag: f64,
+    recursive: Option<[f64; 4]>,
+) -> Vec<Vec<f64>> {
+    let angle_rad = std::f64::consts::PI * angle / 180.0;
+    let mut params: Vec<Vec<f64>> = Vec::new();
+    let f1: f64;
+    let mut f2: f64;
+    let cx: f64;
+    let cy: f64;
+    if let Some([rf1, rf2, rcx, rcy]) = recursive {
+        f1 = rf1;
+        f2 = rf2;
+        cx = rcx;
+        cy = rcy;
+    } else {
+        let (rx1, ry1) = arc_rotate(x1, y1, -angle_rad);
+        let (rx2, ry2) = arc_rotate(x2, y2, -angle_rad);
+        x1 = rx1;
+        y1 = ry1;
+        x2 = rx2;
+        y2 = ry2;
+        let x = (x1 - x2) / 2.0;
+        let y = (y1 - y2) / 2.0;
+        let mut h = (x * x) / (r1 * r1) + (y * y) / (r2 * r2);
+        if h > 1.0 {
+            h = h.sqrt();
+            r1 *= h;
+            r2 *= h;
+        }
+        let sign = if large_arc_flag == sweep_flag { -1.0 } else { 1.0 };
+        let r1_pow = r1 * r1;
+        let r2_pow = r2 * r2;
+        let left = r1_pow * r2_pow - r1_pow * y * y - r2_pow * x * x;
+        let right = r1_pow * y * y + r2_pow * x * x;
+        let k = sign * (left / right).abs().sqrt();
+        cx = k * r1 * y / r2 + (x1 + x2) / 2.0;
+        cy = k * -r2 * x / r1 + (y1 + y2) / 2.0;
+        let v1 = round_to_9((y1 - cy) / r2);
+        let v2 = round_to_9((y2 - cy) / r2);
+        let mut f1m = v1.asin();
+        let mut f2m = v2.asin();
+        if x1 < cx {
+            f1m = std::f64::consts::PI - f1m;
+        }
+        if x2 < cx {
+            f2m = std::f64::consts::PI - f2m;
+        }
+        if f1m < 0.0 {
+            f1m += std::f64::consts::PI * 2.0;
+        }
+        if f2m < 0.0 {
+            f2m += std::f64::consts::PI * 2.0;
+        }
+        if sweep_flag != 0.0 && f1m > f2m {
+            f1m -= std::f64::consts::PI * 2.0;
+        }
+        if sweep_flag == 0.0 && f2m > f1m {
+            f2m -= std::f64::consts::PI * 2.0;
+        }
+        f1 = f1m;
+        f2 = f2m;
+    }
+    let mut df = f2 - f1;
+    if df.abs() > std::f64::consts::PI * 120.0 / 180.0 {
+        let f2old = f2;
+        let x2old = x2;
+        let y2old = y2;
+        if sweep_flag != 0.0 && f2 > f1 {
+            f2 = f1 + std::f64::consts::PI * 120.0 / 180.0;
+        } else {
+            f2 = f1 - std::f64::consts::PI * 120.0 / 180.0;
+        }
+        x2 = cx + r1 * f2.cos();
+        y2 = cy + r2 * f2.sin();
+        params = arc_inner(
+            x2,
+            y2,
+            x2old,
+            y2old,
+            r1,
+            r2,
+            angle,
+            0.0,
+            sweep_flag,
+            Some([f2, f2old, cx, cy]),
+        );
+    }
+    df = f2 - f1;
+    let c1 = f1.cos();
+    let s1 = f1.sin();
+    let c2 = f2.cos();
+    let s2 = f2.sin();
+    let t = (df / 4.0).tan();
+    let hx = 4.0 / 3.0 * r1 * t;
+    let hy = 4.0 / 3.0 * r2 * t;
+    let m1 = [x1, y1];
+    let mut m2 = [x1 + hx * s1, y1 - hy * c1];
+    let m3 = [x2 + hx * s2, y2 - hy * c2];
+    let m4 = [x2, y2];
+    m2[0] = 2.0 * m1[0] - m2[0];
+    m2[1] = 2.0 * m1[1] - m2[1];
+    if recursive.is_some() {
+        let mut out: Vec<Vec<f64>> = Vec::with_capacity(3 + params.len());
+        out.push(vec![m2[0], m2[1]]);
+        out.push(vec![m3[0], m3[1]]);
+        out.push(vec![m4[0], m4[1]]);
+        out.extend(params);
+        out
+    } else {
+        let mut points: Vec<[f64; 2]> = Vec::with_capacity(3 + params.len());
+        points.push(m2);
+        points.push(m3);
+        points.push(m4);
+        for p in &params {
+            points.push([p[0], p[1]]);
+        }
+        let mut curves: Vec<Vec<f64>> = Vec::with_capacity(points.len() / 3);
+        let mut i = 0;
+        while i + 2 < points.len() {
+            let r_a = arc_rotate(points[i][0], points[i][1], angle_rad);
+            let r_b = arc_rotate(points[i + 1][0], points[i + 1][1], angle_rad);
+            let r_c = arc_rotate(points[i + 2][0], points[i + 2][1], angle_rad);
+            curves.push(vec![r_a.0, r_a.1, r_b.0, r_b.1, r_c.0, r_c.1]);
+            i += 3;
+        }
+        curves
+    }
 }
 
 /// Mirrors upstream `svgPath(path, o)` from `renderer.js`.
@@ -1468,12 +1746,18 @@ pub fn bbox_of_sets(sets: &[OpSet]) -> Option<(f64, f64, f64, f64)> {
 // outline / fill chain.
 
 /// Convert polar (deg) rotation to a [`(cos, sin)`] pair, matching JS's
-/// `Math.cos((Math.PI / 180) * deg)` byte-for-byte (Rust's `f64::cos`
-/// shares the same fdlibm-compatible result on every fixture probed).
+/// `Math.cos((Math.PI / 180) * deg)` byte-for-byte. We route through
+/// `crate::math::v8_trig` because some inputs (e.g. `sin((π/180)·240)`)
+/// disagree with `f64::sin` by 1 ULP and feed downstream into the
+/// hachure scan-line, where 1-ULP polygon drift propagates into
+/// venn-intersection cross-hatch fill.
 #[inline]
 fn rot_cs(deg: f64) -> (f64, f64) {
     let radians = (std::f64::consts::PI / 180.0) * deg;
-    (radians.cos(), radians.sin())
+    (
+        crate::math::v8_trig::cos(radians),
+        crate::math::v8_trig::sin(radians),
+    )
 }
 
 /// In-place rotate `points` around `(cx, cy)` by `deg`. Mirrors
@@ -1538,18 +1822,34 @@ pub fn hachure_lines(
     hachure_angle: f64,
     hachure_step_offset: f64,
 ) -> Vec<[[f64; 2]; 2]> {
+    let mut polygons_rot: Vec<Vec<[f64; 2]>> = polygons.to_vec();
+    hachure_lines_mut(&mut polygons_rot, hachure_gap, hachure_angle, hachure_step_offset)
+}
+
+/// In-place variant of [`hachure_lines`] — mirrors JS's
+/// `hachureLines`, which rotates the input polygons by `+angle`, runs
+/// scan-line, then rotates them back by `-angle`. Each round-trip
+/// introduces tiny floating-point drift; cross-hatch fill (which
+/// invokes the hachure twice with different angles) needs that drift
+/// to match upstream byte-for-byte.
+pub fn hachure_lines_mut(
+    polygons: &mut [Vec<[f64; 2]>],
+    hachure_gap: f64,
+    hachure_angle: f64,
+    hachure_step_offset: f64,
+) -> Vec<[[f64; 2]; 2]> {
     let angle = hachure_angle;
     let gap = hachure_gap.max(0.1);
-
-    // Rotate every polygon by `angle` around (0, 0).
-    let mut polygons_rot: Vec<Vec<[f64; 2]>> = polygons.to_vec();
     if angle != 0.0 {
-        for poly in &mut polygons_rot {
+        for poly in polygons.iter_mut() {
             rotate_points(poly, 0.0, 0.0, angle);
         }
     }
-    let mut lines = straight_hachure_lines(&polygons_rot, gap, hachure_step_offset);
+    let mut lines = straight_hachure_lines(polygons, gap, hachure_step_offset);
     if angle != 0.0 {
+        for poly in polygons.iter_mut() {
+            rotate_points(poly, 0.0, 0.0, -angle);
+        }
         rotate_lines(&mut lines, 0.0, 0.0, -angle);
     }
     lines
@@ -1707,6 +2007,18 @@ pub fn polygon_hachure_lines(
     o: &RoughOptions,
     rng: &mut RoughRandom,
 ) -> Vec<[[f64; 2]; 2]> {
+    let mut polys = polygons.to_vec();
+    polygon_hachure_lines_mut(&mut polys, o, rng)
+}
+
+/// In-place variant — mutates `polygons` (rotate-and-rotate-back drift)
+/// to match JS's `hachureLines` semantics. Cross-hatch's two-pass call
+/// needs this drift between passes for byte-exact output.
+pub fn polygon_hachure_lines_mut(
+    polygons: &mut [Vec<[f64; 2]>],
+    o: &RoughOptions,
+    rng: &mut RoughRandom,
+) -> Vec<[[f64; 2]; 2]> {
     let angle = o.hachure_angle + 90.0;
     let mut gap = o.hachure_gap;
     if gap < 0.0 {
@@ -1715,9 +2027,6 @@ pub fn polygon_hachure_lines(
     gap = gap.max(0.1).round();
     let mut skip_offset = 1.0_f64;
     if o.roughness >= 1.0 {
-        // Upstream: `(o.randomizer?.next() || Math.random()) > 0.7`.
-        // Our RoughRandom returns 0 when seed=0 with no fallback — that
-        // hits the falsy branch too. Either way, we consume the pull.
         let r = rng.next();
         if r > 0.7 {
             skip_offset = gap;
@@ -1726,7 +2035,7 @@ pub fn polygon_hachure_lines(
     if skip_offset == 0.0 {
         skip_offset = 1.0;
     }
-    hachure_lines(polygons, gap, angle, skip_offset)
+    hachure_lines_mut(polygons, gap, angle, skip_offset)
 }
 
 /// Render an `OpSet` of type `FillSketch` from a list of hachure lines.

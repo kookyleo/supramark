@@ -197,33 +197,73 @@ pub fn render(d: &VennDiagram, l: &VennLayout, theme: &ThemeVariables, id: &str)
                 .unwrap_or_else(|| l.set_text_color.clone());
             let label_text = area.label.clone().unwrap_or_default();
 
-            // Mermaid's handDrawn path: when no customFill is supplied,
-            // upstream only mutates `fill-opacity` on the existing
-            // VennDiagram path (no `fill` style). When customFill IS
-            // supplied, upstream replaces the path with a cross-hatch
-            // rough.js path entirely. Match the no-customFill branch
-            // here; the customFill+handDrawn branch is not yet ported.
-            let path_style = if d.hand_drawn && custom_fill.is_none() {
-                format!(r#"fill-opacity: {op};"#, op = fill_opacity)
+            if d.hand_drawn && custom_fill.is_some() {
+                // Mermaid's handDrawn intersection-with-customFill path:
+                // upstream replaces the original `<path>` with a
+                // rough.js cross-hatch fill path entirely (no stroke).
+                // See vennRenderer.ts: `roughSvg.path(pathD, {…})`,
+                // `existingPath.parentNode.insertBefore(roughNode, …)`,
+                // `pathEl.remove()`.
+                let cf = custom_fill.clone().unwrap();
+                let fill_trans = crate::theme::color::transparentize(&cf, 0.3);
+                let mut rc = RoughGenerator::new();
+                let mut o = RoughOptions::default();
+                o.seed = d.hand_drawn_seed.unwrap_or(0) as i32;
+                o.roughness = 0.7;
+                o.fill = Some(fill_trans);
+                o.fill_style = "cross-hatch".into();
+                o.fill_weight = 2.0;
+                o.hachure_gap = 6.0;
+                o.hachure_angle = 60.0;
+                o.stroke = "none".into();
+                let drawable = rc.path(&area.path, &o);
+                let paths = to_paths(&drawable, &o);
+                let mut paths_html = String::new();
+                for p in &paths {
+                    paths_html.push_str(&format!(
+                        r#"<path d="{d}" stroke="{s}" stroke-width="{sw}" fill="{f}"></path>"#,
+                        d = p.d,
+                        s = p.stroke,
+                        sw = crate::render::rough::fmt_num(p.stroke_width),
+                        f = p.fill,
+                    ));
+                }
+                out.push_str(&format!(
+                    r#"<g class="venn-area venn-intersection" data-venn-sets="{sets}"><g>{paths_html}</g><text class="label" text-anchor="middle" dy=".35em" x="{tx}" y="{ty}" style="fill: {tfill}; font-size: {fs}px;"><tspan x="{tx}" y="{ty}" dy="0.35em">{label}</tspan></text></g>"#,
+                    sets = area.sets.join("_"),
+                    paths_html = paths_html,
+                    tx = area.text_x,
+                    ty = area.text_y,
+                    tfill = text_color,
+                    fs = num(48.0 * scale),
+                    label = escape_text(&label_text),
+                ));
             } else {
-                format!(
-                    r#"fill-opacity: {op}; fill: {fill};"#,
-                    op = fill_opacity,
-                    fill = fill_value
-                )
-            };
+                // Mermaid's handDrawn path: when no customFill is
+                // supplied, upstream only mutates `fill-opacity` on
+                // the existing VennDiagram path (no `fill` style).
+                let path_style = if d.hand_drawn && custom_fill.is_none() {
+                    format!(r#"fill-opacity: {op};"#, op = fill_opacity)
+                } else {
+                    format!(
+                        r#"fill-opacity: {op}; fill: {fill};"#,
+                        op = fill_opacity,
+                        fill = fill_value
+                    )
+                };
 
-            out.push_str(&format!(
-                r#"<g class="venn-area venn-intersection" data-venn-sets="{sets}"><path style="{ps}" d="{d}"></path><text class="label" text-anchor="middle" dy=".35em" x="{tx}" y="{ty}" style="fill: {tfill}; font-size: {fs}px;"><tspan x="{tx}" y="{ty}" dy="0.35em">{label}</tspan></text></g>"#,
-                sets = area.sets.join("_"),
-                ps = path_style,
-                d = area.path,
-                tx = area.text_x,
-                ty = area.text_y,
-                tfill = text_color,
-                fs = num(48.0 * scale),
-                label = escape_text(&label_text),
-            ));
+                out.push_str(&format!(
+                    r#"<g class="venn-area venn-intersection" data-venn-sets="{sets}"><path style="{ps}" d="{d}"></path><text class="label" text-anchor="middle" dy=".35em" x="{tx}" y="{ty}" style="fill: {tfill}; font-size: {fs}px;"><tspan x="{tx}" y="{ty}" dy="0.35em">{label}</tspan></text></g>"#,
+                    sets = area.sets.join("_"),
+                    ps = path_style,
+                    d = area.path,
+                    tx = area.text_x,
+                    ty = area.text_y,
+                    tfill = text_color,
+                    fs = num(48.0 * scale),
+                    label = escape_text(&label_text),
+                ));
+            }
         }
     }
 
