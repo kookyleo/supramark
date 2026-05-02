@@ -60,11 +60,13 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
         // shape_label_block_with_transform to use the measured bbox.
         let padding = node.padding.unwrap_or(FLOWCHART_PADDING);
         let y_offset = padding / 1.5;
+        let css_styles = node.css_styles.as_deref().unwrap_or(&[]);
         out.push_str(
-            &crate::render::foreign_object::shape_label_block_with_y_offset(
+            &crate::render::foreign_object::shape_label_block_with_y_offset_and_styles(
                 &xml_escape_label(&label),
                 &crate::render::foreign_object::HtmlLabelFont::default(),
                 y_offset,
+                css_styles,
             ),
         );
     }

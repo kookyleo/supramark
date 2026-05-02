@@ -87,10 +87,14 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
         let inner = render_node_label("", 0.0, inner_h, &opts);
         out.push_str(&inner);
     } else {
-        out.push_str(&crate::render::foreign_object::shape_label_block(
-            &xml_escape_label(&label),
-            &crate::render::foreign_object::HtmlLabelFont::default(),
-        ));
+        let css_styles = node.css_styles.as_deref().unwrap_or(&[]);
+        out.push_str(
+            &crate::render::foreign_object::shape_label_block_with_styles(
+                &xml_escape_label(&label),
+                &crate::render::foreign_object::HtmlLabelFont::default(),
+                css_styles,
+            ),
+        );
     }
     out.push_str("</g>");
     Ok(out)

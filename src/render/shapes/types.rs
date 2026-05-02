@@ -300,10 +300,14 @@ pub fn emit_polygon_node(node: &crate::layout::unified::types::Node, pts: &[(f64
         style_attr = style_attr,
     ));
     if !label.is_empty() {
-        out.push_str(&crate::render::foreign_object::shape_label_block(
-            &xml_escape_label(&label),
-            &crate::render::foreign_object::HtmlLabelFont::default(),
-        ));
+        let css_styles = node.css_styles.as_deref().unwrap_or(&[]);
+        out.push_str(
+            &crate::render::foreign_object::shape_label_block_with_styles(
+                &xml_escape_label(&label),
+                &crate::render::foreign_object::HtmlLabelFont::default(),
+                css_styles,
+            ),
+        );
     }
     out.push_str("</g>");
     out
@@ -366,10 +370,14 @@ pub fn emit_polygon_node_with_transform(
         style_attr = style_attr,
     ));
     if !label.is_empty() {
-        out.push_str(&crate::render::foreign_object::shape_label_block(
-            &xml_escape_label(&label),
-            &crate::render::foreign_object::HtmlLabelFont::default(),
-        ));
+        let css_styles = node.css_styles.as_deref().unwrap_or(&[]);
+        out.push_str(
+            &crate::render::foreign_object::shape_label_block_with_styles(
+                &xml_escape_label(&label),
+                &crate::render::foreign_object::HtmlLabelFont::default(),
+                css_styles,
+            ),
+        );
     }
     out.push_str("</g>");
     out

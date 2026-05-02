@@ -40,10 +40,13 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
         r = fmt_num(r),
     ));
     if !label.is_empty() {
-        out.push_str(&crate::render::foreign_object::shape_label_block(
-            &xml_escape_label(&label),
-            &crate::render::foreign_object::HtmlLabelFont::default(),
-        ));
+        out.push_str(
+            &crate::render::foreign_object::shape_label_block_with_styles(
+                &xml_escape_label(&label),
+                &crate::render::foreign_object::HtmlLabelFont::default(),
+                css_styles,
+            ),
+        );
     } else {
         // Upstream's `labelHelper` always emits the `<g class="label">` block
         // (with `<rect>` marker, empty `<foreignObject width="0">`, and an
