@@ -129,6 +129,8 @@ pub fn render(
                         | Some(ArrowType::DottedLine)
                         | Some(ArrowType::SolidCross)
                         | Some(ArrowType::DottedCross)
+                        | Some(ArrowType::BiSolid)
+                        | Some(ArrowType::BiDotted)
                 )
             }
             DiagramItem::Note(n) => {
@@ -655,7 +657,7 @@ pub fn render(
         let to_left = ta.x + ta.width / 2.0 - 1.0;
         let to_right = ta.x + ta.width / 2.0 + 1.0;
         let is_arrow_to_right = from_left <= to_left;
-        let startx = if is_arrow_to_right {
+        let mut startx = if is_arrow_to_right {
             from_right
         } else {
             from_left
@@ -675,11 +677,31 @@ pub fn render(
             m.arrow,
             Some(ArrowType::SolidCross) | Some(ArrowType::DottedCross)
         );
-        if has_arrowhead || has_crosshead {
+        // Bidirectional variants (`<<->>`, `<<-->>`) have arrowheads on
+        // both ends. Both endpoints are shortened by 3 from the base
+        // position (verified against cypress/sequence/69: lifelines
+        // 75/384, line endpoints 79/380).
+        let is_bidir = matches!(
+            m.arrow,
+            Some(ArrowType::BiSolid) | Some(ArrowType::BiDotted)
+        );
+        if has_arrowhead || has_crosshead || is_bidir {
             if is_arrow_to_right {
                 stopx -= 3.0;
             } else {
                 stopx += 3.0;
+            }
+        }
+        if is_bidir {
+            // Shift startx by +/- 3 toward the receiver so the
+            // marker-start arrowhead has room. Verified: line x1=79
+            // for lifeline 75 on left→right, and x1=380 for lifeline
+            // 384 on right→left (both shortened by 4 from the lifeline,
+            // i.e. 3 from the +/- 1 base).
+            if is_arrow_to_right {
+                startx += 3.0;
+            } else {
+                startx -= 3.0;
             }
         }
         // Self-message — upstream sets stopx = startx.
@@ -1287,7 +1309,10 @@ fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
     // dashes (`-->>`, `-->`).
     let is_dashed = matches!(
         m.arrow,
-        ArrowType::DottedArrow | ArrowType::DottedLine | ArrowType::DottedCross
+        ArrowType::DottedArrow
+            | ArrowType::DottedLine
+            | ArrowType::DottedCross
+            | ArrowType::BiDotted
     );
     // `has_arrowhead`: upstream attaches `marker-end="...arrowhead"` for
     // SOLID / DOTTED only — the `_OPEN` variants (`->`, `-->`) get no
@@ -1304,6 +1329,9 @@ fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
         m.arrow,
         ArrowType::SolidCross | ArrowType::DottedCross
     );
+    // Bidirectional arrows (`<<->>`, `<<-->>`) carry arrowheads on both
+    // ends → both `marker-start` AND `marker-end="...arrowhead"`.
+    let is_bidir = matches!(m.arrow, ArrowType::BiSolid | ArrowType::BiDotted);
 
     // <text> per line (multi-line via `<br>` splits to separate <text>
     // elements with stepping y, mirroring upstream `drawText` in
@@ -1375,7 +1403,13 @@ fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
     } else {
         out.push_str("\" stroke-width=\"2\" stroke=\"none\" style=\"fill: none;");
     }
-    if has_arrowhead {
+    if is_bidir {
+        out.push_str("\" marker-start=\"url(#");
+        out.push_str(id);
+        out.push_str("-arrowhead)\" marker-end=\"url(#");
+        out.push_str(id);
+        out.push_str("-arrowhead)\">");
+    } else if has_arrowhead {
         out.push_str("\" marker-end=\"url(#");
         out.push_str(id);
         out.push_str("-arrowhead)\">");
