@@ -127,6 +127,8 @@ pub fn render(
                         | Some(ArrowType::DottedArrow)
                         | Some(ArrowType::SolidLine)
                         | Some(ArrowType::DottedLine)
+                        | Some(ArrowType::SolidCross)
+                        | Some(ArrowType::DottedCross)
                 )
             }
             DiagramItem::Note(n) => {
@@ -177,15 +179,25 @@ pub fn render(
         .actors
         .iter()
         .map(|a| {
-            let tw = crate::font_metrics::text_width(
-                &a.description,
-                "\"Open Sans\", sans-serif",
-                16.0,
-                false,
-                false,
-            )
-            .round();
-            let candidate = tw + 2.0 * cfg.wrap_padding;
+            // Multi-line descriptions (split on <br>) measure as the
+            // max line width, mirroring upstream
+            // `calculateTextDimensions` over `splitBreaks`.
+            let lines = split_br(&a.description);
+            let mut tw_max = 0.0_f64;
+            for line in &lines {
+                let w = crate::font_metrics::text_width(
+                    line,
+                    "\"Open Sans\", sans-serif",
+                    16.0,
+                    false,
+                    false,
+                )
+                .round();
+                if w > tw_max {
+                    tw_max = w;
+                }
+            }
+            let candidate = tw_max + 2.0 * cfg.wrap_padding;
             default_actor_w.max(candidate)
         })
         .collect();
@@ -652,12 +664,18 @@ pub fn render(
         // Filled-arrow variants (`->>`, `-->>`): upstream
         // `adjustLoopHeightForWrap` shortens stopx by 3 toward source so
         // the line ends at the arrowhead base. Open variants (`->`,
-        // `-->`) carry no marker, so no shortening.
+        // `-->`) carry no marker, so no shortening. Cross variants
+        // (`-x`, `--x`) use the same 3-unit shortening — verified
+        // against demos/sequence/06 reference (lifeline 343 → x2 339).
         let has_arrowhead = matches!(
             m.arrow,
             Some(ArrowType::SolidArrow) | Some(ArrowType::DottedArrow)
         );
-        if has_arrowhead {
+        let has_crosshead = matches!(
+            m.arrow,
+            Some(ArrowType::SolidCross) | Some(ArrowType::DottedCross)
+        );
+        if has_arrowhead || has_crosshead {
             if is_arrow_to_right {
                 stopx -= 3.0;
             } else {
@@ -1278,6 +1296,14 @@ fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
         m.arrow,
         ArrowType::SolidArrow | ArrowType::DottedArrow
     );
+    // Cross arrows (`-x`, `--x`) emit `marker-end="...crosshead"` instead
+    // of `arrowhead`. Otherwise they share the same line geometry +
+    // attribute order as the solid/dotted arrowhead variants (the arrow
+    // gap toward the receiver lifeline is identical).
+    let has_crosshead = matches!(
+        m.arrow,
+        ArrowType::SolidCross | ArrowType::DottedCross
+    );
 
     // <text> per line (multi-line via `<br>` splits to separate <text>
     // elements with stepping y, mirroring upstream `drawText` in
@@ -1353,6 +1379,10 @@ fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
         out.push_str("\" marker-end=\"url(#");
         out.push_str(id);
         out.push_str("-arrowhead)\">");
+    } else if has_crosshead {
+        out.push_str("\" marker-end=\"url(#");
+        out.push_str(id);
+        out.push_str("-crosshead)\">");
     } else {
         out.push_str("\">");
     }
