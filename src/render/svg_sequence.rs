@@ -98,14 +98,20 @@ pub fn render(
     }
     // Reject any item we can't render byte-exactly.
     // Currently supported:
-    //   - Message: SolidArrow (`->>`) and DottedArrow (`-->>`).
+    //   - Message: SolidArrow (`->>`), DottedArrow (`-->>`),
+    //     SolidLine (`->`), DottedLine (`-->`). The OPEN variants get
+    //     no `marker-end`; the DOTTED variants additionally get the
+    //     `messageLine1` dashed style. Mirrors upstream `drawArrow`.
     //   - Note: single-line, single-actor anchor (no `over a, b`),
     //     no wrap. Matches upstream `drawNote` for the simplest path.
     fn only_supported_items(items: &[DiagramItem]) -> bool {
         items.iter().all(|it| match it {
             DiagramItem::Message(m) => matches!(
                 m.arrow,
-                Some(ArrowType::SolidArrow) | Some(ArrowType::DottedArrow)
+                Some(ArrowType::SolidArrow)
+                    | Some(ArrowType::DottedArrow)
+                    | Some(ArrowType::SolidLine)
+                    | Some(ArrowType::DottedLine)
             ),
             DiagramItem::Note(n) => {
                 n.placement_actors.len() == 1
@@ -133,13 +139,37 @@ pub fn render(
 
     // ── Layout (mirrors upstream addActorRenderingData + boundMessage)
     let cfg = &d.config;
-    let actor_w = cfg.width;
+    let default_actor_w = cfg.width;
     let actor_h = cfg.height;
     let actor_margin = cfg.actor_margin;
     let box_margin = cfg.box_margin;
     let bottom_margin_adj = cfg.bottom_margin_adj;
     let dia_margin_x = cfg.diagram_margin_x;
     let dia_margin_y = cfg.diagram_margin_y;
+
+    // Per-actor width — upstream `calculateActorMargins` first loop:
+    //   actor.width = actor.wrap ? conf.width
+    //                 : max(conf.width, textWidth(desc, actorFont) + 2*wrapPadding)
+    // Actor description is measured with the actor font (effective size
+    // = global fontSize=16 after `setConf` override, family
+    // `"Open Sans", sans-serif`). Empty / id-only descriptions stay at
+    // the default conf.width = 150.
+    let actor_widths: Vec<f64> = d
+        .actors
+        .iter()
+        .map(|a| {
+            let tw = crate::font_metrics::text_width(
+                &a.description,
+                "\"Open Sans\", sans-serif",
+                16.0,
+                false,
+                false,
+            )
+            .round();
+            let candidate = tw + 2.0 * cfg.wrap_padding;
+            default_actor_w.max(candidate)
+        })
+        .collect();
 
     // ── Per-actor max message width (mirrors getMaxMessageWidthPerActor)
     //
@@ -208,6 +238,10 @@ pub fn render(
                     if max_msg_width_per_actor[from_i] < half {
                         max_msg_width_per_actor[from_i] = half;
                     }
+                    // upstream also bumps prevActor when it exists (mirrors
+                    // the `actor.prevActor` branch in
+                    // `getMaxMessageWidthPerActor`). Skipped here for the
+                    // non-self path until needed by a future fixture.
                 } else if next_actor_of[to_i] == Some(from_i) {
                     // arrow points right→left: from is to.next, so to.next ==
                     // from. Update toActor's max-msg-width.
@@ -323,22 +357,22 @@ pub fn render(
         if mw == 0.0 {
             continue;
         }
-        let half_self = actor_w / 2.0;
-        let m = if let Some(_n) = next_actor_of[i] {
-            mw + actor_margin - half_self - actor_w / 2.0
+        let half_self = actor_widths[i] / 2.0;
+        let m = if let Some(n) = next_actor_of[i] {
+            mw + actor_margin - half_self - actor_widths[n] / 2.0
         } else {
             mw + actor_margin - half_self
         };
         actor_margins[i] = m.max(actor_margin);
     }
 
-    // X positions: x_0 = 0; x_{i+1} = x_i + actor_w + actor.margin_i.
+    // X positions: x_0 = 0; x_{i+1} = x_i + actor.width_i + actor.margin_i.
     let mut xs: Vec<f64> = Vec::with_capacity(n_actors);
     {
         let mut cursor = 0.0_f64;
-        for am in actor_margins.iter().take(n_actors) {
+        for i in 0..n_actors {
             xs.push(cursor);
-            cursor += actor_w + am;
+            cursor += actor_widths[i] + actor_margins[i];
         }
     }
     let actors: Vec<ActorRender> = d
@@ -350,7 +384,7 @@ pub fn render(
             description: a.description.clone(),
             actor_type: a.actor_type.clone(),
             x: xs[i],
-            width: actor_w,
+            width: actor_widths[i],
             height: actor_h,
             cnt: i + 1,
         })
@@ -577,11 +611,20 @@ pub fn render(
             from_left
         };
         let mut stopx = if is_arrow_to_right { to_left } else { to_right };
-        // Solid filled-arrow: shorten end by 3 in the arrow's direction.
-        if is_arrow_to_right {
-            stopx -= 3.0;
-        } else {
-            stopx += 3.0;
+        // Filled-arrow variants (`->>`, `-->>`): upstream
+        // `adjustLoopHeightForWrap` shortens stopx by 3 toward source so
+        // the line ends at the arrowhead base. Open variants (`->`,
+        // `-->`) carry no marker, so no shortening.
+        let has_arrowhead = matches!(
+            m.arrow,
+            Some(ArrowType::SolidArrow) | Some(ArrowType::DottedArrow)
+        );
+        if has_arrowhead {
+            if is_arrow_to_right {
+                stopx -= 3.0;
+            } else {
+                stopx += 3.0;
+            }
         }
         // Self-message — upstream sets stopx = startx.
         if m.from == m.to {
@@ -1155,7 +1198,20 @@ fn emit_actor_top_participant(out: &mut String, a: &ActorRender, bottom_y: f64, 
 }
 
 fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
-    let is_dotted = matches!(m.arrow, ArrowType::DottedArrow);
+    // `is_dashed` controls the `messageLine1` class + dasharray style.
+    // Dashed (DOTTED variants) are arrows AND open lines spelt with two
+    // dashes (`-->>`, `-->`).
+    let is_dashed = matches!(
+        m.arrow,
+        ArrowType::DottedArrow | ArrowType::DottedLine | ArrowType::DottedCross
+    );
+    // `has_arrowhead`: upstream attaches `marker-end="...arrowhead"` for
+    // SOLID / DOTTED only — the `_OPEN` variants (`->`, `-->`) get no
+    // marker-end and instead match the messageLine class only.
+    let has_arrowhead = matches!(
+        m.arrow,
+        ArrowType::SolidArrow | ArrowType::DottedArrow
+    );
 
     // <text> per line (multi-line via `<br>` splits to separate <text>
     // elements with stepping y, mirroring upstream `drawText` in
@@ -1197,26 +1253,44 @@ fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
     push_num(out, m.line_x2);
     out.push_str("\" y2=\"");
     push_num(out, m.line_start_y);
-    if is_dotted {
+    // Attribute order, observed in reference SVGs (depends on which of
+    // `style.fill` / `style.stroke-dasharray` upstream set last):
+    //
+    //   * Dashed + has_arrowhead (`-->>` arrow):
+    //       y2="..." style="stroke-dasharray: 3, 3; fill: none;" class=...
+    //       stroke-width="2" stroke="none" marker-end="..."
+    //   * Solid + has_arrowhead (`->>`):
+    //       y2="..." class=... stroke-width="2" stroke="none"
+    //       style="fill: none;" marker-end="..."
+    //   * Dashed + open (`-->`):
+    //       y2="..." style="stroke-dasharray: 3, 3; fill: none;" class=...
+    //       stroke-width="2" stroke="none"
+    //   * Solid + open (`->`): style="fill: none;" still after class —
+    //     same shape as solid+arrowhead minus `marker-end`.
+    if is_dashed {
         out.push_str("\" style=\"stroke-dasharray: 3, 3; fill: none;");
     }
     out.push_str("\" class=\"messageLine");
-    out.push_str(if is_dotted { "1" } else { "0" });
+    out.push_str(if is_dashed { "1" } else { "0" });
     out.push_str("\" data-et=\"message\" data-id=\"i");
     out.push_str(&m.idx.to_string());
     out.push_str("\" data-from=\"");
     out.push_str(&attr_escape(&m.from));
     out.push_str("\" data-to=\"");
     out.push_str(&attr_escape(&m.to));
-    if is_dotted {
-        out.push_str("\" stroke-width=\"2\" stroke=\"none\" marker-end=\"url(#");
+    if is_dashed {
+        out.push_str("\" stroke-width=\"2\" stroke=\"none");
     } else {
-        out.push_str(
-            "\" stroke-width=\"2\" stroke=\"none\" style=\"fill: none;\" marker-end=\"url(#",
-        );
+        out.push_str("\" stroke-width=\"2\" stroke=\"none\" style=\"fill: none;");
     }
-    out.push_str(id);
-    out.push_str("-arrowhead)\"></line>");
+    if has_arrowhead {
+        out.push_str("\" marker-end=\"url(#");
+        out.push_str(id);
+        out.push_str("-arrowhead)\">");
+    } else {
+        out.push_str("\">");
+    }
+    out.push_str("</line>");
 }
 
 /// Compute the bbox.height of a single line in the messageFont. Upstream's
