@@ -118,7 +118,11 @@ pub fn layout(d: &GanttDiagram, _theme: &ThemeVariables) -> Result<GanttLayout> 
     // Sort by start time (stable) for rendering — upstream calls
     // `taskArray.sort(taskCompare)` which only compares startTime.
     let mut tasks = resolved;
-    tasks.sort_by(|a, b| a.start_ms.partial_cmp(&b.start_ms).unwrap_or(std::cmp::Ordering::Equal));
+    tasks.sort_by(|a, b| {
+        a.start_ms
+            .partial_cmp(&b.start_ms)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // Compute category heights and total height.
     let compact = matches!(d.display_mode.as_deref(), Some(s) if s.eq_ignore_ascii_case("compact"));
@@ -134,7 +138,8 @@ pub fn layout(d: &GanttDiagram, _theme: &ThemeVariables) -> Result<GanttLayout> 
         // modern JS preserves insertion order — i.e. the order of first
         // task seen per section in `taskArray` (post-sort).
         let mut section_order: Vec<String> = Vec::new();
-        let mut section_task_indices: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
+        let mut section_task_indices: std::collections::HashMap<String, Vec<usize>> =
+            std::collections::HashMap::new();
         for (i, t) in tasks.iter().enumerate() {
             if !section_task_indices.contains_key(&t.section_name) {
                 section_order.push(t.section_name.clone());
@@ -234,11 +239,7 @@ pub fn layout(d: &GanttDiagram, _theme: &ThemeVariables) -> Result<GanttLayout> 
 /// largest `j` (0-based row index) used; the section therefore consumes
 /// `j+1` rows. As a side-effect, `tasks[idx].order` is set to `j + offset`
 /// for each task in `task_indices`.
-fn compact_pack(
-    task_indices: &[usize],
-    offset: i32,
-    tasks: &mut [ResolvedTask],
-) -> i32 {
+fn compact_pack(task_indices: &[usize], offset: i32, tasks: &mut [ResolvedTask]) -> i32 {
     if task_indices.is_empty() {
         return 0;
     }
@@ -366,7 +367,9 @@ fn parse_date(s: &str, fmt: &str) -> Option<f64> {
         let date = parse_iso_date(&s[..10])?;
         // Parse trailing time HH:mm:ss / HH:mm if present.
         let (h, mi, se) = parse_time_suffix(&s[10..]);
-        return Some(date + (h as f64) * 3_600_000.0 + (mi as f64) * 60_000.0 + (se as f64) * 1000.0);
+        return Some(
+            date + (h as f64) * 3_600_000.0 + (mi as f64) * 60_000.0 + (se as f64) * 1000.0,
+        );
     }
 
     // Time-only formats. dayjs anchors them on "today" but for byte-exact
@@ -378,9 +381,7 @@ fn parse_date(s: &str, fmt: &str) -> Option<f64> {
         let h: u32 = parts.first().and_then(|x| x.parse().ok())?;
         let mi: u32 = parts.get(1).and_then(|x| x.parse().ok())?;
         let se: u32 = parts.get(2).and_then(|x| x.parse().ok()).unwrap_or(0);
-        return Some(
-            (h as f64) * 3_600_000.0 + (mi as f64) * 60_000.0 + (se as f64) * 1000.0,
-        );
+        return Some((h as f64) * 3_600_000.0 + (mi as f64) * 60_000.0 + (se as f64) * 1000.0);
     }
 
     // Some common compounds with time component.
@@ -396,9 +397,18 @@ fn parse_time_suffix(s: &str) -> (u32, u32, u32) {
     // "T20:30:30" or " 20:30:30" or " 20:30" — return 0,0,0 if any failure.
     let s = s.trim_start_matches(|c: char| c == 'T' || c.is_whitespace());
     let parts: Vec<&str> = s.split(':').collect();
-    let h = parts.first().and_then(|x| x.parse::<u32>().ok()).unwrap_or(0);
-    let mi = parts.get(1).and_then(|x| x.parse::<u32>().ok()).unwrap_or(0);
-    let se = parts.get(2).and_then(|x| x.parse::<u32>().ok()).unwrap_or(0);
+    let h = parts
+        .first()
+        .and_then(|x| x.parse::<u32>().ok())
+        .unwrap_or(0);
+    let mi = parts
+        .get(1)
+        .and_then(|x| x.parse::<u32>().ok())
+        .unwrap_or(0);
+    let se = parts
+        .get(2)
+        .and_then(|x| x.parse::<u32>().ok())
+        .unwrap_or(0);
     (h, mi, se)
 }
 
@@ -470,15 +480,27 @@ fn ms_to_date(ms: f64) -> (i32, u32, u32, u32, u32, u32, u32) {
     let se = rem % 60;
     let ms_part = (ms - (secs as f64) * 1000.0).round() as u32;
     days += 719468;
-    let era = if days >= 0 { days / 146097 } else { (days - 146096) / 146097 };
+    let era = if days >= 0 {
+        days / 146097
+    } else {
+        (days - 146096) / 146097
+    };
     let doe: i64 = days - era * 146097;
     let yoe: i64 = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
     let y0: i64 = yoe + era * 400;
     let doy: i64 = doe - (365 * yoe + yoe / 4 - yoe / 100);
     let mp: i64 = (5 * doy + 2) / 153;
     let d_part: u32 = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let m_part: u32 = if mp < 10 { (mp + 3) as u32 } else { (mp - 9) as u32 };
-    let y_part: i32 = if m_part <= 2 { (y0 + 1) as i32 } else { y0 as i32 };
+    let m_part: u32 = if mp < 10 {
+        (mp + 3) as u32
+    } else {
+        (mp - 9) as u32
+    };
+    let y_part: i32 = if m_part <= 2 {
+        (y0 + 1) as i32
+    } else {
+        y0 as i32
+    };
     (y_part, m_part, d_part, h, mi, se, ms_part)
 }
 
@@ -598,8 +620,15 @@ fn compute_task_times(
         })
         .unwrap_or(false);
     let end_ms = if let Some(end_str) = t.end.as_deref() {
-        get_end_date(end_str, date_format, start_ms, id_to_idx, resolved, inclusive)
-            .unwrap_or(start_ms)
+        get_end_date(
+            end_str,
+            date_format,
+            start_ms,
+            id_to_idx,
+            resolved,
+            inclusive,
+        )
+        .unwrap_or(start_ms)
     } else {
         start_ms
     };
@@ -887,7 +916,12 @@ fn d3_tick_step_year(start: f64, stop: f64, count: f64) -> u32 {
     inc.max(1)
 }
 
-fn generate_ticks(min_ms: f64, max_ms: f64, axis_format: &str, _date_format: &str) -> Vec<AxisTick> {
+fn generate_ticks(
+    min_ms: f64,
+    max_ms: f64,
+    axis_format: &str,
+    _date_format: &str,
+) -> Vec<AxisTick> {
     if !min_ms.is_finite() || !max_ms.is_finite() || max_ms <= min_ms {
         return Vec::new();
     }
