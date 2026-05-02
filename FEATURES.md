@@ -9,7 +9,7 @@ evolve into the support matrix as diagram types come online.
 
 All 25 diagram types are wired through `convert_with_id`; the project
 is in the **convergence phase**. `cargo test` is green; sweep_all
-reports **1184 / 1328 byte-exact ≈ 89.2%**.
+reports **1200 / 1328 byte-exact ≈ 90.4%**.
 
 | | |
 |---|---|
@@ -17,7 +17,7 @@ reports **1184 / 1328 byte-exact ≈ 89.2%**.
 | Wired diagrams | **25 / 25** (incl. sequence / mindmap / c4 / gitGraph) |
 | Byte-exact (≥99% pass) | 22 / 25 |
 | Reference tests | 1328 (cypress 1126 + demos 202); `known_ignored.txt` is now empty |
-| Lib unit tests | 664 / 0 / 0 |
+| Lib unit tests | 666 / 0 / 0 |
 | Layout backend | [`dagre-rs`](https://github.com/kookyleo/dagre-rs) (pinned, complete dagre.js port) |
 | Tracking doc | [PROGRESS.zh.md](PROGRESS.zh.md) (Chinese only, by project rule) |
 
@@ -81,7 +81,7 @@ All 25 user-facing diagrams are wired. Numbers below are
 
 | Diagram | Pass | Remaining |
 |---|---:|---|
-| flowchart | 188/192 cy + 57/65 dm | KaTeX × 6, doublecircle style × 2, icon shapes × 3, stadium rough × 1, ELK opt-in × 1 |
+| flowchart | 191/192 cy + 59/65 dm | KaTeX × 6, icon shape × 1, ELK opt-in × 1 |
 | gantt | 41/43 cy + 8/10 dm | V8 `new Date()` timezone quirks × 4 (environmental) |
 | venn | 16/16 cy + 8/12 dm | constrainedMDS × 1, handDrawn × 3 |
 
@@ -89,7 +89,7 @@ All 25 user-facing diagrams are wired. Numbers below are
 
 | Diagram | Pass | Remaining |
 |---|---:|---|
-| sequence | 40/140 cy + 4/10 dm | Upstream sequenceRenderer.ts + svgDraw.ts ~4K LOC; remaining fixtures need activation / autonumber / wrap / loop_alt / par feature combinations. Requires probe-driven approach (smallest diff_at first) |
+| sequence | 51/140 cy + 4/10 dm | Loop/alt/par/rect/critical/break blocks × 24, activation, actor type variants, note over multi, wrap, font metrics |
 | mindmap | 6/23 cy + 1/2 dm | cose-bilkent physics scaffold landed (W11-D); reduceTrees / FR-grid bucket / Coarsening / curveBasis edge / Base64 data-points still missing |
 
 ### Out of scope / deferred (1)

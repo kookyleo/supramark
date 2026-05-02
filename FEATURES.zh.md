@@ -6,7 +6,7 @@
 
 ## 当前状态（2026-05-02）
 
-25 种 diagram 全部接通，已进入**收敛阶段**。`cargo test` 绿；sweep_all **1184 / 1328 ≈ 89.2% byte-exact**。
+25 种 diagram 全部接通，已进入**收敛阶段**。`cargo test` 绿；sweep_all **1200 / 1328 ≈ 90.4% byte-exact**。
 
 | | |
 |---|---|
@@ -14,7 +14,7 @@
 | 已接通 diagram | **25 / 25**（含 sequence / mindmap / c4 / gitGraph 等全部） |
 | 已 byte-exact（≥99% pass） | 22 / 25 |
 | Reference 测试 | 1328 条（cypress 1126 + demos 202），known_ignored 已清空 |
-| Lib unit tests | 664 / 0 / 0 |
+| Lib unit tests | 666 / 0 / 0 |
 | Layout 后端 | [`dagre-rs`](https://github.com/kookyleo/dagre-rs)（pinned，完整 dagre.js port） |
 | 详细进展 | 见 [PROGRESS.zh.md](PROGRESS.zh.md) |
 
@@ -78,7 +78,7 @@
 
 | 图表 | 通过 | 阻塞 |
 |---|---:|---|
-| flowchart | 188/192 cy + 57/65 dm | KaTeX × 6, doublecircle style × 2, icon shapes × 3, stadium rough × 1, ELK opt-in × 1 |
+| flowchart | 191/192 cy + 59/65 dm | KaTeX × 6, icon shape × 1, ELK opt-in × 1 |
 | gantt | 41/43 cy + 8/10 dm | V8 `new Date()` 时区 quirk × 4（环境性） |
 | venn | 16/16 cy + 8/12 dm | constrainedMDS × 1, handDrawn × 3 |
 
@@ -86,7 +86,7 @@
 
 | 图表 | 通过 | 阻塞 |
 |---|---:|---|
-| sequence | 40/140 cy + 4/10 dm | 上游 sequenceRenderer.ts + svgDraw.ts ~4K LOC，剩余 fixture 需 activation / autonumber / wrap / loop_alt / par 等组合特性。继续推进必须 probe-driven 按 diff_at 选最小差异 fixture |
+| sequence | 51/140 cy + 4/10 dm | loop/alt/par/rect/critical/break 块 × 24，activation，actor type variants，note over multi，wrap，font metrics |
 | mindmap | 6/23 cy + 1/2 dm | cose-bilkent 物理引擎已落骨架（W11-D），缺 reduceTrees / FR-grid bucket / Coarsening / curveBasis edge / Base64 data-points |
 
 ### 不在范围内 / 推迟（1）
