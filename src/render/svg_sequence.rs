@@ -807,16 +807,32 @@ pub fn render(
         } else {
             to_bounds - 1.0
         };
-        // sequenceRenderer.ts:666-697 — for bidirectional + autonumber,
-        // the start shifts by `SEQUENCE_NUMBER_RADIUS * 2 = 12`. For
-        // standard left→right arrows (non-reverse), it shifts by
-        // `SEQUENCE_NUMBER_RADIUS = 6`.
+        // sequenceRenderer.ts:3555-3580 — when autonumber is visible,
+        // line.x1 shifts past the sequence-number circle. For
+        // bidirectional+RTL the shift is `-SEQUENCE_NUMBER_RADIUS = -6`
+        // PLUS an extra `-5` if the message also has a `()` central
+        // connection, PLUS another `-7.5` for DUAL or REVERSE central
+        // connections (matches the line at sequenceRenderer.ts:3567).
+        // For LTR bidir, no central-connection adjustments apply.
+        // For non-bidir left→right autonumber arrows, `+SEQUENCE_NUMBER_RADIUS=+6`.
+        let has_central_conn = m.central_connection.is_some();
+        let is_dual_or_reverse_cc = matches!(
+            m.central_connection,
+            Some(CentralConnection::Dual) | Some(CentralConnection::AtFrom)
+        );
         let line_x1 = if seq_index.is_some() {
             if is_bidir {
                 if is_arrow_to_right {
                     startx + 12.0
                 } else {
-                    startx - 6.0
+                    let mut x = startx - 6.0;
+                    if has_central_conn {
+                        x -= 5.0;
+                    }
+                    if is_dual_or_reverse_cc {
+                        x -= 7.5;
+                    }
+                    x
                 }
             } else {
                 startx + 6.0
