@@ -73,6 +73,7 @@ pub fn parse(source: &str) -> Result<GitGraphDiagram> {
         rotate_commit_label: fm_rotate,
         show_branches: fm_show_branches,
         show_commit_label: fm_show_commit_label,
+        parallel_commits: fm_parallel_commits,
         main_branch_name,
         main_branch_order,
         body,
@@ -105,6 +106,9 @@ pub fn parse(source: &str) -> Result<GitGraphDiagram> {
     }
     if let Some(b) = fm_show_commit_label {
         diagram.config.show_commit_label = b;
+    }
+    if let Some(b) = fm_parallel_commits {
+        diagram.config.parallel_commits = b;
     }
 
     let main_name = main_branch_name.unwrap_or_else(|| "main".to_string());
@@ -316,6 +320,7 @@ struct FrontmatterData {
     rotate_commit_label: Option<bool>,
     show_branches: Option<bool>,
     show_commit_label: Option<bool>,
+    parallel_commits: Option<bool>,
     main_branch_name: Option<String>,
     main_branch_order: Option<i64>,
     body: String,
@@ -336,6 +341,7 @@ fn strip_frontmatter(source: &str) -> FrontmatterData {
         rotate_commit_label: None,
         show_branches: None,
         show_commit_label: None,
+        parallel_commits: None,
         main_branch_name: None,
         main_branch_order: None,
         body: source.to_string(),
@@ -361,6 +367,7 @@ fn strip_frontmatter(source: &str) -> FrontmatterData {
     let mut rotate: Option<bool> = None;
     let mut show_branches: Option<bool> = None;
     let mut show_commit_label: Option<bool> = None;
+    let mut parallel_commits: Option<bool> = None;
     let mut main_branch_name: Option<String> = None;
     let mut main_branch_order: Option<i64> = None;
     let mut config_indent: Option<usize> = None;
@@ -417,6 +424,13 @@ fn strip_frontmatter(source: &str) -> FrontmatterData {
             } else if v == "false" {
                 show_commit_label = Some(false);
             }
+        } else if gitgraph_indent.is_some() && trimmed_line.starts_with("parallelCommits:") {
+            let v = trimmed_line["parallelCommits:".len()..].trim().trim_matches('"');
+            if v == "true" {
+                parallel_commits = Some(true);
+            } else if v == "false" {
+                parallel_commits = Some(false);
+            }
         } else if gitgraph_indent.is_some() && trimmed_line.starts_with("mainBranchName:") {
             let v = trimmed_line["mainBranchName:".len()..]
                 .trim()
@@ -440,6 +454,7 @@ fn strip_frontmatter(source: &str) -> FrontmatterData {
         rotate_commit_label: rotate,
         show_branches,
         show_commit_label,
+        parallel_commits,
         main_branch_name,
         main_branch_order,
         body: after_close.to_string(),

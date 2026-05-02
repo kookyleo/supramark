@@ -692,7 +692,10 @@ fn cypress_100() {
     assert_byte_exact("ext_fixtures/cypress/gitGraph/100");
 }
 
-// 101 — `parallelCommits: true`, listed in known_ignored.txt.
+#[test]
+fn cypress_101_parallel_commits() {
+    assert_byte_exact("ext_fixtures/cypress/gitGraph/101");
+}
 
 #[test]
 fn cypress_102() {
