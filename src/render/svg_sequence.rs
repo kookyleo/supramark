@@ -41,6 +41,7 @@ struct ActorRender {
 /// `round(starty + 10 + n * line_height_unrounded + textMargin/2)`.
 #[derive(Debug, Clone)]
 struct MsgRender {
+    is_self: bool,
     from: String,
     to: String,
     /// One entry per `<br>`-split line.
@@ -53,6 +54,11 @@ struct MsgRender {
     line_step: f64,
     line_x1: f64,
     line_x2: f64,
+    /// For self-ref: the original startx (before autonumber shift).
+    self_startx: f64,
+    /// For self-ref: lineStartX for path d attribute
+    /// (= startx + (autonumber && (isReverse || isBidir) ? 10 : 0)).
+    self_line_start_x: f64,
     /// 0-based message index — upstream uses `i0`, `i1`, … as the
     /// `data-id` value.
     idx: usize,
@@ -680,9 +686,7 @@ pub fn render(
         let starty_for_msg = vertical;
         vertical += 10.0;
         vertical += line_height;
-        let total_offset = (text_dims_height - 10.0) + box_margin;
-        let line_start_y = vertical + total_offset;
-        vertical += total_offset;
+        let is_self = m.from == m.to;
 
         // startx / stopx: standard left→right for SolidArrow → arrow_end shrinks by 3.
         let from_left = fa.x + fa.width / 2.0 - 1.0;
@@ -696,6 +700,9 @@ pub fn render(
             from_left
         };
         let mut stopx = if is_arrow_to_right { to_left } else { to_right };
+        if is_self {
+            stopx = startx;
+        }
         // Central-connection startx adjustment. Mirrors upstream
         // `calculateCentralConnectionOffset` (sequenceRenderer.ts:1768).
         // Upstream adds an absolute (direction-independent) `+= 4` to
@@ -713,24 +720,6 @@ pub fn render(
                 startx -= 6.0;
             }
         }
-        // `msg.activate && !isArrowToActivation` → stopx shifts by
-        // `activationWidth/2 - 1` = 4 toward source (mirrors
-        // sequenceRenderer.ts:1922-1924). For the no-activation-rect
-        // central-connection path, `isArrowToActivation = false`
-        // (toLeft - toRight = 2, not >2), so the adjustment fires.
-        if m.activate {
-            if is_arrow_to_right {
-                stopx -= 4.0;
-            } else {
-                stopx += 4.0;
-            }
-        }
-        // Filled-arrow variants (`->>`, `-->>`): upstream
-        // `adjustLoopHeightForWrap` shortens stopx by 3 toward source so
-        // the line ends at the arrowhead base. Open variants (`->`,
-        // `-->`) carry no marker, so no shortening. Cross variants
-        // (`-x`, `--x`) use the same 3-unit shortening — verified
-        // against demos/sequence/06 reference (lifeline 343 → x2 339).
         let has_arrowhead = matches!(
             m.arrow,
             Some(ArrowType::SolidArrow) | Some(ArrowType::DottedArrow)
@@ -739,36 +728,65 @@ pub fn render(
             m.arrow,
             Some(ArrowType::SolidCross) | Some(ArrowType::DottedCross)
         );
-        // Bidirectional variants (`<<->>`, `<<-->>`) have arrowheads on
-        // both ends. Both endpoints are shortened by 3 from the base
-        // position (verified against cypress/sequence/69: lifelines
-        // 75/384, line endpoints 79/380).
         let is_bidir = matches!(
             m.arrow,
             Some(ArrowType::BiSolid) | Some(ArrowType::BiDotted)
         );
-        if has_arrowhead || has_crosshead || is_bidir {
-            if is_arrow_to_right {
-                stopx -= 3.0;
-            } else {
-                stopx += 3.0;
+        if !is_self {
+            if m.activate {
+                if is_arrow_to_right {
+                    stopx -= 4.0;
+                } else {
+                    stopx += 4.0;
+                }
+            }
+            if has_arrowhead || has_crosshead || is_bidir {
+                if is_arrow_to_right {
+                    stopx -= 3.0;
+                } else {
+                    stopx += 3.0;
+                }
+            }
+            if is_bidir {
+                if is_arrow_to_right {
+                    startx += 3.0;
+                } else {
+                    startx -= 3.0;
+                }
             }
         }
-        if is_bidir {
-            // Shift startx by +/- 3 toward the receiver so the
-            // marker-start arrowhead has room. Verified: line x1=79
-            // for lifeline 75 on left→right, and x1=380 for lifeline
-            // 384 on right→left (both shortened by 4 from the lifeline,
-            // i.e. 3 from the +/- 1 base).
-            if is_arrow_to_right {
-                startx += 3.0;
-            } else {
-                startx -= 3.0;
-            }
+
+        let mut total_offset = (text_dims_height - 10.0) + box_margin;
+        let line_start_y = vertical + total_offset;
+        if is_self {
+            total_offset += 30.0;
         }
-        // Self-message — upstream sets stopx = startx.
-        if m.from == m.to {
-            stopx = startx;
+        vertical += total_offset;
+
+        if is_self {
+            let mut msg_text_width = 0.0_f64;
+            for line in &msg_lines {
+                let w = crate::font_metrics::text_width(
+                    line,
+                    "sans-serif",
+                    cfg.message_font_size as f64,
+                    false,
+                    false,
+                )
+                .round();
+                if w > msg_text_width {
+                    msg_text_width = w;
+                }
+            }
+            let dx = (msg_text_width / 2.0).max(default_actor_w / 2.0);
+            let self_startx = startx - dx;
+            let self_stopx = startx + dx;
+            if self_startx < bounds_startx {
+                bounds_startx = self_startx;
+            }
+            if self_stopx > bounds_stopx {
+                bounds_stopx = self_stopx;
+            }
         }
 
         // Text positioning (upstream drawText with anchor='center',
@@ -820,7 +838,25 @@ pub fn render(
             m.central_connection,
             Some(CentralConnection::Dual) | Some(CentralConnection::AtFrom)
         );
-        let line_x1 = if seq_index.is_some() {
+        let self_startx = startx;
+        let self_line_start_x = if is_self && seq_index.is_some() && is_bidir {
+            startx + 10.0
+        } else if is_self {
+            startx
+        } else {
+            0.0
+        };
+        let line_x1 = if is_self {
+            if seq_index.is_some() {
+                if is_bidir {
+                    startx - 6.0
+                } else {
+                    startx + 6.0
+                }
+            } else {
+                startx
+            }
+        } else if seq_index.is_some() {
             if is_bidir {
                 if is_arrow_to_right {
                     startx + 12.0
@@ -872,6 +908,7 @@ pub fn render(
         }
 
         messages.push(MsgRender {
+            is_self,
             from: m.from.clone(),
             to: m.to.clone(),
             lines: msg_lines.iter().map(|s| s.to_string()).collect(),
@@ -882,6 +919,8 @@ pub fn render(
             line_step,
             line_x1,
             line_x2,
+            self_startx,
+            self_line_start_x,
             idx,
             seq_index,
             seq_x,
@@ -1513,14 +1552,65 @@ fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
         out.push_str("</text>");
     }
 
-    // <line> next.
-    //
-    // Solid arrows (`->>`) emit `class="messageLine0"` with style
-    // `fill: none;`. Dotted arrows (`-->>`) emit `class="messageLine1"`
-    // with style `stroke-dasharray: 3, 3; fill: none;`. The d3 ordering
-    // in upstream sets `style.stroke-dasharray` BEFORE the stroke and
-    // attr-class, so the on-disk attribute order for dotted is:
-    //   x1, y1, x2, y2, style (with both props), class, data-*, ...
+    // <line> or <path> next.
+    if m.is_self {
+        let lsx = m.self_line_start_x;
+        let sx = m.self_startx;
+        let lsy = m.line_start_y;
+        out.push_str("<path d=\"M ");
+        push_num(out, lsx);
+        out.push(',');
+        push_num(out, lsy);
+        out.push_str(" C ");
+        push_num(out, lsx + 60.0);
+        out.push(',');
+        push_num(out, lsy - 10.0);
+        out.push(' ');
+        push_num(out, sx + 60.0);
+        out.push(',');
+        push_num(out, lsy + 30.0);
+        out.push(' ');
+        push_num(out, sx);
+        out.push(',');
+        push_num(out, lsy + 20.0);
+        if is_dashed {
+            out.push_str("\" style=\"stroke-dasharray: 3, 3; fill: none;");
+        }
+        out.push_str("\" class=\"messageLine");
+        out.push_str(if is_dashed { "1" } else { "0" });
+        out.push_str("\" data-et=\"message\" data-id=\"i");
+        out.push_str(&m.idx.to_string());
+        out.push_str("\" data-from=\"");
+        out.push_str(&attr_escape(&m.from));
+        out.push_str("\" data-to=\"");
+        out.push_str(&attr_escape(&m.to));
+        if is_dashed {
+            out.push_str("\" stroke-width=\"2\" stroke=\"none");
+        } else {
+            out.push_str("\" stroke-width=\"2\" stroke=\"none\" style=\"fill: none;");
+        }
+        if is_bidir {
+            out.push_str("\" marker-start=\"url(#");
+            out.push_str(id);
+            out.push_str("-arrowhead)\" marker-end=\"url(#");
+            out.push_str(id);
+            out.push_str("-arrowhead)");
+        } else if has_arrowhead {
+            out.push_str("\" marker-end=\"url(#");
+            out.push_str(id);
+            out.push_str("-arrowhead)");
+        } else if has_crosshead {
+            out.push_str("\" marker-end=\"url(#");
+            out.push_str(id);
+            out.push_str("-crosshead)");
+        }
+        if m.seq_index.is_some() {
+            out.push_str("\" x1=\"");
+            push_num(out, m.line_x1);
+        }
+        out.push_str("\">");
+        out.push_str("</path>");
+    } else {
     out.push_str("<line x1=\"");
     push_num(out, m.line_x1);
     out.push_str("\" y1=\"");
@@ -1577,6 +1667,7 @@ fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
         out.push_str("\">");
     }
     out.push_str("</line>");
+    }
 
     // Central-connection `()` circles. Mirrors upstream
     // `sequenceRenderer.ts:329-372`:
