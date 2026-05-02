@@ -253,3 +253,14 @@
 - **W10-B flowchart asymmetric +5**：cypress 105/239 + demos 38/39/40。upstream `rectLeftInvArrow.ts` 即使 `look !== 'handDrawn'` 也走 `rc.path(pathData, options)` 双 `<path>` 输出，不走 analytical polygon。复刻 rough.path emission + outer-path `<g>` wrapper + label `dx` offset。剩 144/41 卡 doublecircle style threading defect。
 - **W10-C venn foreignObject +7**：cypress 06/10/11/13/16 + demos 06/07。3 根因：(1) **dual padding** —— upstream `vennRenderer` 用 visible padding=15 算可见圆，再用 `config.padding=8` 跑第二次 `scale_solution` + `compute_text_centres` 给 foreignObject 文本节点定位；(2) V8 `Math.hypot` vs libm `hypot` 1-ULP 差异，三相交 inner_radius 偏移 3 ULP；用 V8 双参公式 `max * sqrt(1 + (min/max)²)` 重写；(3) hex `#rrggbb` → CSSOM `rgb(r,g,b)` 序列化（jsdom 行为）。
 - **W10-D gantt residuals +4**：cypress/gantt 27/24/40 + demos/10。`displayMode: compact` + `HH:mm:ss`/`HH:mm` 时间格式；d3-array `tickSpec` 完整 `sqrt(50)/sqrt(10)/sqrt(2)` 阈值 + 多年 stride 锚定到 N 整数倍；3 位年份 `202-12-01` lenient parse 正常解到 202 AD。剩 4 个时区敏感 fixture 留 `#[ignore]`（DST 边界 / `new Date("0")` / 非 ISO `08-08-09-01:00` 后退路径）。
+
+## Wave 11 进展（4 路并行）
+
+净增 +5，1179 → 1184/1184 byte-exact。127 fixture 仍在 known_ignored。
+
+- **W11-A sequence 0 unlock**：`#lt;`/`#gt;`/`#colon;` entity decoder（`xml_escape` + `attr_escape` 加 `try_consume_hash_entity`）。SVG 输出端正确，但 demos/sequence/03（2-byte 差）还需 placeholder-encoded text width 度量补齐。其它 small-gap fixtures 都需大特性（self-arrow cubic-bezier / wrap / autonumber+activation / par_over / link popup / external-actor）。
+- **W11-B venn theme +3**（demos/venn 03/08/09 dark/forest/neutral）：W9-A `build_style(id, theme)` 模式应用到 svg_venn。`is_dark(color)` mirror khroma 0.2126R+0.7152G+0.0722B luminance（threshold 0.5, 1e-10 round），用于 single-set 标签 lighten/darken 切换。剩余 4 demos venn 都是 constrainedMDS / handDrawn。
+- **W11-C gitGraph +2**（cypress 101 parallelCommits + 105 multi-line branch）：parallelCommits 给每个 commit 按 closest_parent_x + COMMIT_DISTANCE 重锚（兄弟可同 X）；multi-line branch label 在 `\n` 处拆 tspan + dy 步进 + 更新 bbox 高度。gitGraph 现在 100% byte-exact。
+- **W11-D mindmap multi-node 0 unlock**：`run_layout()` 改返 Ok 真实模拟坐标，`render_multi()` + `emit_shape_body()` 处理 7 种 shape，结构骨架匹配但 (1) 节点位置差大（缺 reduceTrees/Coarsening）(2) 边 d= 是直线 M…L… 而非 curveBasis M…L…C…C…L…（3）缺 data-points Base64 metadata。3 个独立 follow-up 任务。
+
+664 lib tests pass。注：cargo build cache 导致 sweep 一度假报 1179；touch sweep_all.rs 强制重建后正确。
