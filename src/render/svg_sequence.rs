@@ -1143,21 +1143,30 @@ fn emit_actor_man_body(
     // For default scale=1 with actor.height already set to bounds.height
     // (=65 = conf.height), text y = adjustedActorY + 35 + 32.5 = adjY+67.5.
     let text_y = adjusted_actor_y + 35.0 * scale + (a.height / scale) / 2.0;
-    out.push_str("<text x=\"");
-    push_num(out, cx);
-    out.push_str("\" y=\"");
-    push_num(out, text_y);
-    out.push_str(
-        "\" style=\"text-anchor: middle; font-size: 16px; font-weight: 400; font-family: ",
-    );
-    out.push_str(&attr_escape(ACTOR_FONT_FAMILY));
-    out.push_str(
-        ";\" dominant-baseline=\"central\" alignment-baseline=\"central\" class=\"actor actor-man\"><tspan x=\"",
-    );
-    push_num(out, cx);
-    out.push_str("\" dy=\"0\">");
-    out.push_str(&xml_escape(&a.description));
-    out.push_str("</tspan></text></g>");
+    let lines = split_br(&a.description);
+    let n_lines = lines.len();
+    let font_size = 16.0_f64;
+    for (i, line) in lines.iter().enumerate() {
+        let dy = (i as f64) * font_size - font_size * ((n_lines as f64) - 1.0) / 2.0;
+        out.push_str("<text x=\"");
+        push_num(out, cx);
+        out.push_str("\" y=\"");
+        push_num(out, text_y);
+        out.push_str(
+            "\" style=\"text-anchor: middle; font-size: 16px; font-weight: 400; font-family: ",
+        );
+        out.push_str(&attr_escape(ACTOR_FONT_FAMILY));
+        out.push_str(
+            ";\" dominant-baseline=\"central\" alignment-baseline=\"central\" class=\"actor actor-man\"><tspan x=\"",
+        );
+        push_num(out, cx);
+        out.push_str("\" dy=\"");
+        push_num(out, dy);
+        out.push_str("\">");
+        out.push_str(&xml_escape(line));
+        out.push_str("</tspan></text>");
+    }
+    out.push_str("</g>");
 }
 
 /// Emit one `<g data-et="note" data-id="iN">` containing a rounded
@@ -1229,6 +1238,36 @@ fn emit_actor_top_lifeline_actor(
     out.push_str("\"></line></g>");
 }
 
+/// Emit the byTspan multi-line `<text><tspan>` group for an actor box.
+/// Mirrors upstream `_drawTextCandidateFunc.byTspan` in svgDraw — one
+/// `<text>` element per line, sharing the same `y`, with `dy` offsets so
+/// lines stack vertically around the centre.
+fn emit_actor_box_text(out: &mut String, cx: f64, cy: f64, description: &str) {
+    let lines = split_br(description);
+    let n = lines.len();
+    let font_size = 16.0_f64;
+    for (i, line) in lines.iter().enumerate() {
+        let dy = (i as f64) * font_size - font_size * ((n as f64) - 1.0) / 2.0;
+        out.push_str("<text x=\"");
+        push_num(out, cx);
+        out.push_str("\" y=\"");
+        push_num(out, cy);
+        out.push_str(
+            "\" style=\"text-anchor: middle; font-size: 16px; font-weight: 400; font-family: ",
+        );
+        out.push_str(&attr_escape(ACTOR_FONT_FAMILY));
+        out.push_str(
+            ";\" dominant-baseline=\"central\" alignment-baseline=\"central\" class=\"actor actor-box\"><tspan x=\"",
+        );
+        push_num(out, cx);
+        out.push_str("\" dy=\"");
+        push_num(out, dy);
+        out.push_str("\">");
+        out.push_str(&xml_escape(line));
+        out.push_str("</tspan></text>");
+    }
+}
+
 fn emit_actor_bottom_participant(out: &mut String, a: &ActorRender, bottom_y: f64) {
     out.push_str("<g><rect x=\"");
     push_num(out, a.x);
@@ -1240,23 +1279,11 @@ fn emit_actor_bottom_participant(out: &mut String, a: &ActorRender, bottom_y: f6
     push_num(out, a.height);
     out.push_str("\" name=\"");
     out.push_str(&xml_escape(&a.id));
-    out.push_str(
-        "\" rx=\"3\" ry=\"3\" class=\"actor actor-bottom\"></rect><text x=\"",
-    );
-    push_num(out, a.x + a.width / 2.0);
-    out.push_str("\" y=\"");
-    push_num(out, bottom_y + a.height / 2.0);
-    out.push_str(
-        "\" style=\"text-anchor: middle; font-size: 16px; font-weight: 400; font-family: ",
-    );
-    out.push_str(&attr_escape(ACTOR_FONT_FAMILY));
-    out.push_str(
-        ";\" dominant-baseline=\"central\" alignment-baseline=\"central\" class=\"actor actor-box\"><tspan x=\"",
-    );
-    push_num(out, a.x + a.width / 2.0);
-    out.push_str("\" dy=\"0\">");
-    out.push_str(&xml_escape(&a.description));
-    out.push_str("</tspan></text></g>");
+    out.push_str("\" rx=\"3\" ry=\"3\" class=\"actor actor-bottom\"></rect>");
+    let cx = a.x + a.width / 2.0;
+    let cy = bottom_y + a.height / 2.0;
+    emit_actor_box_text(out, cx, cy, &a.description);
+    out.push_str("</g>");
 }
 
 fn emit_actor_top_participant(out: &mut String, a: &ActorRender, bottom_y: f64, rank: usize) {
@@ -1296,23 +1323,10 @@ fn emit_actor_top_participant(out: &mut String, a: &ActorRender, bottom_y: f64, 
     push_num(out, a.height);
     out.push_str("\" name=\"");
     out.push_str(&xml_escape(&a.id));
-    out.push_str(
-        "\" rx=\"3\" ry=\"3\" class=\"actor actor-top\"></rect><text x=\"",
-    );
-    push_num(out, cx);
-    out.push_str("\" y=\"");
-    push_num(out, top_y + a.height / 2.0);
-    out.push_str(
-        "\" style=\"text-anchor: middle; font-size: 16px; font-weight: 400; font-family: ",
-    );
-    out.push_str(&attr_escape(ACTOR_FONT_FAMILY));
-    out.push_str(
-        ";\" dominant-baseline=\"central\" alignment-baseline=\"central\" class=\"actor actor-box\"><tspan x=\"",
-    );
-    push_num(out, cx);
-    out.push_str("\" dy=\"0\">");
-    out.push_str(&xml_escape(&a.description));
-    out.push_str("</tspan></text></g></g>");
+    out.push_str("\" rx=\"3\" ry=\"3\" class=\"actor actor-top\"></rect>");
+    let cy = top_y + a.height / 2.0;
+    emit_actor_box_text(out, cx, cy, &a.description);
+    out.push_str("</g></g>");
 }
 
 fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
