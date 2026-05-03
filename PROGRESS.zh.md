@@ -1,12 +1,12 @@
 # 阶段进展
 
-截至 2026-05-03，Wave 15-D 完结。
+截至 2026-05-03，Wave 15-G 完结。
 
-**当前指标：1210 / 1323 byte-exact（约 91.08%）**。
+**当前指标：1238 / 1323 byte-exact（约 93.6%）**。
 
-- 1210 = Wave 15 累计 +4（87 wrap 前缀 +1，88 config wrap +1，118 popup link +1，demos/02 frontmatter title +1）
+- 1238 = Wave 15 累计 +32（87/88 actor wrap +2，118 popup link +1，demos/02 title +1，08/14 boundary +2，half-arrow 17 fixture +18，control +2，114/115 message-wrap +2，entity +2，database +3）
 - 1323 = sweep_all 处理的 fixture 总数（已剔除环境性 6 项）
-- 差额 113 = sequence ~84 + mindmap 18 + KaTeX 6 + stadium rough 1 + misc ~4
+- 差额 85 = sequence ~56 + mindmap 18 + KaTeX 6 + stadium rough 1 + misc ~4
 
 ## Wave 15-spike + 15-A（2026-05-03）
 
@@ -46,6 +46,31 @@ W15-A 实现 `actor.wrap` 分支（svg_sequence.rs:205-285 actor_widths → acto
 55. **reverse + half-arrow 大簇**：~27-28 fixture（含 got=25640 那 9 个）。parser `ARROWS` 表（`parser/sequence.rs:658`）只列了 10 种箭头，缺 `/|-` `\|-` `//-` `\\-` `-|\` `-|/` `-\\` `-//` 及 dotted 变体；renderer `only_supported_items` 也需放行。parser+renderer 双侧改动。
 56. **par_over 关键字**：fixture 74 单独命中，`strip_kw` 要求关键字后面必须是空白字符，所以 `par_over X` 不会匹配 `par`。修一行即可。
 57. **message-level wrap**：fixture 114/115 命中，cfg.wrap 已 sniff 到 actor 但未传到 message 渲染路径。
+
+**W15-E**（commit `a0c5593`）实现 typed-actor `@{type:"boundary"}` 渲染：
+- `only_supported_items` 上方 actor-type filter 加 `ActorType::Boundary`
+- 新增 `emit_actor_boundary_body`（horizontal torso + vertical arms + circle r=22, transform="translate(0,21)"）
+- `compute_stick_ids` 遍历 Boundary
+- 关键陷阱：boundary top-pass bbox 用 65、footer-pass actor.height mutate 为 64（44+labelBoxHeight 20）
+
+**W15-half-arrow**（commit `e34fc76`）+18 实现 reverse + forward half-arrow 全 16 种箭头：
+- ARROWS 表加 `/|-` `\|-` `//-` `\\-` `/|--` `\|--` `//--` `\\--` `-|\` `-|/` `-\\` `-//` `--|\` `--|/` `--\\` `--//`（长 token 在前避免 `-->` / `->` 抢占）
+- 16 个新 ArrowType 变体加进 `only_supported_items` match
+- `emit_message`：`half_marker_end` (forward → marker-end) + `half_marker_start` (reverse → marker-start，top↔bottom 互换)
+- Geometry：SOLID forward half-arrow `stopx-=3`，SOLID reverse `startx-=3`；STICK 不收敛
+- 解锁 cypress/sequence: 50, 126-128, 129, 131-140
+
+**W15-F**（commit `8040483`）+2 实现 control type：circle r=15 + 上方箭头 line。
+
+**W15-message-wrap**（commit `ff5ed18`）+2 把 cfg.wrap 应用到 message text 渲染：
+- 第 ~342 行（width 计算）：`m.wrap` → `m.wrap || cfg.wrap`
+- 第 ~759 行（emit）：`m.wrap` → `m.wrap || cfg.wrap`
+
+**W15-G**（3 commits 5ed585b/5a83767/896afb7）+5 实现 entity / database：
+- entity: 圆 r=22 + 底部下划线 stroke-width=2，post-bbox actor.height=64
+- database: stacked cylinder，路径 `M ry a a l a l`，stroke=#9370DB，post-bbox actor.height=body_h+20
+- database root-N 必须用独立 DOM 序计数器（不能用 reverse-iter rank，generate_ref.mjs 按 DOM 出现重编号）
+- translate 中逗号后必须有空格；SVG path d 命令字母后逗号无空格
 
 旧记录（按时间倒序）：1099 → 1135 → 1136 (W6) → 1145 (W7) → 1151 (W8) → 1161 (W9) → 1179 (W10) → 1184 (W11) → 1200 (W12) → 1204 (W13) → 1206 (W14)。
 
