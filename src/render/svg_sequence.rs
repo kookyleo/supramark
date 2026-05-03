@@ -144,6 +144,37 @@ struct LoopSection {
     label_idx: usize,
 }
 
+/// Per-rect block geometry — `rect rgb(r,g,b) ... end`. Mirrors the
+/// upstream `loopModel` shape (rects share the same `bounds.newLoop`
+/// machinery) but emits as a single coloured `<rect class="rect">`
+/// rather than the loop's 4-line + labelBox `<g>`.
+#[derive(Debug, Clone)]
+struct RectRender {
+    startx: f64,
+    stopx: f64,
+    starty: f64,
+    stopy: f64,
+    /// Already-formatted fill expression — `rgb(204, 0, 102)` or any
+    /// CSS colour token the parser captured verbatim.
+    fill: String,
+}
+
+impl RectRender {
+    fn widen_x(&mut self, sx: f64, ex: f64) {
+        if sx < self.startx {
+            self.startx = sx;
+        }
+        if ex > self.stopx {
+            self.stopx = ex;
+        }
+    }
+    fn widen_stopy(&mut self, y: f64) {
+        if y > self.stopy {
+            self.stopy = y;
+        }
+    }
+}
+
 const FONT_FAMILY: &str = "\"trebuchet ms\", verdana, arial";
 const ACTOR_FONT_FAMILY: &str = "\"trebuchet ms\", verdana, arial";
 
@@ -243,7 +274,8 @@ pub fn render(
             // event pairs around drawLoop.
             DiagramItem::Loop { items, .. }
             | DiagramItem::Opt { items, .. }
-            | DiagramItem::Break { items, .. } => only_supported_items(items),
+            | DiagramItem::Break { items, .. }
+            | DiagramItem::Rect { items, .. } => only_supported_items(items),
             // `alt <label> ... else <label2> ... end` — multi-section
             // variant. Each branch may contain Message / Note /
             // Autonumber / nested Loop / Opt / Alt.
@@ -621,6 +653,32 @@ pub fn render(
     // entry on this stack — mirrors upstream `updateBounds` per
     // `sequenceItems` element.
     let mut active_loops: Vec<usize> = Vec::new();
+    // Rect-fill blocks — `rect rgb(...) ... end`. Backgrounds are
+    // pushed at RECT_END time and emitted at the very start of the
+    // body in REVERSE end-order to match upstream's
+    // `forEach(drawBackgroundRect)` + per-rect `.lower()` (each
+    // `lower()` reasserts as first child, so the LAST end is first
+    // in DOM, the second-to-last is second, etc.).
+    // `rects` is filled at RECT_END time so it carries END order
+    // (innermost finishes first; sequential rects in source order).
+    let mut rects: Vec<RectRender> = Vec::new();
+    // Stack of currently-open rect models — partial geometry that
+    // accumulates startx/stopx as inner messages widen the bounds.
+    // Drained into `rects` (in end order) on each RECT_END.
+    let mut pending_rects: Vec<RectRender> = Vec::new();
+    // Unified open-block stack — mirrors upstream's `sequenceItems`
+    // (one push per LOOP/ALT/OPT/PAR/CRITICAL/BREAK/RECT start, one
+    // pop per matching end). At every `bounds.insert` we widen each
+    // open block by ±n*boxMargin where n = stack.len() - position
+    // (1-based from top) — sequenceRenderer.ts:114-128 updateBounds.
+    // The two `kind` arms route the widening to the right backing
+    // store: `Loop(idx)` → loops[idx], `Rect` → top of pending_rects.
+    #[derive(Debug, Clone, Copy)]
+    enum SeqItem {
+        Loop(usize),
+        Rect(usize), // index into pending_rects
+    }
+    let mut seq_items: Vec<SeqItem> = Vec::new();
     // ── Activation tracking ─────────────────────────────────────────
     //
     // Mirrors upstream `bounds.activations` (sequenceRenderer.ts:148-169
@@ -715,6 +773,12 @@ pub fn render(
         // block. Carries the next arm's label.
         AltSection(&'a str),
         LoopEnd,
+        // `rect rgb(...) ... end` — coloured background block. The
+        // RectStart carries the fill expression; bounds are tracked
+        // exactly like a loop on `active_rects`, and the rect lands
+        // on `rects` at RectEnd time.
+        RectStart(&'a str),
+        RectEnd,
         Item(&'a DiagramItem),
     }
     fn flatten<'a>(items: &'a [DiagramItem], out: &mut Vec<WalkEvent<'a>>) {
@@ -792,6 +856,11 @@ pub fn render(
                     }
                     out.push(WalkEvent::LoopEnd);
                 }
+                DiagramItem::Rect { fill, items: inner } => {
+                    out.push(WalkEvent::RectStart(fill));
+                    flatten(inner, out);
+                    out.push(WalkEvent::RectEnd);
+                }
                 _ => out.push(WalkEvent::Item(it)),
             }
         }
@@ -843,6 +912,7 @@ pub fn render(
                     sections: Vec::new(),
                 });
                 active_loops.push(li);
+                seq_items.push(SeqItem::Loop(li));
                 continue;
             }
             WalkEvent::AltSection(label) => {
@@ -903,11 +973,11 @@ pub fn render(
             WalkEvent::LoopEnd => {
                 // LOOP_END → consume one idx slot, finalize stopy/stopx
                 // bounds, and bumpVerticalPos to loopModel.stopy.
-                // updateBounds stops_y = inner_stopy + n*boxMargin where
-                // n is the depth of THIS loop on `active_loops` (1 for
-                // top-level). Same n widens startx/stopx outwards.
+                // X-outset and stopy-outset are already applied at each
+                // bounds.insert (see widening pass below); here we only
+                // bumpVerticalPos to the final stopy and pop the stack.
                 let li = active_loops.pop().expect("LoopEnd without start");
-                let depth = active_loops.len() as f64 + 1.0; // 1 for top-level
+                seq_items.pop();
                 let lr = &mut loops[li];
                 // If a loop has zero inner messages, startx/stopx stay
                 // at ±∞ — there is no actor extent contribution. Snap to
@@ -917,13 +987,60 @@ pub fn render(
                     lr.startx = bounds_startx;
                     lr.stopx = bounds_stopx;
                 }
-                lr.startx -= depth * box_margin;
-                lr.stopx += depth * box_margin;
-                lr.stopy = vertical + depth * box_margin;
+                if lr.stopy == 0.0 {
+                    // No inner messages widened stopy — use vertical.
+                    lr.stopy = vertical;
+                }
                 lr.idx = msg_id_counter;
                 msg_id_counter += 1;
                 // bumpVerticalPos(loopModel.stopy - getVerticalPos())
                 vertical = lr.stopy;
+                continue;
+            }
+            WalkEvent::RectStart(fill) => {
+                // RECT_START → adjustLoopHeightForWrap with
+                //   preMargin  = boxMargin (10)
+                //   postMargin = boxMargin (10)
+                // No msg.id / msg.message → no totalOffset bump, just
+                // pre + post = 20 px header (sequenceRenderer.ts:1172).
+                // We track the open rect on `pending_rects` (a stack
+                // of partial models) and only push the finalised
+                // `RectRender` to `rects` at RECT_END time — this
+                // gives `rects` the END order the upstream
+                // `backgrounds.forEach + .lower()` chain produces.
+                let _rect_start_idx = msg_id_counter;
+                msg_id_counter += 1;
+                vertical += box_margin;
+                let starty = vertical;
+                vertical += box_margin;
+                let pending_idx = pending_rects.len();
+                pending_rects.push(RectRender {
+                    startx: f64::INFINITY,
+                    stopx: f64::NEG_INFINITY,
+                    starty,
+                    stopy: 0.0,
+                    fill: fill.to_string(),
+                });
+                seq_items.push(SeqItem::Rect(pending_idx));
+                continue;
+            }
+            WalkEvent::RectEnd => {
+                // RECT_END → mirror LOOP_END. X / stopy outsets are
+                // already applied per insert; here we just pop and
+                // bumpVerticalPos to stopy.
+                let mut r = pending_rects.pop().expect("RectEnd without start");
+                seq_items.pop();
+                if r.startx.is_infinite() {
+                    r.startx = bounds_startx;
+                    r.stopx = bounds_stopx;
+                }
+                if r.stopy == 0.0 {
+                    r.stopy = vertical;
+                }
+                let _rect_end_idx = msg_id_counter;
+                msg_id_counter += 1;
+                vertical = r.stopy;
+                rects.push(r);
                 continue;
             }
             WalkEvent::Item(it) => it,
@@ -1386,7 +1503,13 @@ pub fn render(
         }
         vertical += total_offset;
 
-        if is_self {
+        // Compute dx widening for self-messages: upstream's
+        // `bounds.insert(startx - dx, ..., stopx + dx, ...)` at
+        // sequenceRenderer.ts:433 uses dx = max(textWidth/2, conf.width/2).
+        // The ±dx propagates through updateBounds into every open
+        // sequenceItem (loops + rects), widening the rendered block
+        // even though the lifeline sits on a single actor centre.
+        let self_dx: Option<f64> = if is_self {
             let mut msg_text_width = 0.0_f64;
             for line in &msg_lines {
                 let resolved = resolve_hash_entities_for_measure(line);
@@ -1411,7 +1534,10 @@ pub fn render(
             if self_stopx > bounds_stopx {
                 bounds_stopx = self_stopx;
             }
-        }
+            Some(dx)
+        } else {
+            None
+        };
 
         // Text positioning (upstream drawText with anchor='center',
         // valign='center', textMargin=wrapPadding=10):
@@ -1449,18 +1575,69 @@ pub fn render(
         let ta_cx = ta.x + ta.width / 2.0;
         let from_bounds = (fa_cx - 1.0).min(ta_cx - 1.0);
         let to_bounds = (fa_cx + 1.0).max(ta_cx + 1.0);
-        // Widen every currently-open loop's startx/stopx — mirrors
-        // upstream `bounds.insert(msgModel.fromBounds, ..., msgModel.toBounds, ...)`
-        // → `updateBounds` walking `sequenceItems`. The depth-dependent
-        // ±n*boxMargin outset is applied at LoopEnd, so here we just
-        // collect the raw min/max.
-        for &li in &active_loops {
-            let lr = &mut loops[li];
-            if from_bounds < lr.startx {
-                lr.startx = from_bounds;
+        // Widen every currently-open sequenceItem (loop OR rect)
+        // — mirrors upstream `bounds.insert` →
+        // `updateBounds` walking `sequenceItems` at
+        // sequenceRenderer.ts:114-128. For self-messages the
+        // actor lifeline is a single x but upstream widens by
+        // ±dx via `bounds.insert(startx-dx, ..., stopx+dx, ...)`
+        // (sequenceRenderer.ts:433). Each item's `n` =
+        // `stack.len() - cnt + 1` where cnt is its 1-based
+        // position from the bottom — i.e. the OUTERMOST gets the
+        // BIGGEST ±n*boxMargin outset.
+        // Upstream builds msgModel.startx = fromRight = cx+1 for
+        // self-messages (sequenceRenderer.ts:1879-1913), then
+        // bounds.insert uses startx ± dx → centre at cx+1 not cx.
+        let (item_startx, item_stopx) = if let Some(dx) = self_dx {
+            (fa_cx + 1.0 - dx, fa_cx + 1.0 + dx)
+        } else {
+            (from_bounds, to_bounds)
+        };
+        // Per upstream `boundMessage` (sequenceRenderer.ts:406-449),
+        // self-messages get an EXTRA bounds.insert with a wider y span:
+        //   insert(startx-dx, getVerticalPos()-10+totalOffset,
+        //          stopx+dx,  getVerticalPos()+30+totalOffset)
+        // followed by bumpVerticalPos(totalOffset). After the bump,
+        // the insert's stopy lands at `vertical_AFTER + 30`. For
+        // non-self the only insert is at lineStartY = vertical_AFTER.
+        // `vertical` is already AFTER the bump at this point, so the
+        // base is `vertical` plus the optional self bonus.
+        let insert_stopy_base = vertical;
+        let self_extra_stopy = if is_self { 30.0 } else { 0.0 };
+        let stack_len = seq_items.len();
+        for (cnt0, item) in seq_items.iter().enumerate() {
+            let n = (stack_len - cnt0) as f64;
+            let widened_startx = item_startx - n * box_margin;
+            let widened_stopx = item_stopx + n * box_margin;
+            let widened_stopy = insert_stopy_base + self_extra_stopy + n * box_margin;
+            match *item {
+                SeqItem::Loop(li) => {
+                    let lr = &mut loops[li];
+                    if widened_startx < lr.startx {
+                        lr.startx = widened_startx;
+                    }
+                    if widened_stopx > lr.stopx {
+                        lr.stopx = widened_stopx;
+                    }
+                    if widened_stopy > lr.stopy {
+                        lr.stopy = widened_stopy;
+                    }
+                }
+                SeqItem::Rect(pidx) => {
+                    let r = &mut pending_rects[pidx];
+                    r.widen_x(widened_startx, widened_stopx);
+                    r.widen_stopy(widened_stopy);
+                }
             }
-            if to_bounds > lr.stopx {
-                lr.stopx = to_bounds;
+            // Global diagram bounds also widen by the OUTERMOST item's
+            // n*boxMargin (sequenceRenderer.ts:119-120) on every insert.
+            // Since we apply widening per item, the largest n (= stack_len)
+            // ends up driving bounds_*x — capture that here too.
+            if widened_startx < bounds_startx {
+                bounds_startx = widened_startx;
+            }
+            if widened_stopx > bounds_stopx {
+                bounds_stopx = widened_stopx;
             }
         }
         let seq_x = if is_reverse_arrow {
@@ -1803,6 +1980,17 @@ pub fn render(
     out.push_str(
         "\" role=\"graphics-document document\" aria-roledescription=\"sequence\">",
     );
+
+    // Background rects — emit BEFORE everything else so they sit at
+    // the bottom of the visual stack. Upstream pushes models in
+    // RECT_END order, then `backgrounds.forEach + rectElement.lower()`
+    // reverses that into DOM order (each `.lower()` reasserts as the
+    // first child of the parent). We push to `rects` at RECT_END time,
+    // so iterating in REVERSE here matches the lower-stack flip
+    // (svgDrawCommon.ts:54 drawBackgroundRect → rectElement.lower()).
+    for r in rects.iter().rev() {
+        emit_rect(&mut out, r);
+    }
 
     // Bottom actor groups — REVERSE iteration (`.lower()` semantics
     // mirror upstream svgDraw: each lowered group displaces those that
@@ -3255,6 +3443,24 @@ fn emit_loop(out: &mut String, lr: &LoopRender) {
         out.push_str("</text>");
     }
     out.push_str("</g>");
+}
+
+/// Emit one background `<rect>` for a `rect rgb(...) ... end` block.
+/// Single self-closing element with `class="rect"`, no surrounding `<g>`.
+/// Width / height are computed from `(stop - start)` deltas at emit time.
+/// Mirrors upstream `svgDrawCommon.drawBackgroundRect`.
+fn emit_rect(out: &mut String, r: &RectRender) {
+    out.push_str("<rect x=\"");
+    push_num(out, r.startx);
+    out.push_str("\" y=\"");
+    push_num(out, r.starty);
+    out.push_str("\" fill=\"");
+    out.push_str(&r.fill);
+    out.push_str("\" width=\"");
+    push_num(out, r.stopx - r.startx);
+    out.push_str("\" height=\"");
+    push_num(out, r.stopy - r.starty);
+    out.push_str("\" class=\"rect\"></rect>");
 }
 
 /// Emit one `<g data-et="note" data-id="iN">` containing a rounded
