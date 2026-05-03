@@ -1187,6 +1187,13 @@ pub fn render(
     // initial 2000 default that drawActorType* assigned.
     let lifeline_y2 = if mirror { bottom_y } else { 2000.0 };
     let force_menus = d.config.force_menus;
+    // Database `root-N` ids are renumbered by the reference normaliser
+    // (`generate_ref.mjs:counterRules`) per first-DOM-appearance, NOT by the
+    // upstream `actorCnt` (which uses declaration order). Since we walk
+    // actors in reverse here and emit each top group sequentially, we just
+    // need a counter that increments once per Database actor encountered in
+    // DOM order — i.e. in this reverse iteration.
+    let mut db_counter: usize = 0;
     for (rank, a) in actors.iter().rev().enumerate() {
         // Upstream `drawActorTypeParticipant` / `drawActorTypeActor`:
         //   if (Object.keys(actor.links || {}).length && !conf.forceMenus) {
@@ -1223,7 +1230,15 @@ pub fn render(
             // inside a SINGLE outer <g> (upstream's `boxplusLineGroup`).
             // No separate body emission later — top group is self-contained.
             ActorType::Database => {
-                emit_actor_database_top_group(&mut out, a, lifeline_y2, rank, popup)
+                emit_actor_database_top_group(
+                    &mut out,
+                    a,
+                    lifeline_y2,
+                    rank,
+                    db_counter,
+                    popup,
+                );
+                db_counter += 1;
             }
             _ => unreachable!("gated above"),
         }
@@ -1872,6 +1887,7 @@ fn emit_actor_database_top_group(
     a: &ActorRender,
     bottom_y: f64,
     rank: usize,
+    db_index: usize,
     popup: bool,
 ) {
     let center = a.x + a.width / 2.0;
@@ -1910,8 +1926,10 @@ fn emit_actor_database_top_group(
     out.push_str("\"></line>");
 
     // <g id="root-N" data-et="participant" data-type="database" data-id="X">
+    // root-N counter is renumbered by ref normaliser per DOM appearance, so
+    // we use a separate `db_index` rather than `rank`.
     out.push_str("<g id=\"root-");
-    out.push_str(&rank.to_string());
+    out.push_str(&db_index.to_string());
     out.push_str("\" data-et=\"participant\" data-type=\"database\" data-id=\"");
     out.push_str(&xml_escape(&a.id));
     out.push_str("\">");
