@@ -195,21 +195,45 @@ pub fn render(
     let dia_margin_x = cfg.diagram_margin_x;
     let dia_margin_y = cfg.diagram_margin_y;
 
-    // Per-actor width — upstream `calculateActorMargins` first loop:
-    //   actor.width = actor.wrap ? conf.width
-    //                 : max(conf.width, textWidth(desc, actorFont) + 2*wrapPadding)
+    // Per-actor (width, height, rendered_description) — upstream
+    // `calculateActorMargins` first loop:
+    //   if actor.wrap: description = wrapLabel(desc, conf.width-2*wrapPadding)
+    //   actor.width  = wrap ? conf.width
+    //                       : max(conf.width, textWidth + 2*wrapPadding)
+    //   actor.height = wrap ? max(actDims.height, conf.height) : conf.height
     // Actor description is measured with the actor font (effective size
     // = global fontSize=16 after `setConf` override, family
-    // `"Open Sans", sans-serif`). Empty / id-only descriptions stay at
-    // the default conf.width = 150.
-    let actor_widths: Vec<f64> = d
+    // `"trebuchet ms", verdana, arial`). After this loop upstream
+    // assigns `conf.height = max(all actor.height)`, then
+    // `addActorRenderingData` clamps every actor.height up to that.
+    // Net effect: all actors share the SAME height = maxHeight.
+    //
+    // `actor.wrap` is set per-actor by the parser when the description
+    // carries a `wrap:` prefix OR when `%%{init: ... wrap: true}%%` was
+    // declared (we propagate config.wrap below before this loop).
+    let actor_dims: Vec<(f64, f64, String)> = d
         .actors
         .iter()
         .map(|a| {
+            // Effective wrap = per-actor flag OR diagram-level config.
+            let wrap = a.wrap || cfg.wrap;
+            // When wrap is on AND the description has no <br> already,
+            // pre-wrap to (conf.width - 2*wrapPadding) before measuring.
+            let description = if wrap {
+                wrap_label(
+                    &a.description,
+                    cfg.width - 2.0 * cfg.wrap_padding,
+                    "\"trebuchet ms\", verdana, arial",
+                    16.0,
+                )
+            } else {
+                a.description.clone()
+            };
             // Multi-line descriptions (split on <br>) measure as the
             // max line width, mirroring upstream
-            // `calculateTextDimensions` over `splitBreaks`.
-            let lines = split_br(&a.description);
+            // `calculateTextDimensions` over `splitBreaks`. Per-line
+            // height is rounded individually then summed for actDims.
+            let lines = split_br(&description);
             let mut tw_max = 0.0_f64;
             for line in &lines {
                 let resolved = resolve_hash_entities_for_measure(line);
@@ -225,10 +249,37 @@ pub fn render(
                     tw_max = w;
                 }
             }
-            let candidate = tw_max + 2.0 * cfg.wrap_padding;
-            default_actor_w.max(candidate)
+            let line_h = crate::font_metrics::line_height(
+                "\"trebuchet ms\", verdana, arial",
+                16.0,
+                false,
+                false,
+            )
+            .round();
+            let actdims_h = line_h * (lines.len() as f64);
+            let width = if wrap {
+                default_actor_w
+            } else {
+                let candidate = tw_max + 2.0 * cfg.wrap_padding;
+                default_actor_w.max(candidate)
+            };
+            let height = if wrap {
+                actdims_h.max(actor_h)
+            } else {
+                actor_h
+            };
+            (width, height, description)
         })
         .collect();
+    let actor_widths: Vec<f64> = actor_dims.iter().map(|(w, _, _)| *w).collect();
+    // Upstream `calculateActorMargins` returns maxHeight which becomes
+    // the new `conf.height`. Then `addActorRenderingData` bumps every
+    // actor.height up to conf.height. So every actor renders at the
+    // SAME height (the max across all actors).
+    let actor_h = actor_dims
+        .iter()
+        .map(|(_, h, _)| *h)
+        .fold(actor_h, f64::max);
 
     // ── Per-actor max message width (mirrors getMaxMessageWidthPerActor)
     //
@@ -442,7 +493,10 @@ pub fn render(
         .enumerate()
         .map(|(i, a)| ActorRender {
             id: a.id.clone(),
-            description: a.description.clone(),
+            // Use the (possibly wrap-expanded) description from the
+            // dims pass — wrap_label inserts `<br/>` so split_br on the
+            // render side will produce the same multi-line layout.
+            description: actor_dims[i].2.clone(),
             actor_type: a.actor_type.clone(),
             x: xs[i],
             width: actor_widths[i],

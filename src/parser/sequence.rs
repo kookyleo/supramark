@@ -822,16 +822,19 @@ fn sniff_theme(block: &str) -> Option<String> {
 /// `key: true|false` from an `%%{init: { ... }}%%` block. Returns
 /// `Some(value)` when the key is present, `None` otherwise.
 fn sniff_bool(block: &str, key: &str) -> Option<bool> {
-    let needle = format!("\"{}\"", key);
-    let p = block.find(&needle).or_else(|| {
-        // Unquoted key fallback (some directives use bare-key syntax).
-        let bare = format!("{}:", key);
-        block.find(&bare).map(|i| i)
-    })?;
-    let key_len = if block[p..].starts_with('"') {
-        needle.len()
+    // Try double-quoted, then single-quoted (mermaid accepts both inside
+    // %%{init: …}%% blocks), then bare-key as last resort.
+    let dq = format!("\"{}\"", key);
+    let sq = format!("'{}'", key);
+    let bare = format!("{}:", key);
+    let (p, key_len) = if let Some(i) = block.find(&dq) {
+        (i, dq.len())
+    } else if let Some(i) = block.find(&sq) {
+        (i, sq.len())
+    } else if let Some(i) = block.find(&bare) {
+        (i, key.len())
     } else {
-        key.len()
+        return None;
     };
     let after = &block[p + key_len..];
     let after = after.trim_start_matches(|c: char| c.is_whitespace() || c == ':');
