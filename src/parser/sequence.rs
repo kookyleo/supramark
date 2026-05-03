@@ -378,8 +378,25 @@ pub fn parse(source: &str) -> Result<SequenceDiagram> {
             }
             continue;
         }
-        // properties / details — record-and-skip (not yet rendered).
-        if line.starts_with("properties ") || line.starts_with("details ") {
+        // `properties <actor>: {"class": "<name>", "type": "<icon>"}`.
+        // Only the `class` key is honoured for now — it lands on the
+        // actor's main rect and triggers a custom fill in the renderer.
+        // The `type` key (icon) is recorded but not yet rendered.
+        if let Some(rest) = line.strip_prefix("properties ") {
+            if let Some((actor_id, entries)) = parse_links_directive(rest) {
+                ensure_actor(&mut d, &actor_id, current_box);
+                if let Some(a) = d.actors.iter_mut().find(|a| a.id == actor_id) {
+                    for (k, v) in entries {
+                        if k == "class" {
+                            a.class_name = Some(v);
+                        }
+                    }
+                }
+            }
+            continue;
+        }
+        // `details` — record-and-skip (not yet rendered).
+        if line.starts_with("details ") {
             continue;
         }
 
@@ -694,6 +711,7 @@ fn parse_actor_decl(s: &str, default_type: ActorType, box_index: Option<usize>) 
         destroyed: false,
         wrap,
         links: Vec::new(),
+        class_name: None,
     }
 }
 

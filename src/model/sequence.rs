@@ -67,6 +67,11 @@ pub struct Actor {
     /// source order — upstream `svgDraw.popupMenu` walks `Object.entries`
     /// in the same order.
     pub links: Vec<(String, String)>,
+    /// Custom CSS class name from a `properties <actor>: {"class": ...}`
+    /// directive. When set, the actor's main rect uses this class (with
+    /// the standard `actor-top`/`actor-bottom` suffix appended) and a
+    /// custom fill (`#EDF2AE` for known service-actor classes).
+    pub class_name: Option<String>,
 }
 
 /// Arrow-token classification — matches upstream's `LINETYPE`

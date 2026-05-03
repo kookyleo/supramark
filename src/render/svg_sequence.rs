@@ -33,6 +33,10 @@ struct ActorRender {
     cnt: usize,
     /// Popup-menu entries from `link`/`links` directives.
     links: Vec<(String, String)>,
+    /// Optional custom CSS class from a `properties` directive — when
+    /// `Some`, the main actor rect uses `<class> actor-{top,bottom}` and
+    /// a `#EDF2AE` fill in place of the default `actor` / `#eaeaea`.
+    class_name: Option<String>,
 }
 
 /// Information collected per-message for the render pass.
@@ -697,6 +701,7 @@ pub fn render(
             height: actor_h,
             cnt: i + 1,
             links: a.links.clone(),
+            class_name: a.class_name.clone(),
         })
         .collect();
 
@@ -3777,18 +3782,39 @@ fn emit_actor_box_text(out: &mut String, cx: f64, cy: f64, description: &str) {
     }
 }
 
+/// Resolve the `(fill, base_class)` pair for an actor's main rectangle.
+///
+/// When `properties <id>: {"class": ...}` was given, the directive class
+/// replaces the default `actor` base class and the rect uses the custom
+/// service-actor fill `#EDF2AE`. Otherwise the default theme styling
+/// (`#eaeaea`, base class `actor`) applies. Mirrors upstream
+/// `svgDraw.drawActor`'s `rect.class = actor.properties.class || 'actor'`
+/// branch.
+fn actor_rect_style(a: &ActorRender) -> (&str, &str) {
+    if let Some(cls) = a.class_name.as_deref() {
+        ("#EDF2AE", cls)
+    } else {
+        ("#eaeaea", "actor")
+    }
+}
+
 fn emit_actor_bottom_participant(out: &mut String, a: &ActorRender, bottom_y: f64) {
+    let (fill, base_cls) = actor_rect_style(a);
     out.push_str("<g><rect x=\"");
     push_num(out, a.x);
     out.push_str("\" y=\"");
     push_num(out, bottom_y);
-    out.push_str("\" fill=\"#eaeaea\" stroke=\"#666\" width=\"");
+    out.push_str("\" fill=\"");
+    out.push_str(fill);
+    out.push_str("\" stroke=\"#666\" width=\"");
     push_num(out, a.width);
     out.push_str("\" height=\"");
     push_num(out, a.height);
     out.push_str("\" name=\"");
     out.push_str(&xml_escape(&a.id));
-    out.push_str("\" rx=\"3\" ry=\"3\" class=\"actor actor-bottom\"></rect>");
+    out.push_str("\" rx=\"3\" ry=\"3\" class=\"");
+    out.push_str(base_cls);
+    out.push_str(" actor-bottom\"></rect>");
     let cx = a.x + a.width / 2.0;
     let cy = bottom_y + a.height / 2.0;
     emit_actor_box_text(out, cx, cy, &a.description);
@@ -3834,17 +3860,22 @@ fn emit_actor_top_participant(
         "\" data-et=\"participant\" data-type=\"participant\" data-id=\"",
     );
     out.push_str(&xml_escape(&a.id));
+    let (fill, base_cls) = actor_rect_style(a);
     out.push_str("\"><rect x=\"");
     push_num(out, a.x);
     out.push_str("\" y=\"");
     push_num(out, top_y);
-    out.push_str("\" fill=\"#eaeaea\" stroke=\"#666\" width=\"");
+    out.push_str("\" fill=\"");
+    out.push_str(fill);
+    out.push_str("\" stroke=\"#666\" width=\"");
     push_num(out, a.width);
     out.push_str("\" height=\"");
     push_num(out, a.height);
     out.push_str("\" name=\"");
     out.push_str(&xml_escape(&a.id));
-    out.push_str("\" rx=\"3\" ry=\"3\" class=\"actor actor-top\"></rect>");
+    out.push_str("\" rx=\"3\" ry=\"3\" class=\"");
+    out.push_str(base_cls);
+    out.push_str(" actor-top\"></rect>");
     let cy = top_y + a.height / 2.0;
     emit_actor_box_text(out, cx, cy, &a.description);
     out.push_str("</g></g>");
