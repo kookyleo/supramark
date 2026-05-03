@@ -120,7 +120,10 @@ pub fn render(
     if !d
         .actors
         .iter()
-        .all(|a| matches!(a.actor_type, ActorType::Participant | ActorType::Actor))
+        .all(|a| matches!(
+            a.actor_type,
+            ActorType::Participant | ActorType::Actor | ActorType::Boundary
+        ))
     {
         return Ok(placeholder(d, id));
     }
@@ -1081,7 +1084,10 @@ pub fn render(
         for a in actors.iter().rev() {
             match a.actor_type {
                 ActorType::Participant => emit_actor_bottom_participant(&mut out, a, bottom_y),
-                ActorType::Actor => out.push_str("<g></g>"),
+                // Actor and Boundary both emit empty <g></g> placeholder for
+                // their bottom group's `line2` (lowered to front). Bodies
+                // emit later, after defs.
+                ActorType::Actor | ActorType::Boundary => out.push_str("<g></g>"),
                 _ => unreachable!("gated above"),
             }
         }
@@ -1114,7 +1120,10 @@ pub fn render(
             ActorType::Participant => {
                 emit_actor_top_participant(&mut out, a, lifeline_y2, rank, popup)
             }
-            ActorType::Actor => {
+            // Boundary uses the same lifeline-only top group as Actor — body
+            // emits later after defs. Lifeline `<g><line id="actorN" .../></g>`
+            // is identical to Actor.
+            ActorType::Actor | ActorType::Boundary => {
                 emit_actor_top_lifeline_actor(&mut out, a, lifeline_y2, rank, popup)
             }
             _ => unreachable!("gated above"),
@@ -1191,13 +1200,19 @@ pub fn render(
         emit_note(&mut out, n);
     }
 
-    // Top bodies, declaration order, only for Actor-type actors.
+    // Top bodies, declaration order, only for Actor / Boundary types.
     for (i, a) in actors.iter().enumerate() {
-        if !matches!(a.actor_type, ActorType::Actor) {
-            continue;
+        match a.actor_type {
+            ActorType::Actor => {
+                let (torso_id, arms_id) = stick_ids.top[i];
+                emit_actor_man_body(&mut out, a, 0.0, false, torso_id, arms_id);
+            }
+            ActorType::Boundary => {
+                let (torso_id, arms_id) = stick_ids.top[i];
+                emit_actor_boundary_body(&mut out, a, 0.0, false, torso_id, arms_id);
+            }
+            _ => continue,
         }
-        let (torso_id, arms_id) = stick_ids.top[i];
-        emit_actor_man_body(&mut out, a, 0.0, false, torso_id, arms_id);
     }
 
     // Messages — text + line for each, in declaration order.
@@ -1205,15 +1220,21 @@ pub fn render(
         emit_message(&mut out, id, m);
     }
 
-    // Bottom bodies, declaration order, only for Actor-type actors —
+    // Bottom bodies, declaration order, only for Actor / Boundary types —
     // and only when mirroring.
     if mirror {
         for (i, a) in actors.iter().enumerate() {
-            if !matches!(a.actor_type, ActorType::Actor) {
-                continue;
+            match a.actor_type {
+                ActorType::Actor => {
+                    let (torso_id, arms_id) = stick_ids.bottom[i];
+                    emit_actor_man_body(&mut out, a, bottom_y, true, torso_id, arms_id);
+                }
+                ActorType::Boundary => {
+                    let (torso_id, arms_id) = stick_ids.bottom[i];
+                    emit_actor_boundary_body(&mut out, a, bottom_y, true, torso_id, arms_id);
+                }
+                _ => continue,
             }
-            let (torso_id, arms_id) = stick_ids.bottom[i];
-            emit_actor_man_body(&mut out, a, bottom_y, true, torso_id, arms_id);
         }
     }
 
@@ -1308,9 +1329,11 @@ fn compute_stick_ids(d: &SequenceDiagram, n_actors_total: usize) -> StickIds {
         }
     };
 
-    // Walk top bodies in decl order
+    // Walk top bodies in decl order. Both Actor and Boundary increment
+    // `actorCnt` upstream and emit body groups with `actor-man-{torso,arms}N`
+    // ids, so they share the same numbering pool.
     for (i, a) in d.actors.iter().enumerate() {
-        if !matches!(a.actor_type, ActorType::Actor) {
+        if !matches!(a.actor_type, ActorType::Actor | ActorType::Boundary) {
             continue;
         }
         let raw_n = i + 1;
@@ -1320,7 +1343,7 @@ fn compute_stick_ids(d: &SequenceDiagram, n_actors_total: usize) -> StickIds {
     }
     // Walk bottom bodies in decl order
     for (i, a) in d.actors.iter().enumerate() {
-        if !matches!(a.actor_type, ActorType::Actor) {
+        if !matches!(a.actor_type, ActorType::Actor | ActorType::Boundary) {
             continue;
         }
         let raw_n = n_actors_total;
@@ -1330,6 +1353,125 @@ fn compute_stick_ids(d: &SequenceDiagram, n_actors_total: usize) -> StickIds {
     }
 
     StickIds { top, bottom }
+}
+
+/// Emit one `<g class="actor-man actor-{top,bottom}" ...>` body group
+/// for a Boundary-type actor. Differs from `emit_actor_man_body`:
+/// - horizontal torso line (left half), vertical arms line at left edge;
+/// - no legs;
+/// - circle radius 22 (vs 15);
+/// - outer `<g>` carries `transform="translate(0, 21)"`
+///   (= radius/2 + 10 = 21);
+/// - top group's `data-{et,type,id}` attrs come AFTER `name=` and AFTER
+///   `transform=` (mirrors upstream svgDraw `actElem.attr` order).
+/// Mirrors upstream `drawActorTypeBoundary` (mermaid.js line 137422).
+fn emit_actor_boundary_body(
+    out: &mut String,
+    a: &ActorRender,
+    actor_y: f64,
+    is_footer: bool,
+    torso_id: usize,
+    arms_id: usize,
+) {
+    const RADIUS: f64 = 22.0;
+    let center = a.x + a.width / 2.0;
+
+    // Outer <g>. Top groups carry data-* AFTER transform; bottom groups omit
+    // data-* entirely. Both have `name=` and `style=`. The transform is
+    // `translate(0, radius/2 + 10)` = `translate(0, 21)`.
+    out.push_str("<g class=\"actor-man ");
+    out.push_str(if is_footer {
+        "actor-bottom"
+    } else {
+        "actor-top"
+    });
+    out.push_str("\" name=\"");
+    out.push_str(&xml_escape(&a.id));
+    out.push_str("\" style=\"stroke: #9370DB;\" transform=\"translate(0,");
+    push_num(out, RADIUS / 2.0 + 10.0);
+    out.push_str(")\"");
+    if !is_footer {
+        out.push_str(" data-et=\"participant\" data-type=\"boundary\" data-id=\"");
+        out.push_str(&xml_escape(&a.id));
+        out.push('"');
+    }
+    out.push('>');
+
+    // torso (horizontal): x1 = center - r*2.5, y1 = actorY+12,
+    //                     x2 = center - 15,    y2 = actorY+12
+    out.push_str("<line id=\"actor-man-torso");
+    out.push_str(&torso_id.to_string());
+    out.push_str("\" x1=\"");
+    push_num(out, center - RADIUS * 2.5);
+    out.push_str("\" y1=\"");
+    push_num(out, actor_y + 12.0);
+    out.push_str("\" x2=\"");
+    push_num(out, center - 15.0);
+    out.push_str("\" y2=\"");
+    push_num(out, actor_y + 12.0);
+    out.push_str("\"></line>");
+
+    // arms (vertical): x1 = center - r*2.5, y1 = actorY+2,
+    //                  x2 = center - r*2.5, y2 = actorY+22
+    out.push_str("<line id=\"actor-man-arms");
+    out.push_str(&arms_id.to_string());
+    out.push_str("\" x1=\"");
+    push_num(out, center - RADIUS * 2.5);
+    out.push_str("\" y1=\"");
+    push_num(out, actor_y + 2.0);
+    out.push_str("\" x2=\"");
+    push_num(out, center - RADIUS * 2.5);
+    out.push_str("\" y2=\"");
+    push_num(out, actor_y + 22.0);
+    out.push_str("\"></line>");
+
+    // circle: cx=center, cy=actorY+12, r=22
+    out.push_str("<circle cx=\"");
+    push_num(out, center);
+    out.push_str("\" cy=\"");
+    push_num(out, actor_y + 12.0);
+    out.push_str("\" r=\"");
+    push_num(out, RADIUS);
+    out.push_str("\"></circle>");
+
+    // Text: byTspan with x6=actor.x, y6=actorY+15, width=actor.width,
+    // height=actor.height. The byTspan formula puts text y at
+    // y6 + height/2 = actorY + 15 + actor.height/2.
+    //
+    // Subtle: upstream MUTATES `actor.height` post-bbox at the END of the
+    // top-pass `drawActorTypeBoundary` call to `bbox.height + labelBoxHeight
+    // = 44 + 20 = 64`. The footer pass then sees `actor.height = 64`
+    // (instead of the initial 65) and uses it for `rect3.height` in the
+    // text call. So top text uses height=65 (initial), bottom uses 64.
+    // For boundary the bbox is always the same shape (44×77), so the
+    // post-bbox value is always 64 — no per-actor variance.
+    let text_height = if is_footer { 64.0 } else { a.height };
+    let text_y = actor_y + 15.0 + text_height / 2.0;
+    let cx = center;
+    let lines = split_br(&a.description);
+    let n_lines = lines.len();
+    let font_size = 16.0_f64;
+    for (i, line) in lines.iter().enumerate() {
+        let dy = (i as f64) * font_size - font_size * ((n_lines as f64) - 1.0) / 2.0;
+        out.push_str("<text x=\"");
+        push_num(out, cx);
+        out.push_str("\" y=\"");
+        push_num(out, text_y);
+        out.push_str(
+            "\" style=\"text-anchor: middle; font-size: 16px; font-weight: 400; font-family: ",
+        );
+        out.push_str(&attr_escape(ACTOR_FONT_FAMILY));
+        out.push_str(
+            ";\" dominant-baseline=\"central\" alignment-baseline=\"central\" class=\"actor actor-man\"><tspan x=\"",
+        );
+        push_num(out, cx);
+        out.push_str("\" dy=\"");
+        push_num(out, dy);
+        out.push_str("\">");
+        out.push_str(&xml_escape(line));
+        out.push_str("</tspan></text>");
+    }
+    out.push_str("</g>");
 }
 
 /// Emit one `<g class="actor-man actor-{top,bottom}" ...>` body group
