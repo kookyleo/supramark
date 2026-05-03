@@ -1,15 +1,28 @@
 # 阶段进展
 
-截至 2026-05-03，Wave 14 完结，环境性 fixture 已移入 known_ignored。
+截至 2026-05-03，Wave 15-A 完结。
 
-**当前指标：1206 / 1323 byte-exact（约 90.85%）**。
+**当前指标：1208 / 1323 byte-exact（约 90.93%）**。
 
-- 1206 = Wave 14 新增 +2（demos/venn/12 v8_trig +1，demos/venn/11 cross-hatch +1）
-- 1323 = sweep_all 处理的 fixture 总数 = 1328（全集）− 5 个新进 ignore（cypress/gantt/05 + 39, demos/gantt/06 + 07, demos/venn/04；demos/class/08 因无 ref svg 一直被静默 skip，不计入分母）
-- 差额 117 = sequence ~88 + mindmap 18 + KaTeX 6 + stadium rough 1 + misc ~4
-- ELK fixtures 仍由 `is_elk()` 程序性过滤
-- 环境性 6 项（gantt × 4、class/08、venn/04）已写入 `tests/known_ignored.txt`，不再算失败
-- venn handDrawn 全收（demos/venn 11/11，constrainedMDS 已 ignore）
+- 1208 = Wave 15-A 新增 +2（cypress/sequence/87 wrap 前缀 +1，cypress/sequence/88 config wrap +1）
+- 1323 = sweep_all 处理的 fixture 总数（已剔除环境性 6 项）
+- 差额 115 = sequence ~86 + mindmap 18 + KaTeX 6 + stadium rough 1 + misc ~4
+
+## Wave 15-spike + 15-A（2026-05-03）
+
+**关键修正前期判断**：W13-E 把"sequence font-metrics 全局阻塞"列为高性价比目标，spike 实测推翻此结论。
+
+W15-spike 在 5 个失败 fixture 上对比 reference (mjs) 与 Rust (rs) 的 measureText 调用：~285 次比对，**0 例 VALUE_DIFF / 0 例 PARAM_DIFF**，全部偏离都是 MISSING（Rust 端"该测的字符串没测"）。
+
+→ 字体表与度量函数完全正确，sequence 失败的根因是**渲染路径漏写**。技术发现：
+
+48. **font_metrics 数学正确，sequence 失败 ≠ 度量校准**：W13-E 标的"全局阻塞"误判，root cause 是 `actor.wrap` / popup link / forceMenus 等 sub-feature 渲染路径直接缺失。这意味着 PROGRESS"高性价比"分类中"font-metrics 校准"项可彻底划掉。
+
+49. **actor.wrap 双路触发**：`participant A as wrap:<text>`（per-actor 前缀）与 `%%{init: {'config': {'wrap': true}}}%%`（global config）必须合并到同一个 `actor.wrap` 字段；上游 `calculateActorMargins` 在 wrap=true 时直接 `actor.width = conf.width` 不测原文。
+
+50. **`sniff_bool` 需识别单引号 key**：fixture 88 init 块写 `'wrap': true`（非 `"wrap": true`），需扩展 parser 单引号路径。
+
+W15-A 实现 `actor.wrap` 分支（svg_sequence.rs:205-285 actor_widths → actor_dims，含 width / height / 渲染描述三元组），cypress/sequence/87 + 88 byte-exact，121 width 部分已修但剩余 diff 来自 popup link，归 W15-B 处理。
 
 旧记录（按时间倒序）：1099 → 1135 → 1136 (W6) → 1145 (W7) → 1151 (W8) → 1161 (W9) → 1179 (W10) → 1184 (W11) → 1200 (W12) → 1204 (W13) → 1206 (W14)。
 
