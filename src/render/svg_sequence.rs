@@ -2497,7 +2497,7 @@ pub fn render(
             continue;
         }
         let rank = n_actors - 1 - i;
-        emit_actor_popup(&mut out, a, rank, force_menus);
+        emit_actor_popup(&mut out, a, rank, force_menus, mirror);
     }
 
     // Frontmatter title bar — emitted *after* every other element so it
@@ -3891,7 +3891,7 @@ fn emit_actor_top_participant(
 ///   - rect.height = 20 + 30 * N    (N = link count, no header text)
 ///   - text.x = actor.x + 10
 ///   - text.y of link n = actor.height + 30 * (n + 1)
-fn emit_actor_popup(out: &mut String, a: &ActorRender, rank: usize, force_menus: bool) {
+fn emit_actor_popup(out: &mut String, a: &ActorRender, rank: usize, force_menus: bool, mirror: bool) {
     let panel_x = a.x;
     let panel_y = a.height; // actor box bottom in the top group.
     let n_links = a.links.len() as f64;
@@ -3903,9 +3903,12 @@ fn emit_actor_popup(out: &mut String, a: &ActorRender, rank: usize, force_menus:
     out.push_str("_popup\" class=\"actorPopupMenu\" display=\"");
     out.push_str(display);
     let (panel_fill, panel_cls) = actor_rect_style(a);
+    let panel_position = if mirror { "actor-bottom" } else { "actor-top" };
     out.push_str("\"><rect class=\"actorPopupMenuPanel ");
     out.push_str(panel_cls);
-    out.push_str(" actor-bottom\" x=\"");
+    out.push_str(" ");
+    out.push_str(panel_position);
+    out.push_str("\" x=\"");
     push_num(out, panel_x);
     out.push_str("\" y=\"");
     push_num(out, panel_y);
