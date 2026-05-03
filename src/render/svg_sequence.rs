@@ -2162,9 +2162,11 @@ pub fn render(
         } else {
             stopx
         };
-        if seq_index.is_some() {
-            auto_seq_index += auto_seq_step;
-        }
+        // Counter increments for every message regardless of visibility —
+        // `autonumber off` suppresses display but the counter still
+        // advances, so the next re-enabling lands on the post-increment
+        // value (upstream sequenceRenderer.ts: bumps autoNumber per signal).
+        auto_seq_index += auto_seq_step;
 
         // Central-connection circle offset when autonumber is on.
         // Mirrors upstream `drawCentralConnection`

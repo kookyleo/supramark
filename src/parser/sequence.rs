@@ -179,7 +179,10 @@ pub fn parse(source: &str) -> Result<SequenceDiagram> {
             } else {
                 let mut parts = rest.split_whitespace();
                 let start = parts.next().and_then(|s| s.parse::<i64>().ok());
-                let step = parts.next().and_then(|s| s.parse::<i64>().ok());
+                // Default step to 1 when only start is given (matches
+                // upstream: `autonumber N` resets step to 1; only
+                // `autonumber N M` carries an explicit step).
+                let step = parts.next().and_then(|s| s.parse::<i64>().ok()).or(Some(1));
                 (start, step, true)
             };
             push_item(
