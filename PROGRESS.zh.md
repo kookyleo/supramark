@@ -1,12 +1,12 @@
 # 阶段进展
 
-截至 2026-05-03，Wave 15-B 完结。
+截至 2026-05-03，Wave 15-D 完结。
 
-**当前指标：1209 / 1323 byte-exact（约 91.0%）**。
+**当前指标：1210 / 1323 byte-exact（约 91.08%）**。
 
-- 1209 = Wave 15 累计 +3（87 wrap 前缀 +1，88 config wrap +1，118 popup link +1）
+- 1210 = Wave 15 累计 +4（87 wrap 前缀 +1，88 config wrap +1，118 popup link +1，demos/02 frontmatter title +1）
 - 1323 = sweep_all 处理的 fixture 总数（已剔除环境性 6 项）
-- 差额 114 = sequence ~85 + mindmap 18 + KaTeX 6 + stadium rough 1 + misc ~4
+- 差额 113 = sequence ~84 + mindmap 18 + KaTeX 6 + stadium rough 1 + misc ~4
 
 ## Wave 15-spike + 15-A（2026-05-03）
 
@@ -33,6 +33,19 @@ W15-A 实现 `actor.wrap` 分支（svg_sequence.rs:205-285 actor_widths → acto
 **W15-B 副产品 intel**（用于 W15-C+ 排单）：
 51. **cypress/sequence/121 不是 popup 问题**：121 需要 properties 解析 + `<rect class="actorPopupMenuPanel <classFromProps> actor-top" fill="<fillFromProps>">` + 头部 title 行 + 顶部 actor box 内嵌 @clock/@computer `<use>` 引用 → 属于 W13-D 标的"actor type variants"多 wave 工作。
 52. **demos/sequence/02 不是 popup 问题**：popup 段已正确生成且带 `display="block !important"`，剩余 diff 来自 frontmatter title 渲染（viewBox 高度差 40 = title bar 高度），与 popup 无关。这是较小 scope 的独立任务。
+
+**W15-D**（commit `0f0650f`）实现 sequence frontmatter title：
+- 当 `d.title.is_some()` 时 viewBox y -= 40 / height += 40
+- `</svg>` 之前 emit `<text x="<center>" y="-25">{title}</text>`
+- demos/sequence/02 byte-exact
+
+53. **修正 W15-A popup gating 方向错误**：W15-A 把 actor onclick 包装条件写成 `links.is_some() OR forceMenus`，上游实际是 `links.is_some() AND !forceMenus`（forceMenus=true 时**抑制** per-actor onclick，靠 popup `<g>` 自身 `display="block !important"` 直接显示）。W15-D 修正后 demos/02 byte-exact。
+
+**W15-C-spike retry2 关键发现**（用于后续排单）：
+54. **typed-actor `@{type:...}` 大簇**：byte=95/got=189 那 ~31 个 fixture **全是同一根因** —— `participant X@{ "type": "control" }` 等 typed-actor 语法被 `only_supported_items` 拒绝走 100x100 placeholder。解禁 `svg_sequence.rs:118-124` ActorType gate + 实现 6 种 type 的 box 形状（boundary/control/entity/database/collections/queue）即可解锁。Parser 端已 sniff 到 actor_type，无需改。
+55. **reverse + half-arrow 大簇**：~27-28 fixture（含 got=25640 那 9 个）。parser `ARROWS` 表（`parser/sequence.rs:658`）只列了 10 种箭头，缺 `/|-` `\|-` `//-` `\\-` `-|\` `-|/` `-\\` `-//` 及 dotted 变体；renderer `only_supported_items` 也需放行。parser+renderer 双侧改动。
+56. **par_over 关键字**：fixture 74 单独命中，`strip_kw` 要求关键字后面必须是空白字符，所以 `par_over X` 不会匹配 `par`。修一行即可。
+57. **message-level wrap**：fixture 114/115 命中，cfg.wrap 已 sniff 到 actor 但未传到 message 渲染路径。
 
 旧记录（按时间倒序）：1099 → 1135 → 1136 (W6) → 1145 (W7) → 1151 (W8) → 1161 (W9) → 1179 (W10) → 1184 (W11) → 1200 (W12) → 1204 (W13) → 1206 (W14)。
 
