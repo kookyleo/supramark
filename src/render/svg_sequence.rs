@@ -1805,6 +1805,12 @@ pub fn render(
             if seq_index.is_some() {
                 if is_bidir {
                     startx - 6.0
+                } else if is_reverse_arrow {
+                    // Reverse half-arrow self-loops: x1 stays at the
+                    // actor centre (no +6 shift) — the arrowhead clearance
+                    // is applied via the path start (+10) and an explicit
+                    // `x2 = startx - 6` attribute emitted on the path.
+                    startx
                 } else {
                     startx + 6.0
                 }
@@ -1861,6 +1867,11 @@ pub fn render(
                 x += 15.0;
             }
             x
+        } else if is_self && seq_index.is_some() && is_reverse_arrow && !is_bidir {
+            // Reverse half-arrow self-loop with autonumber: emits an
+            // explicit `x2 = startx - 6` attribute on the path so the
+            // sequence-number circle clears the actor centre.
+            stopx - 6.0
         } else {
             stopx
         };
@@ -3992,15 +4003,21 @@ fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
 
     // <line> or <path> next.
     if m.is_self {
+        // Reverse half-arrows on self-loops use `marker-start`, so the
+        // path's start point + first control point shift right by +10
+        // to clear the arrow head occupying the source side. The second
+        // control point and end point (the inbound side, on the actor
+        // centre) remain at `sx`.
+        let start_offset = if half_marker_start.is_some() { 10.0 } else { 0.0 };
         let lsx = m.self_line_start_x;
         let sx = m.self_startx;
         let lsy = m.line_start_y;
         out.push_str("<path d=\"M ");
-        push_num(out, lsx);
+        push_num(out, lsx + start_offset);
         out.push(',');
         push_num(out, lsy);
         out.push_str(" C ");
-        push_num(out, lsx + 60.0);
+        push_num(out, lsx + 60.0 + start_offset);
         out.push(',');
         push_num(out, lsy - 10.0);
         out.push(' ');
@@ -4057,6 +4074,13 @@ fn emit_message(out: &mut String, id: &str, m: &MsgRender) {
             out.push(')');
         }
         if m.seq_index.is_some() {
+            // Reverse half-arrow self-loops emit `x2` BEFORE `x1` —
+            // upstream's d3 chain sets `x2` first when reverse, so the
+            // attribute order in the serialised DOM is x2 then x1.
+            if half_marker_start.is_some() {
+                out.push_str("\" x2=\"");
+                push_num(out, m.line_x2);
+            }
             out.push_str("\" x1=\"");
             push_num(out, m.line_x1);
         }
