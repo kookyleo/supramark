@@ -608,7 +608,14 @@ Math.random = __mulberry32;
 W.Math.random = __mulberry32;
 
 const mermaid = (await import('mermaid')).default;
-mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', handDrawnSeed: 1 });
+// `forceLegacyMathML: true` makes mermaid call the real KaTeX renderer
+// (output: 'htmlAndMathml') even in jsdom — without it, the jsdom env
+// (`window.MathMLElement === undefined`) triggers mermaid's `renderKatexUnsanitized`
+// fallback that replaces every `$$...$$` with the literal placeholder
+// "MathML is unsupported in this environment.", which would force the
+// Rust port to mirror that placeholder instead of real KaTeX output.
+// We aim for byte-exact parity with what users see in real browsers.
+mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', handDrawnSeed: 1, forceLegacyMathML: true });
 
 // ---------- render one source ----------
 // Guarded against mermaid.render() promises that never settle (seen
