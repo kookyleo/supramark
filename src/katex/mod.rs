@@ -26,6 +26,37 @@ pub mod sanitize;
 pub use render::{render, RenderError};
 pub use sanitize::sanitize;
 
+/// Decode the three XML entities that the flowchart label pipeline emits
+/// (via `xml_escape_label`): `&amp;`, `&lt;`, `&gt;`. KaTeX expects raw
+/// LaTeX characters — these entities would otherwise be interpreted as the
+/// literal letter sequences `amp`, `lt`, `gt` followed by `;`.
+fn decode_basic_entities(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(amp) = rest.find('&') {
+        out.push_str(&rest[..amp]);
+        let after = &rest[amp..];
+        if let Some(semi) = after.find(';') {
+            let entity = &after[1..semi];
+            match entity {
+                "amp" => out.push('&'),
+                "lt" => out.push('<'),
+                "gt" => out.push('>'),
+                _ => {
+                    out.push('&');
+                    out.push_str(&after[1..=semi]);
+                }
+            }
+            rest = &after[semi + 1..];
+        } else {
+            out.push_str(after);
+            return out;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Mermaid's `katexRegex` — `/\$\$(.*)\$\$/g`. The capture is greedy, but
 /// in mermaid's per-line replace path each line carries at most one
 /// `$$..$$` segment that we want to expand. We intentionally use a manual
@@ -81,7 +112,20 @@ fn replace_katex_in_line(line: &str) -> Result<String, RenderError> {
     let prefix = &line[..start];
     let body = &line[start + 2..end];
     let suffix = &line[end + 2..];
-    let katex_html = render::render(body, true)?;
+    // The label has been XML-escaped by the time it reaches us, so any `&`
+    // (case-environment column splits, `\&` literal) inside the LaTeX is now
+    // `&amp;`. Same for `<`/`>` (rare in math but possible in `\text`).
+    // KaTeX needs the raw character — decode the basic three entities here
+    // before handing the body to the JS renderer.
+    let decoded = decode_basic_entities(body);
+    // Mermaid's KaTeX-input shim — see chunk-7XTQR4JX.mjs:1978:
+    //   const inputForKatex = text.replace(/\\\\/g, "\\");
+    // i.e. collapse every `\\` to `\`. This converts e.g. `\\ ` (the
+    // cases-environment row separator written in .mmd) into `\ ` (KaTeX's
+    // thin-space command), which is what the upstream reference SVGs
+    // contain.
+    let katex_input = decoded.replace("\\\\", "\\");
+    let katex_html = render::render(&katex_input, true)?;
     // Mermaid post-processes KaTeX output before splicing it back in:
     // ```
     // .replace(/\n/g, ' ').replace(/<annotation.*<\/annotation>/g, '')

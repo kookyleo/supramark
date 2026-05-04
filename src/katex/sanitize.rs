@@ -46,7 +46,7 @@ pub fn strip_annotation_pub(s: &str) -> String {
 pub fn dompurify_equivalent(html: &str) -> String {
     let s1 = strip_semantics(html);
     let s2 = expand_self_closing(&s1);
-    nbsp_in_mtext(&s2)
+    nbsp_to_entity(&s2)
 }
 
 fn drop_newlines(s: &str) -> String {
@@ -150,29 +150,23 @@ fn expand_self_closing(s: &str) -> String {
     out
 }
 
-/// Replace literal U+0020 with `&nbsp;` inside the textContent of `<mtext>`
-/// elements. DOMPurify's MathML serialiser does this normalisation when the
-/// value contains otherwise-collapsible whitespace.
-fn nbsp_in_mtext(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 16);
-    let mut rest = s;
-    loop {
-        let Some(open) = rest.find("<mtext>") else {
-            out.push_str(rest);
-            break;
-        };
-        out.push_str(&rest[..open + "<mtext>".len()]);
-        let after = &rest[open + "<mtext>".len()..];
-        let Some(close) = after.find("</mtext>") else {
-            out.push_str(after);
-            break;
-        };
-        let body = &after[..close];
-        out.push_str(&body.replace(' ', "&nbsp;"));
-        out.push_str("</mtext>");
-        rest = &after[close + "</mtext>".len()..];
-    }
-    out
+/// Replace literal NBSP (U+00A0) with the `&nbsp;` named entity. KaTeX
+/// emits NBSP as a raw two-byte UTF-8 sequence (`0xC2 0xA0`) wherever a
+/// non-breaking space is needed — inside `<mtext>` (for `\text{…}` content),
+/// inside the `<span class="mord">` text-mode siblings, and inside
+/// `<span class="mspace">` thin/medium/thick spaces. When DOMPurify
+/// re-serialises the parsed DOM, every NBSP code point becomes `&nbsp;`,
+/// regardless of which element it sits in.
+///
+/// ASCII U+0020 spaces are passed through unchanged — DOMPurify's HTML
+/// serialiser only entity-escapes NBSP (and a couple of other control
+/// chars KaTeX never emits).
+///
+/// We do not need to skip attribute values: KaTeX's output uses ASCII-only
+/// class names, style values, and other attributes — there is never an
+/// NBSP character on the attribute side.
+fn nbsp_to_entity(s: &str) -> String {
+    s.replace('\u{00A0}', "&nbsp;")
 }
 
 #[cfg(test)]
@@ -214,12 +208,21 @@ mod tests {
     }
 
     #[test]
-    fn mtext_space_to_nbsp() {
-        let s = "<mrow><mtext>if </mtext><mi>b</mi></mrow>";
+    fn nbsp_byte_to_entity() {
+        // KaTeX emits NBSP (U+00A0) anywhere it needs a non-breaking space —
+        // inside <mtext>, inside <span class="mord">, etc.
+        let s = "<mrow><mtext>if\u{00A0}</mtext><mi>b</mi><span>x\u{00A0}y</span></mrow>";
         assert_eq!(
-            nbsp_in_mtext(s),
-            "<mrow><mtext>if&nbsp;</mtext><mi>b</mi></mrow>"
+            nbsp_to_entity(s),
+            "<mrow><mtext>if&nbsp;</mtext><mi>b</mi><span>x&nbsp;y</span></mrow>"
         );
+    }
+
+    #[test]
+    fn ascii_space_kept() {
+        // ASCII U+0020 stays as-is — DOMPurify only escapes NBSP.
+        let s = "<mtext>a b</mtext>";
+        assert_eq!(nbsp_to_entity(s), "<mtext>a b</mtext>");
     }
 
     #[test]

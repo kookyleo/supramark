@@ -1218,7 +1218,22 @@ fn measure_vertex_box(v: &Vertex, is_bold: bool, font_size_px: Option<f64>) -> (
     } else {
         label.clone()
     };
-    let (tw, th) = measure_text_with_size(&measure_label, is_bold, font_size_px);
+    // KaTeX `$$..$$` math labels: the rendered HTML is a structured KaTeX
+    // tree. Measuring its textContent (via `measure_html_markup_label`)
+    // reproduces what jsdom's `getBoundingClientRect` shim does on the
+    // wrapping `<div>` after mermaid splices KaTeX into it. Without this
+    // detour the bbox is computed from the raw `$$..$$` source text and
+    // gets the node sized as if the LaTeX were a plain string — much wider
+    // than the rendered KaTeX result.
+    let (tw, th) = if crate::render::foreign_object::contains_katex_marker(&measure_label) {
+        let font = crate::render::foreign_object::HtmlLabelFont::default();
+        match crate::render::foreign_object::try_render_katex_label(&measure_label, &font) {
+            Some((_, w, h)) => (w, h),
+            None => measure_text_with_size(&measure_label, is_bold, font_size_px),
+        }
+    } else {
+        measure_text_with_size(&measure_label, is_bold, font_size_px)
+    };
     // Upstream shape helpers compute total size from the label bbox
     // plus per-shape padding. The `node.padding` config default is 15.
     //
@@ -1582,6 +1597,16 @@ fn measure_edge_label(text: &str, html_labels: bool, is_markdown: bool) -> (f64,
     let h = font_metrics::line_height(EDGE_LABEL_FONT, EDGE_LABEL_SIZE, false, false);
     if text.is_empty() {
         return (0.0, h);
+    }
+    // KaTeX `$$..$$` math edge labels: the layout engine must reserve the
+    // post-render bbox, not the raw `$$..$$` source width.
+    if html_labels && crate::render::foreign_object::contains_katex_marker(text) {
+        let font = crate::render::foreign_object::HtmlLabelFont::default();
+        if let Some((_, w, h)) =
+            crate::render::foreign_object::try_render_katex_label(text, &font)
+        {
+            return (w, h);
+        }
     }
     let measure_text = if is_markdown {
         // Under htmlLabels=false the SVG <text> textContent comes from

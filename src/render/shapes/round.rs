@@ -56,6 +56,42 @@ pub fn draw(node: &Node, _theme: &ThemeVariables) -> Result<String> {
         h = fmt_num(h),
     ));
     if !label.is_empty() {
+        // KaTeX `$$..$$` math block — see `rect.rs` for the same branch.
+        let font = crate::render::foreign_object::HtmlLabelFont::default();
+        if let Some((katex_html, lw, lh)) =
+            crate::render::foreign_object::try_render_katex_label(&label, &font)
+        {
+            let css = node.css_styles.as_deref().unwrap_or(&[]);
+            let lbl_style = build_label_style(css);
+            let div_prefix = build_div_style_prefix(css);
+            let opts = crate::render::foreign_object::LabelOpts {
+                group_style: if lbl_style.is_empty() {
+                    Some("")
+                } else {
+                    Some(&lbl_style)
+                },
+                label_style: if lbl_style.is_empty() {
+                    None
+                } else {
+                    Some(&lbl_style)
+                },
+                div_style_prefix: if div_prefix.is_empty() {
+                    None
+                } else {
+                    Some(&div_prefix)
+                },
+                wrap_in_p: false,
+                ..crate::render::foreign_object::LabelOpts::default()
+            };
+            out.push_str(&crate::render::foreign_object::render_node_label(
+                &katex_html,
+                lw,
+                lh,
+                &opts,
+            ));
+            out.push_str("</g>");
+            return Ok(out);
+        }
         let is_markdown = node.label_type.as_deref() == Some("markdown");
         let css = node.css_styles.as_deref().unwrap_or(&[]);
         // Label style from css_styles (color:, font-*, text-*) overrides node.label_style.

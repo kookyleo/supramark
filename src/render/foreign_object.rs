@@ -39,6 +39,64 @@
 
 use crate::font_metrics::{line_height, text_width};
 
+/// Detect a KaTeX block — at least one paired `$$..$$` on a single line.
+/// Mirrors mermaid's `katexRegex.test(text)` (`/\$\$(.*)\$\$/g`).
+pub fn contains_katex_marker(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    let mut found_open = None;
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'$' && bytes[i + 1] == b'$' {
+            if let Some(open) = found_open {
+                if i > open + 2 {
+                    return true;
+                }
+            } else {
+                found_open = Some(i);
+            }
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    false
+}
+
+/// Try to render a label that may contain `$$..$$` math through KaTeX. On
+/// success returns `(html, width, height)` ready to feed into
+/// `render_node_label` (the caller passes `wrap_in_p: false`); on failure
+/// or when the `katex` feature is off the function returns `None` and the
+/// caller falls back to its normal text path.
+///
+/// The label is the raw .mmd label (XML-escaped — `&` → `&amp;` etc.).
+/// `font` controls bbox measurement.
+#[cfg(feature = "katex")]
+pub fn try_render_katex_label(
+    label: &str,
+    font: &HtmlLabelFont<'_>,
+) -> Option<(String, f64, f64)> {
+    if !contains_katex_marker(label) {
+        return None;
+    }
+    match crate::katex::render_label(label) {
+        Ok(html) => {
+            let (w, h) = measure_html_markup_label(&html, font, 200.0, true);
+            Some((html, w, h))
+        }
+        Err(_) => None,
+    }
+}
+
+/// Stub used when the `katex` feature is off — always falls back to the
+/// upstream jsdom-default placeholder behavior (text rendered verbatim).
+#[cfg(not(feature = "katex"))]
+pub fn try_render_katex_label(
+    _label: &str,
+    _font: &HtmlLabelFont<'_>,
+) -> Option<(String, f64, f64)> {
+    None
+}
+
 /// Normalise every `<br>` / `<br />` / `<br\t/>` (and other whitespace
 /// variants) to upstream's canonical `<br/>` form. Other tags pass through
 /// unchanged, including their original casing.

@@ -820,7 +820,21 @@ fn compute_viewbox(
             } else {
                 font.clone()
             };
-            let (lw, lh) = measure_html_markup_label(&processed, &label_font, 200.0, true);
+            // KaTeX `$$..$$` math: the bbox we feed into the viewBox union
+            // must match the bbox the actual KaTeX-rendered foreignObject
+            // ends up with — otherwise the viewBox grows as if it contained
+            // the raw `$$..$$` source text.
+            let (lw, lh) = if crate::render::foreign_object::contains_katex_marker(&processed) {
+                match crate::render::foreign_object::try_render_katex_label(
+                    &processed,
+                    &label_font,
+                ) {
+                    Some((_, w, h)) => (w, h),
+                    None => measure_html_markup_label(&processed, &label_font, 200.0, true),
+                }
+            } else {
+                measure_html_markup_label(&processed, &label_font, 200.0, true)
+            };
             expand(
                 &mut min_x, &mut min_y, &mut max_x, &mut max_y, 0.0, 0.0, lw, lh,
             );
@@ -3309,14 +3323,28 @@ fn render_edge_label(e: &UEdge, html_labels: bool, l: &FlowchartLayout) -> Strin
     let processed =
         crate::render::foreign_object::normalize_br_tags(&replace_fa_icons(&label_html));
     let is_empty = processed.is_empty();
-    // Upstream always measures the label height (even when empty),
-    // using the font's line-height. For empty labels, width=0 but
-    // height is still the font's line-height.
-    let (w, h) = if is_empty {
+    // KaTeX `$$..$$` math edge labels: render through the embedded KaTeX
+    // pipeline and emit an edge label with `wrap_in_p: false` so the
+    // inner `<span class="edgeLabel ">` directly carries the KaTeX
+    // `<div>…</div>` markup, matching the reference SVG.
+    let (w, h, katex_html) = if !is_empty
+        && crate::render::foreign_object::contains_katex_marker(&processed)
+    {
+        let font = HtmlLabelFont::default();
+        match crate::render::foreign_object::try_render_katex_label(&processed, &font) {
+            Some((html, w, h)) => (w, h, Some(html)),
+            None => {
+                let (w, h) = measure_html_markup_label(&processed, &font, 200.0, true);
+                (w, h, None)
+            }
+        }
+    } else if is_empty {
         let (_, lh) = measure_html_label("X", &HtmlLabelFont::default(), 200.0, true);
-        (0.0, lh)
+        (0.0, lh, None)
     } else {
-        measure_html_markup_label(&processed, &HtmlLabelFont::default(), 200.0, true)
+        let (w, h) =
+            measure_html_markup_label(&processed, &HtmlLabelFont::default(), 200.0, true);
+        (w, h, None)
     };
     let dagre_lx = e.label_x.unwrap_or(0.0);
     let dagre_ly = e.label_y.unwrap_or(0.0);
@@ -3366,7 +3394,7 @@ fn render_edge_label(e: &UEdge, html_labels: bool, l: &FlowchartLayout) -> Strin
     let opts = LabelOpts {
         data_id: Some(&e.id),
         group_style: None,
-        wrap_in_p: !is_empty,
+        wrap_in_p: !is_empty && katex_html.is_none(),
         div_style_prefix: if div_prefix.is_empty() {
             None
         } else {
@@ -3379,7 +3407,8 @@ fn render_edge_label(e: &UEdge, html_labels: bool, l: &FlowchartLayout) -> Strin
         },
         ..LabelOpts::default()
     };
-    fo_edge(&processed, lx, ly, w, h, opts)
+    let body = katex_html.as_deref().unwrap_or(processed.as_str());
+    fo_edge(body, lx, ly, w, h, opts)
 }
 
 /// Render an edge label as `<text>`/`<tspan>` (htmlLabels=false branch).
