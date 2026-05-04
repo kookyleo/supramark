@@ -229,14 +229,18 @@ fn render_multi(
             continue;
         };
         let section = l.nodes[i].section;
+        // edge-depth-N: N = parent.level + 1 (mirrors upstream
+        // `mindmap-definition::generateEdges`).
+        let edge_depth = d.nodes[parent].level + 1;
         let edge_id = format!("{id}-edge_{}_{}", parent, i);
         let d_attr = curve_basis_path(*ep);
         let points_attr = encode_data_points(*ep);
         out.push_str(&format!(
-            r#"<path d="{d}" id="{eid}" class=" edge-thickness-normal edge-pattern-solid edge section-edge-{sec} edge-depth-1" style="undefined;;;undefined" data-edge="true" data-et="edge" data-id="edge_{ps}_{cs}" data-points="{pts}" data-look="classic"></path>"#,
+            r#"<path d="{d}" id="{eid}" class=" edge-thickness-normal edge-pattern-solid edge section-edge-{sec} edge-depth-{ed}" style="undefined;;;undefined" data-edge="true" data-et="edge" data-id="edge_{ps}_{cs}" data-points="{pts}" data-look="classic"></path>"#,
             d = d_attr,
             eid = edge_id,
             sec = section,
+            ed = edge_depth,
             ps = parent,
             cs = i,
             pts = points_attr,

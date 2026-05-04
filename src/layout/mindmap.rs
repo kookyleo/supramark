@@ -248,28 +248,29 @@ pub fn layout(d: &MindmapDiagram, _theme: &ThemeVariables) -> Result<MindmapLayo
     })
 }
 
-/// Clip the segment from `from` (kept) towards `to` against a 30 × 30 box
-/// centred at `from`. Returns the intersection on the box boundary in
-/// the direction of `to`. If the segment is degenerate (`from == to`) we
-/// return `from` unchanged.
+/// Return the point on the circle of radius 15 centred at `from`, on the
+/// side facing `to`. Mirrors cytoscape's `intersectLineEllipse` operation
+/// order BIT-FOR-BIT (see vendor/cytoscape.umd.js#4077): the length is
+/// computed from RADIUS-NORMALISED displacements, but the proportional
+/// scaling is applied to the RAW displacements. Re-arranging into a
+/// single `(R / len)` factor produces a different rounding pattern.
 fn clip_to_default_bbox(from: (f64, f64), to: (f64, f64)) -> (f64, f64) {
-    const HALF: f64 = 15.0; // cytoscape default node bbox = 30 × 30
-    let (dx, dy) = (to.0 - from.0, to.1 - from.1);
-    if dx == 0.0 && dy == 0.0 {
+    const R: f64 = 15.0;
+    // Cytoscape's `intersectLineEllipse(x, y, centerX, centerY, r, r)`
+    // returns the intersection on the boundary nearest `(x, y)`. Map
+    // our `(from, to)` to cytoscape's `(centerX, centerY) = from`,
+    // `(x, y) = to`.
+    let disp_x = (from.0 - to.0) / R;
+    let disp_y = (from.1 - to.1) / R;
+    let len = (disp_x * disp_x + disp_y * disp_y).sqrt();
+    let new_length = len - 1.0;
+    if new_length < 0.0 {
         return from;
     }
-    // Parametric: from + t * (dx, dy), find smallest t > 0 hitting one of
-    // the four box edges.
-    let mut t = f64::INFINITY;
-    if dx != 0.0 {
-        let tx = (HALF * dx.signum()) / dx;
-        t = t.min(tx);
-    }
-    if dy != 0.0 {
-        let ty = (HALF * dy.signum()) / dy;
-        t = t.min(ty);
-    }
-    (from.0 + t * dx, from.1 + t * dy)
+    let len_prop = new_length / len;
+    let raw_dx = from.0 - to.0;
+    let raw_dy = from.1 - to.1;
+    (raw_dx * len_prop + to.0, raw_dy * len_prop + to.1)
 }
 
 /// Compute width × height for a node. Mirrors upstream's
