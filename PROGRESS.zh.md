@@ -1,16 +1,18 @@
 # 阶段进展
 
-截至 2026-05-04，Wave 16-A 完结。
+截至 2026-05-04，Wave 16-C 完结。
 
-**当前指标：1292 / 1323 byte-exact（约 97.2%）**。
+**当前指标：1298 / 1323 byte-exact（约 98.0%）**。
 
-- 1292 = 1289（W15-EE 入手点）+3：
+- 1298 = 1289（W15-EE 入手点）+9：
   - W16-A（fixture 27 bidirectional bounds.insert line endpoints）+1
   - W16-B（mindmap Circle + RoundedRect single-node）+2
-- 1323 = sweep_all 处理的 fixture 总数
-- 差额 31 = cypress/sequence 6（box×4 + create×2）+ demos/sequence 3（box×1 + loop×2）+ mindmap 15 + demos/mindmap 1 + KaTeX flowchart 6（out of scope）
+  - W16-C（sequence box 渲染 + create/destroy 渲染 + typed-actor y-offset）+6
+- cypress/sequence 达到 **140/140 (100%)** ✓
+- 1323 = sweep_all fixture 总数
+- 差额 25 = mindmap 15(cose-bilkent) + demos/mindmap 1 + demos/flowchart 6(KaTeX) + demos/sequence 3
 
-W16-A 子 agent 实现了 sequence box + create/destroy 渲染骨架，但因改动过大引入严重回归（134→9/140），已全部回滚到 68dee74。经验教训：sequence 渲染改动必须**逐函数增量推进**，不能一次性修改 only_supported_items + 多个 emit_actor_top/bottom 函数签名。
+W16-A 子 agent 实现了 sequence box + create/destroy 渲染骨架，但因改动过大引入严重回归（134→9/140），已全部回滚到 68dee74。W16-C 重新增量实现，逐 commit 推进，最终达到 140/140 无回归。
 
 ## Wave 15-spike + 15-A（2026-05-03）
 
