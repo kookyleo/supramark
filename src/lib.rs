@@ -28,6 +28,7 @@ pub mod model;
 pub mod parser;
 pub mod preprocess;
 pub mod render;
+pub mod svg_match;
 pub mod text;
 pub mod theme;
 

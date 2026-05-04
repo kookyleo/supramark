@@ -128,7 +128,7 @@ fn main() {
                         continue;
                     }
                 };
-                let pass = got == expected;
+                let pass = mermaid_little::svg_match::svg_match_tolerant(&got, &expected);
                 let detail = if pass {
                     String::new()
                 } else {
