@@ -765,6 +765,7 @@ pub fn render(
         actor_margins[i] = m.max(actor_margin);
     }
 
+    // Per-actor margin
     // X positions: mirrors upstream addActorRenderingData actor loop.
     // When boxes are present, box margins shift actor positions:
     //   - on box start: prevMargin += box.margin
@@ -830,6 +831,9 @@ pub fn render(
                 if let Some(cbi) = cur_box {
                     prev_margin += box_margins_for_x[cbi];
                 }
+            }
+            if d.actors[i].created {
+                prev_margin += actor_widths[i] / 2.0;
             }
             xs.push(cursor + prev_margin);
             cursor += actor_widths[i] + prev_margin;
@@ -2067,6 +2071,48 @@ pub fn render(
         let mut stopx = if is_arrow_to_right { to_left } else { to_right };
         if is_self {
             stopx = startx;
+        }
+        // ── Created / destroyed actor adjustment ───────────────────────
+        //
+        // Mirrors upstream `adjustCreatedDestroyedData`
+        // (sequenceRenderer.ts:967-1014). For a created actor the
+        // message's stopx is adjusted inward (receiver side) by half
+        // the actor's visual width + 3 so the line ends at the body
+        // edge rather than the lifeline centre. For a destroyed actor
+        // the startx is similarly adjusted (sender side, without the
+        // +3). Upstream also calls bounds.insert here but that only
+        // affects bounds_startx/bounds_stopx which are already
+        // correct from the actor x-positioning pass.
+        fn is_drawn_type(t: &ActorType) -> bool {
+            matches!(t, ActorType::Actor | ActorType::Control | ActorType::Entity | ActorType::Database)
+        }
+        if pending_create_actor.is_some() {
+            if ta.x < fa.x {
+                let adj = if is_drawn_type(&ta.actor_type) { 18.0 + 3.0 } else { ta.width / 2.0 + 3.0 };
+                stopx += adj;
+            } else {
+                let adj = if is_drawn_type(&ta.actor_type) { 18.0 + 3.0 } else { ta.width / 2.0 + 3.0 };
+                stopx -= adj;
+            }
+        }
+        for did in &pending_destroy_actors {
+            if did == &m.from {
+                if fa.x < ta.x {
+                    let adj = if is_drawn_type(&fa.actor_type) { 18.0 } else { fa.width / 2.0 };
+                    startx += adj;
+                } else {
+                    let adj = if is_drawn_type(&fa.actor_type) { 18.0 } else { fa.width / 2.0 };
+                    startx -= adj;
+                }
+            } else if did == &m.to {
+                if ta.x < fa.x {
+                    let adj = if is_drawn_type(&ta.actor_type) { 18.0 + 3.0 } else { ta.width / 2.0 + 3.0 };
+                    stopx += adj;
+                } else {
+                    let adj = if is_drawn_type(&ta.actor_type) { 18.0 + 3.0 } else { ta.width / 2.0 + 3.0 };
+                    stopx -= adj;
+                }
+            }
         }
         // Central-connection startx adjustment. Mirrors upstream
         // `calculateCentralConnectionOffset` (sequenceRenderer.ts:1768).

@@ -680,22 +680,19 @@ fn split_box_header(s: &str) -> (Option<String>, String) {
         let label = parts.next().unwrap_or("").trim().to_string();
         return (Some(fill), label);
     }
-    // Upstream captures first word (\w*) as color candidate, then
-    // validates it via CSS.supports / Option.style. We approximate with
-    // a known-set check: if the first word is a recognised CSS named
-    // colour, use it as fill; otherwise the whole string is the label
-    // and fill is transparent.
+    // Upstream regex: ^((?:rgba?|hsla?)\s*\(.*\)|\w*)(.*)$ — first word
+    // is always the fill candidate regardless of CSS validity; drawBox
+    // uses `fill || 'transparent'`, which treats empty-string as falsy.
     let first_word_end = s
         .find(|c: char| !c.is_ascii_alphanumeric())
         .unwrap_or(s.len());
     if first_word_end > 0 {
-        let candidate = &s[..first_word_end];
-        if is_css_color_name(candidate) {
-            let label = s[first_word_end..].trim().to_string();
-            return (Some(candidate.to_string()), label);
-        }
+        let fill = &s[..first_word_end];
+        let label = s[first_word_end..].trim().to_string();
+        (Some(fill.to_string()), label)
+    } else {
+        (None, s.to_string())
     }
-    (None, s.to_string())
 }
 
 fn is_css_color_name(name: &str) -> bool {
