@@ -2608,29 +2608,54 @@ pub fn render(
             // ── Extra bounds.insert for create/destroy ──────────────────
             //
             // Mirrors upstream `adjustCreatedDestroyedData` calling
-            // `bounds2.insert()` with stopy =
-            // `msgModel.stopy + actor.height/2` and expanded x-bounds
-            // that include the created/destroyed actor's visual extent.
-            // The x-widening is already covered by the main message
-            // widening pass (which uses from_bounds/to_bounds), but the
-            // stopy needs an extra bump of half_actor_h.
+            // `bounds2.insert()`. For a created actor on the right,
+            // the insert uses `original_stopx + adjustment` (before
+            // our stopx -= adj), which equals `stopx + 2*adj`.
+            // For created on the left, the insert uses `stopx + adj`
+            // which equals the unadjusted stopx (since stopx += adj).
+            // For destroyed actors, similar logic applies to startx.
             let create_destroy_stopy = vertical;
+            let mut cd_minx = startx.min(stopx);
+            let mut cd_maxx = startx.max(stopx);
+            if had_create {
+                let adj = if is_drawn_type(&cd_ta_actor_type) { 18.0 + 3.0 } else { cd_ta_width / 2.0 + 3.0 };
+                if cd_ta_x >= cd_fa_x {
+                    cd_maxx = cd_maxx.max(stopx + 2.0 * adj);
+                } else {
+                    cd_minx = cd_minx.min(startx - 2.0 * adj);
+                }
+            }
             let stack_len = seq_items.len();
             for (cnt0, item) in seq_items.iter().enumerate() {
                 let n = (stack_len - cnt0) as f64;
                 let widened_stopy = create_destroy_stopy + n * box_margin;
+                let w_startx = cd_minx - n * box_margin;
+                let w_stopx = cd_maxx + n * box_margin;
                 match *item {
                     SeqItem::Loop(li) => {
                         let lr = &mut loops[li];
                         if widened_stopy > lr.stopy {
                             lr.stopy = widened_stopy;
                         }
+                        if w_startx < lr.startx {
+                            lr.startx = w_startx;
+                        }
+                        if w_stopx > lr.stopx {
+                            lr.stopx = w_stopx;
+                        }
                     }
                     SeqItem::Rect(pidx) => {
                         let r = &mut pending_rects[pidx];
                         r.widen_stopy(widened_stopy);
+                        r.widen_x(w_startx, w_stopx);
                     }
                 }
+            }
+            if cd_minx < bounds_startx {
+                bounds_startx = cd_minx;
+            }
+            if cd_maxx > bounds_stopx {
+                bounds_stopx = cd_maxx;
             }
         }
 
