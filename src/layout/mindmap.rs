@@ -310,18 +310,53 @@ fn size_node(n: &MindmapNode, d: &MindmapDiagram) -> PositionedNode {
         MindmapNodeType::RoundedRect => {
             (bbox_w + 2.0 * padding, bbox_h + 2.0 * padding)
         }
+        MindmapNodeType::Bang => {
+            // Upstream `bangShape`:
+            //   w = bbox.width  + 10 * halfPadding
+            //   h = bbox.height +  8 * halfPadding
+            //   minWidth  = bbox.width  + 20
+            //   minHeight = bbox.height + 20
+            //   effectiveWidth  = max(w, minWidth)
+            //   effectiveHeight = max(h, minHeight)
+            let w = bbox_w + 10.0 * half_padding;
+            let h = bbox_h + 8.0 * half_padding;
+            let min_w = bbox_w + 20.0;
+            let min_h = bbox_h + 20.0;
+            (w.max(min_w), h.max(min_h))
+        }
+        MindmapNodeType::Cloud => {
+            // Upstream `cloudShape`:
+            //   w = bbox.width  + 2 * halfPadding
+            //   h = bbox.height + 2 * halfPadding
+            (bbox_w + 2.0 * half_padding, bbox_h + 2.0 * half_padding)
+        }
         _ => (bbox_w + 8.0 * half_padding, bbox_h + 2.0 * half_padding),
     };
 
     // Union bbox (shape ∪ foreignObject, transforms ignored — JSDOM
     // shim semantics). Mermaid feeds these values to cose-bilkent as the
-    // node's `data.{width, height}` after `getBBox()`. Matches:
-    //   * shape: centred at origin → covers `[-shape_w/2, shape_w/2]`
-    //     × `[-shape_h/2, shape_h/2]`.
-    //   * foreignObject: ignored transform → covers `[0, bbox_w]`
-    //     × `[0, bbox_h]`.
-    let cose_w = shape_w / 2.0 + bbox_w.max(shape_w / 2.0);
-    let cose_h = shape_h / 2.0 + bbox_h.max(shape_h / 2.0);
+    // node's `data.{width, height}` after `getBBox()`. The shape origin
+    // depends on the shape type:
+    //   * centred shapes (default, rect, rounded, circle, hexagon) draw
+    //     a path/rect with coordinates already in `[-w/2, w/2]`, so the
+    //     shape covers `[-shape_w/2, shape_w/2]`. Foreign object is at
+    //     `translate(-bbox_w/2, -bbox_h/2)` (transform ignored) so it
+    //     covers `[0, bbox_w]`. Union = `shape_w/2 + max(shape_w/2,
+    //     bbox_w)`.
+    //   * bang / cloud start at `M0 0` and trace into +x/+y space, with
+    //     a `transform="translate(-eff/2, -eff/2)"` on the path element
+    //     (ignored by JSDOM). Path bbox covers `[0, eff_w]`. Foreign
+    //     object also covers `[0, bbox_w]`. Union = `max(eff_w, bbox_w)
+    //     = shape_w` (since shape_w >= bbox_w by construction).
+    let (cose_w, cose_h) = match n.node_type {
+        MindmapNodeType::Bang | MindmapNodeType::Cloud => {
+            (shape_w.max(bbox_w), shape_h.max(bbox_h))
+        }
+        _ => (
+            shape_w / 2.0 + bbox_w.max(shape_w / 2.0),
+            shape_h / 2.0 + bbox_h.max(shape_h / 2.0),
+        ),
+    };
 
     PositionedNode {
         id: n.id,

@@ -402,33 +402,82 @@ fn emit_shape_body(out: &mut String, kind: ShapeKind, n: &PositionedNode, dom_id
             ));
         }
         ShapeKind::Bang => {
-            // Simplified bang / explosion stand-in (rounded rect) until
-            // the 12-arc `bangShape` formula is ported.
-            let inner_w = n.shape_w - 10.0;
-            let inner_h = n.shape_h - 10.0;
+            // Upstream `bangShape` (src/rendering-util/rendering-elements/
+            // shapes/bang.ts): 12-arc explosion path drawn from `M0 0`
+            // with a translate of (-effectiveWidth/2, -effectiveHeight/2)
+            // applied to the path itself. effectiveWidth/Height already
+            // baked into shape_w/shape_h by the layout sizing pass.
+            let ew = n.shape_w;
+            let eh = n.shape_h;
+            let r = 0.15 * ew;
+            let r08 = r * 0.8;
+            let path = format!(
+                "M0 0 \n    a{r},{r} 1 0,0 {a1},{b1}\n    a{r},{r} 1 0,0 {a1},{z}\n    a{r},{r} 1 0,0 {a1},{z}\n    a{r},{r} 1 0,0 {a1},{b2}\n\n    a{r},{r} 1 0,0 {c1},{d1}\n    a{r08},{r08} 1 0,0 0,{d2}\n    a{r},{r} 1 0,0 {c2},{d1}\n\n    a{r},{r} 1 0,0 {e1},{f1}\n    a{r},{r} 1 0,0 {e1},0\n    a{r},{r} 1 0,0 {e1},0\n    a{r},{r} 1 0,0 {e1},{f2}\n\n    a{r},{r} 1 0,0 {g1},{h1}\n    a{r08},{r08} 1 0,0 0,{h2}\n    a{r},{r} 1 0,0 {g2},{h1}\n  H0 V0 Z",
+                r = fmt_num(r),
+                r08 = fmt_num(r08),
+                a1 = fmt_num(ew * 0.25),
+                b1 = fmt_num(-1.0 * eh * 0.1),
+                z = fmt_num(0.0),
+                b2 = fmt_num(eh * 0.1),
+                c1 = fmt_num(ew * 0.15),
+                d1 = fmt_num(eh * 0.33),
+                d2 = fmt_num(eh * 0.34),
+                c2 = fmt_num(-1.0 * ew * 0.15),
+                e1 = fmt_num(-1.0 * ew * 0.25),
+                f1 = fmt_num(eh * 0.15),
+                f2 = fmt_num(-1.0 * eh * 0.15),
+                g1 = fmt_num(-1.0 * ew * 0.1),
+                h1 = fmt_num(-1.0 * eh * 0.33),
+                h2 = fmt_num(-1.0 * eh * 0.34),
+                g2 = fmt_num(ew * 0.1),
+            );
             out.push_str(&format!(
-                r#"<path class="basic label-container" style="" d="M{nx} {hh}v{nih}q0,-5 5,-5h{iw}q5,0 5,5v{ih}q0,5 -5,5h{niw}q-5,0 -5,-5Z"></path>"#,
-                nx = fmt_num(-half_w),
-                hh = fmt_num(half_h - 5.0),
-                nih = fmt_num(-inner_h),
-                iw = fmt_num(inner_w),
-                ih = fmt_num(inner_h),
-                niw = fmt_num(-inner_w),
+                r#"<path class="basic label-container" style="" d="{d}" transform="translate({tx}, {ty})"></path>"#,
+                d = path,
+                tx = fmt_num(-ew / 2.0),
+                ty = fmt_num(-eh / 2.0),
             ));
         }
         ShapeKind::Cloud => {
-            // Simplified cloud stand-in (rounded rect) until the
-            // upstream `cloudShape` 9-arc formula is ported.
-            let inner_w = n.shape_w - 10.0;
-            let inner_h = n.shape_h - 10.0;
+            // Upstream `cloudShape` (src/rendering-util/rendering-elements/
+            // shapes/cloud.ts): 9-arc puffy cloud path drawn from `M0 0`
+            // with a translate of (-w/2, -h/2). w/h already baked into
+            // shape_w/shape_h by the layout sizing pass.
+            let w = n.shape_w;
+            let h = n.shape_h;
+            let r1 = 0.15 * w;
+            let r2 = 0.25 * w;
+            let r3 = 0.35 * w;
+            let r4 = 0.20 * w;
+            let path = format!(
+                "M0 0 \n    a{r1},{r1} 0 0,1 {a1},{b1}\n    a{r3},{r3} 1 0,1 {a2},{b1}\n    a{r2},{r2} 1 0,1 {a3},{b2}\n\n    a{r1},{r1} 1 0,1 {c1},{d1}\n    a{r4},{r4} 1 0,1 {c2},{d2}\n\n    a{r2},{r1} 1 0,1 {e1},{f1}\n    a{r3},{r3} 1 0,1 {e2},0\n    a{r1},{r1} 1 0,1 {e1},{f2}\n\n    a{r1},{r1} 1 0,1 {g1},{h1}\n    a{r4},{r4} 1 0,1 {g2},{h2}\n  H0 V0 Z",
+                r1 = fmt_num(r1),
+                r2 = fmt_num(r2),
+                r3 = fmt_num(r3),
+                r4 = fmt_num(r4),
+                a1 = fmt_num(w * 0.25),
+                b1 = fmt_num(-1.0 * w * 0.1),
+                a2 = fmt_num(w * 0.4),
+                a3 = fmt_num(w * 0.35),
+                b2 = fmt_num(w * 0.2),
+                c1 = fmt_num(w * 0.15),
+                d1 = fmt_num(h * 0.35),
+                c2 = fmt_num(-1.0 * w * 0.15),
+                d2 = fmt_num(h * 0.65),
+                e1 = fmt_num(-1.0 * w * 0.25),
+                f1 = fmt_num(w * 0.15),
+                e2 = fmt_num(-1.0 * w * 0.5),
+                f2 = fmt_num(-1.0 * w * 0.15),
+                g1 = fmt_num(-1.0 * w * 0.1),
+                h1 = fmt_num(-1.0 * h * 0.35),
+                g2 = fmt_num(w * 0.1),
+                h2 = fmt_num(-1.0 * h * 0.65),
+            );
             out.push_str(&format!(
-                r#"<path class="basic label-container" style="" d="M{nx} {hh}v{nih}q0,-5 5,-5h{iw}q5,0 5,5v{ih}q0,5 -5,5h{niw}q-5,0 -5,-5Z"></path>"#,
-                nx = fmt_num(-half_w),
-                hh = fmt_num(half_h - 5.0),
-                nih = fmt_num(-inner_h),
-                iw = fmt_num(inner_w),
-                ih = fmt_num(inner_h),
-                niw = fmt_num(-inner_w),
+                r#"<path class="basic label-container" style="" d="{d}" transform="translate({tx}, {ty})"></path>"#,
+                d = path,
+                tx = fmt_num(-w / 2.0),
+                ty = fmt_num(-h / 2.0),
             ));
         }
     }
