@@ -19,6 +19,7 @@
   - W-Mindmap-Markdown-Branch：把 `<p>` wrap 判定从形状改成 is_indented_block；单行 Circle/RoundedRect 文本（如 `((mindmap))`）现在正确包 `<p>` → cypress/01, 02, 04, 14（commit `5c0c305`）
   - W-Mindmap-Raw-Descr：layout 度量 + renderer 文本统一用 `raw_descr` 而非 `descr`，反引号等原始字符如实保留 → cypress/21
   - W-Mindmap-Br-Strip：度量端去 `<br/>` 后再 textWidth（textContent 不含 br 元素文本），渲染端 html_escape 跳过 br 让其作为 HTML 元素保留；含 `<br/>` 节点的 bbox 从 ~130 修正到 ~88，cose-bilkent 输入对齐 → cypress/13 + demos/mindmap/01（commit `6932396`）
+  - W-Mindmap-Bang-Cloud-Path：把 upstream `bangShape`（12 弧爆炸）+ `cloudShape`（9 弧云）路径 byte-exact 移植；cose-bilkent 输入用 path 合成的 union bbox（bbox + 10/8/2 × half_padding）→ cypress/10, 11 字节差从 ~2500 缩到 ~87（commit `cb2982f`）。剩余 87 字节差是 cose-bilkent JS 在 3 节点入口走了 tiling fallback 的 degenerate y，path 端已 byte-exact
 - cypress/sequence 达到 **140/140 (100%)** ✓
 - 1323 = sweep_all fixture 总数
 - 差额 4 = cypress/mindmap 4（03, 10, 11, 23）
@@ -32,9 +33,9 @@
 **关键发现 — cose-bilkent 失败根因不是 ULP**：QuickJS `Math.sin/sqrt/pow/log/cos/atan/exp` 多组样本与 V8 字节相同（fixture 12 全 Default-shape 同结构 max delta 1.42e-14 通过容差），cose-bilkent 物理本身确定。失败根因是**喂给 cose-bilkent 的 width/height 错了**：mermaid 上游 `cy.add({ data: { width, height } })` 的 width/height 来自 JSDOM `getBBox()` 对实际 `<g class="node">` 的实测，我们端则是合成公式。bbox 端 `<br/>` 计入了文本（textContent 把 br 算空），渲染端 `<br/>` 又被 escape 成 `&lt;br/&gt;`（应保留为 HTML 元素），两 bug 双向偏。
 
 **剩余 4 项分类**：
-- cypress/mindmap：10, 11（含 bang `((..))` 形状）— bang/cloud 渲染目前是占位 rounded-rect，几何外凸 10-20px 没复刻
-- cypress/mindmap：03（`layout: tidy-tree` 不走 cose-bilkent，需独立端口非分层 tidy-tree 算法）
-- cypress/mindmap：23（15 节点 default-only，position 漂移幅度大、待诊断）
+- cypress/mindmap：10, 11 — bang/cloud SVG 路径几何已 byte-exact（commit `cb2982f`，12 弧 bang + 9 弧 cloud），但 cose-bilkent JS 在 3 节点情况下返回 y 全部 = 43.148（degenerate "tiling 横排" fallback），上游则有合理的 y 散布（50/66/63）。差距来自 cose-bilkent 的 reduceTrees + tiling 选择路径未对齐
+- cypress/mindmap：03（`layout: tidy-tree` 不走 cose-bilkent，需独立端口 non-layered-tidy-tree 算法）
+- cypress/mindmap：23（15 节点 default-only，cose-bilkent 全图 simulation 拓扑性偏离 —— 全 leaf 单层结构触发 reduceTrees 不同分支，不是 ULP）
 
 **架构**：仅依赖嵌入式 JS 引擎（rquickjs），不依赖 node、不依赖 DOM/webview。KaTeX 0.16.45 `renderToString` 走 `toMarkup` 路径无 DOM 依赖；cytoscape headless + cose-bilkent 仅需 15 LOC stub（console + setTimeout no-ops），同样无 DOM。DOMPurify 等价由 Rust 重写。Cargo `katex` / `cose_bilkent` feature 各自独立 gate，关闭时不影响默认 build。
 
