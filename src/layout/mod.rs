@@ -1546,14 +1546,19 @@ fn layout_class_diagram(cd: &ClassDiagram, skin: &crate::style::SkinParams) -> R
             // This pushes lf_min_x 2px beyond the rect's (node_x - 1).
             let lf_extra = entity_lf_extra_left(cd, e);
             // Java: EntityImageMap uses ShapeType.RECTANGLE_HTML_FOR_PORTS which
-            // emits a shape=plaintext HTML table. Graphviz adds a default plaintext
-            // margin of 0.055in ~= 4pt on top/bottom, inflating the node bbox by
-            // ~8px total (4 above, 4 below). Mirror that by inflating the DOT node
-            // height for Map entities; the renderer still uses the natural image
-            // height from image_height_pt.
+            // emits a shape=plaintext HTML table. Graphviz lays the table out at
+            // its declared dimensions (no extra padding), so the rendered bbox
+            // sits at slightly different x/y than a shape=rect node of the same
+            // size would. Use the same shape here for byte-exact alignment with
+            // Java reference SVGs.
             let is_map = e.kind == EntityKind::Map && !e.map_entries.is_empty();
-            let dot_h = if is_map { h + 8.0 } else { h };
+            let dot_h = h;
             let natural_h = h;
+            let shape = if is_map {
+                Some(crate::svek::shape_type::ShapeType::RectangleHtmlForPorts)
+            } else {
+                None
+            };
             LayoutNode {
                 id: name_to_id
                     .get(&e.name)
@@ -1562,7 +1567,7 @@ fn layout_class_diagram(cd: &ClassDiagram, skin: &crate::style::SkinParams) -> R
                 label: e.name.clone(),
                 width_pt: w,
                 height_pt: dot_h,
-                shape: None,
+                shape,
                 shield,
                 entity_position: None,
                 max_label_width: None,
