@@ -10,7 +10,6 @@ use std::process::{Command, Stdio};
 const PX_PER_EX: i32 = 8;
 
 /// Embedded JS sources (same files as Go d2).
-static POLYFILLS_JS: &str = include_str!("../polyfills.js");
 static MATHJAX_JS: &str = include_str!("../mathjax.js");
 static SETUP_JS: &str = include_str!("../setup.js");
 
@@ -55,11 +54,7 @@ process.stdout.write(result);
     );
 
     // Build the full script. Write via stdin to avoid arg-length limits.
-    let mut script = String::with_capacity(
-        POLYFILLS_JS.len() + MATHJAX_JS.len() + SETUP_JS.len() + tail.len() + 4,
-    );
-    script.push_str(POLYFILLS_JS);
-    script.push('\n');
+    let mut script = String::with_capacity(MATHJAX_JS.len() + SETUP_JS.len() + tail.len() + 2);
     script.push_str(MATHJAX_JS);
     script.push('\n');
     script.push_str(SETUP_JS);
