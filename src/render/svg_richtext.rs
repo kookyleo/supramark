@@ -2850,13 +2850,23 @@ fn render_text_line_with_sprites(
                     if pending_gap {
                         cursor_x += gap;
                     }
-                    // Java AtomOpenIcon: getStartingAltitude = -3 * factor
-                    // The icon is rendered starting at (cursor_x + 1 margin, y - ascent + starting_altitude_offset)
-                    // Looking at the reference SVG, the icon path starts at the text baseline area.
-                    // Java: icon is drawn at UGraphic position, with startingAltitude = -3 * factor
-                    // shifting it up from the baseline.
-                    let icon_x = cursor_x + 1.0; // 1px left margin
-                    let icon_y = y - ascent + 3.0 * factor;
+                    // Java Sea places each atom by:
+                    //   pos.translateY(-height + atom.getStartingAltitude())
+                    // then translateMinYto(0) so the topmost atom sits at y=0.
+                    // For a line that mixes text and an OpenIcon at font size F:
+                    //   text block height  = ascent + descent
+                    //   icon block height  = icon_h + 3*factor (AtomOpenIcon.getStartingAltitude = -3*factor)
+                    //   line height        = max(text_h, icon_block_h)
+                    //   icon top offset    = line_h - icon_block_h
+                    // The text baseline sits at line_top + ascent, so:
+                    //   icon_top = (y_baseline - ascent) + (line_h - icon_block_h)
+                    let icon_x = cursor_x + 1.0; // 1px left margin (TextBlockUtils.withMargin(.., 1, 0))
+                    let descent = font_metrics::descent(font_family, font_size, bold, italic);
+                    let icon_h = icon.height as f64 * factor;
+                    let text_h = (ascent + descent).max(10.0);
+                    let icon_block_h = icon_h + 3.0 * factor;
+                    let line_h = text_h.max(icon_block_h);
+                    let icon_y = y - ascent + (line_h - icon_block_h);
                     let icon_fill = color.as_deref().unwrap_or(fill);
                     let path_svg =
                         crate::openiconic::render_icon_svg(icon, icon_x, icon_y, factor, icon_fill);
@@ -2987,8 +2997,15 @@ fn render_line_with_sprites(
                 if let Some(icon) = crate::openiconic::find_icon(name) {
                     let factor = *scale * font_size / 12.0;
                     let icon_x = cursor_x + 1.0;
+                    // Java Sea: icon top = max(text_h, icon_h + 3*factor) - (icon_h + 3*factor)
+                    // relative to the text top (= y_baseline - ascent).
                     let ascent = font_metrics::ascent(&font_family, font_size, bold, italic);
-                    let icon_y = y - ascent + 3.0 * factor;
+                    let descent = font_metrics::descent(&font_family, font_size, bold, italic);
+                    let icon_h = icon.height as f64 * factor;
+                    let text_h = (ascent + descent).max(10.0);
+                    let icon_block_h = icon_h + 3.0 * factor;
+                    let line_h = text_h.max(icon_block_h);
+                    let icon_y = y - ascent + (line_h - icon_block_h);
                     let icon_fill = color.as_deref().unwrap_or(fill);
                     let path_svg =
                         crate::openiconic::render_icon_svg(icon, icon_x, icon_y, factor, icon_fill);
