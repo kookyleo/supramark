@@ -1,6 +1,9 @@
 //! E2E runner for the full dagre/SVG-applicable Go corpus.
 //! Each case executes in its own subprocess so crashes/timeouts stay isolated.
 
+#[path = "common/mod.rs"]
+mod common;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -151,6 +154,10 @@ fn maybe_run_single_case() -> bool {
         Ok(s) => s,
         Err(_) => return false,
     };
+    // Tests run inside this child process call into latex::render via the
+    // svg_render pipeline; install the rquickjs-backed engine before any
+    // case touches a `tex:` block.
+    common::latex_engine::install();
     let idx: usize = idx_str.parse().unwrap();
     let all_cases = cases();
     let case = &all_cases[idx];
