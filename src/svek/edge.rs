@@ -82,6 +82,12 @@ pub enum LinkDecoration {
     #[default]
     None,
     Arrow,
+    /// Hollow triangle (Java `LinkDecor.ARROW_TRIANGLE`, source `>>`/`<<`).
+    /// Used by C4 stdlib `Rel(...)` which expands to `-->>`.  Rendered as
+    /// a 4-point triangle (apex + 2 base + close), drawn open (no fill),
+    /// decoration length 8 (vs `Arrow`'s 6) so the path is shortened
+    /// further before the head is drawn.
+    ArrowTriangle,
     Extends,
     Composition,
     Aggregation,
@@ -101,7 +107,10 @@ impl LinkDecoration {
     pub fn dot_arrow(&self) -> &'static str {
         match self {
             Self::None => "none",
-            Self::Arrow => "open",
+            // ARROW_TRIANGLE in Java passes `arrowsize=0.8` etc.; for DOT
+            // graphviz purposes, "open" matches the un-filled triangular
+            // head — same DOT routing, the SVG-level shape differs.
+            Self::Arrow | Self::ArrowTriangle => "open",
             Self::Extends => "empty",
             Self::Composition => "diamond",
             Self::Aggregation => "odiamond",
@@ -118,9 +127,19 @@ impl LinkDecoration {
     }
 
     /// Decoration margin size for spacing calculation.
+    /// Java `LinkDecor.getMargin()`: ARROW=10, ARROW_TRIANGLE=10,
+    /// EXTENDS=30, COMPOSITION/AGREGATION=15, NOT_NAVIGABLE=1, etc.
+    /// Our values diverge from Java for the legacy decoration types
+    /// because they were calibrated empirically.
+    /// `ArrowTriangle` returns 0 here (rather than mirroring `Arrow`'s 4)
+    /// so the value passed through `decor_dzeta` matches what `None`
+    /// produced before — the legacy component pipeline used `None` as
+    /// the default head decoration and routed arrows correctly.  We
+    /// only need `ArrowTriangle` distinct from `Arrow` for the SVG
+    /// rendering decision, not for DOT routing.
     pub fn margin(&self) -> i32 {
         match self {
-            Self::None => 0,
+            Self::None | Self::ArrowTriangle => 0,
             Self::Arrow | Self::HalfArrow => 4,
             Self::Extends | Self::Composition | Self::Aggregation => 7,
             Self::Circle | Self::CircleFill | Self::CircleCross => 5,

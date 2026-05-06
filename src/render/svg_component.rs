@@ -2336,11 +2336,20 @@ fn render_edge(
 
     let pts = &edge.points;
     let arrow_at_start = edge.reversed_for_svg;
+    // Java `Extremity.getDecorationLength()` controls how much the path is
+    // shortened so it doesn't overlap the arrowhead.  ExtremityArrow returns
+    // 6, ExtremityTriangle returns the configured `decorationLength` (8 for
+    // `LinkDecor.ARROW_TRIANGLE`).  Pick the matching length so the SVG path
+    // ends exactly where the arrowhead's base sits.
+    let head_dec_length = match edge.head_decoration {
+        crate::svek::edge::LinkDecoration::ArrowTriangle => 8.0,
+        _ => 6.0,
+    };
     let d = if let Some(ref raw_d) = edge.raw_path_d {
         if arrow_at_start {
-            adjust_path_startpoint(raw_d, 6.0)
+            adjust_path_startpoint(raw_d, head_dec_length)
         } else {
-            adjust_path_endpoint(raw_d, 6.0)
+            adjust_path_endpoint(raw_d, head_dec_length)
         }
     } else {
         let mut d = String::new();
@@ -2385,15 +2394,20 @@ fn render_edge(
         r#"<path d="{d}" fill="none" id="{path_id}" style="stroke:{arrow_color};stroke-width:1;{dash_style}"/>"#,
     ));
 
-    // Java `ExtremityArrow`: 5-point arrowhead with a contact notch.
-    // For reversed ("backto") links the arrow points at the START of the path;
-    // for normal links the arrow points at the END.
+    // Arrowhead emission.  Two shapes are supported here:
+    //   * `Arrow` (Java `ExtremityArrow`): 5-point rhombus with a
+    //     contact notch — `(tip, wing-, notch, wing+, close)`,
+    //     xWing=9, ySide=4, notch xContact=5.
+    //   * `ArrowTriangle` (Java `ExtremityTriangle` with xWing=8,
+    //     yAperture=3, decorationLength=8): 4-point hollow triangle —
+    //     `(tip, wing-, wing+, close)`.  Used by C4 stdlib `Rel(...)`
+    //     which expands to `-->>`.
+    // For reversed ("backto") links the arrow points at the START of
+    // the path; for normal links it points at the END.
     if pts.len() >= 2 {
         let (tx, ty, fx, fy) = if arrow_at_start {
-            // Arrow at start: tip = pts[0], direction from pts[1] towards pts[0]
             (pts[0].0, pts[0].1, pts[1].0, pts[1].1)
         } else {
-            // Arrow at end: tip = last point, direction from second-to-last towards last
             (
                 pts[pts.len() - 1].0,
                 pts[pts.len() - 1].1,
@@ -2409,22 +2423,46 @@ fn render_edge(
             let uy = dy / len;
             let px = -uy;
             let py = ux;
-            let back = 9.0;
-            let side = 4.0;
-            let mid_back = 5.0;
-            let p1x = tx;
-            let p1y = ty;
-            let p2x = tx - ux * back - px * side;
-            let p2y = ty - uy * back - py * side;
-            let p3x = tx - ux * mid_back;
-            let p3y = ty - uy * mid_back;
-            let p4x = tx - ux * back + px * side;
-            let p4y = ty - uy * back + py * side;
 
-            PolygonShape {
-                points: vec![p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y, p1x, p1y],
+            match edge.head_decoration {
+                crate::svek::edge::LinkDecoration::ArrowTriangle => {
+                    // Java `ExtremityTriangle.buildPolygon` for ARROW_TRIANGLE:
+                    //   (0,0) -> (-xWing,-yAperture) -> (-xWing,yAperture) -> (0,0)
+                    // with xWing=8, yAperture=3, then rotate by `angle + π/2`
+                    // and translate to the tip.
+                    let xw = 8.0;
+                    let ya = 3.0;
+                    let p1x = tx;
+                    let p1y = ty;
+                    let p2x = tx - ux * xw - px * ya;
+                    let p2y = ty - uy * xw - py * ya;
+                    let p3x = tx - ux * xw + px * ya;
+                    let p3y = ty - uy * xw + py * ya;
+
+                    PolygonShape {
+                        points: vec![p1x, p1y, p2x, p2y, p3x, p3y, p1x, p1y],
+                    }
+                    .draw(sg, &DrawStyle::filled(arrow_color, arrow_color, 1.0));
+                }
+                _ => {
+                    let back = 9.0;
+                    let side = 4.0;
+                    let mid_back = 5.0;
+                    let p1x = tx;
+                    let p1y = ty;
+                    let p2x = tx - ux * back - px * side;
+                    let p2y = ty - uy * back - py * side;
+                    let p3x = tx - ux * mid_back;
+                    let p3y = ty - uy * mid_back;
+                    let p4x = tx - ux * back + px * side;
+                    let p4y = ty - uy * back + py * side;
+
+                    PolygonShape {
+                        points: vec![p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y, p1x, p1y],
+                    }
+                    .draw(sg, &DrawStyle::filled(arrow_color, arrow_color, 1.0));
+                }
             }
-            .draw(sg, &DrawStyle::filled(arrow_color, arrow_color, 1.0));
         }
     }
 
@@ -3325,6 +3363,7 @@ mod tests {
             dashed: false,
             reversed_for_svg: false,
             label_xy: None,
+            head_decoration: crate::svek::edge::LinkDecoration::Arrow,
         });
         let svg =
             render_component(&diagram, &layout, &SkinParams::default()).expect("render failed");
@@ -3352,6 +3391,7 @@ mod tests {
             dashed: true,
             reversed_for_svg: false,
             label_xy: None,
+            head_decoration: crate::svek::edge::LinkDecoration::Arrow,
         });
         let svg =
             render_component(&diagram, &layout, &SkinParams::default()).expect("render failed");
@@ -3375,6 +3415,7 @@ mod tests {
             dashed: false,
             reversed_for_svg: false,
             label_xy: None,
+            head_decoration: crate::svek::edge::LinkDecoration::Arrow,
         });
         let svg =
             render_component(&diagram, &layout, &SkinParams::default()).expect("render failed");
@@ -3619,6 +3660,7 @@ mod tests {
             dashed: false,
             reversed_for_svg: false,
             label_xy: None,
+            head_decoration: crate::svek::edge::LinkDecoration::Arrow,
         });
 
         let svg =
@@ -3677,6 +3719,7 @@ mod tests {
             dashed: false,
             reversed_for_svg: false,
             label_xy: None,
+            head_decoration: crate::svek::edge::LinkDecoration::Arrow,
         });
         let svg =
             render_component(&diagram, &layout, &SkinParams::default()).expect("render failed");

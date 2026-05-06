@@ -66,6 +66,12 @@ pub struct ComponentEdgeLayout {
     pub reversed_for_svg: bool,
     /// Label center position from graphviz/svek solve (x, y).
     pub label_xy: Option<(f64, f64)>,
+    /// Head-side arrow decoration (Java `LinkDecor`).  Currently only
+    /// `Arrow` (the default rhombus) and `ArrowTriangle` (`>>`,
+    /// hollow 4-point triangle from C4 stdlib `Rel(...)`) are
+    /// distinguished here — other decorations still go through the
+    /// legacy hard-coded path.
+    pub head_decoration: crate::svek::edge::LinkDecoration,
 }
 
 /// A positioned note.
@@ -916,6 +922,18 @@ pub fn layout_component(
             } else {
                 link.arrow_len.saturating_sub(1) as u32
             };
+            // The legacy component pipeline left `head_decoration=None`
+            // for every edge and let the renderer hard-code an
+            // `ExtremityArrow` 5-point rhombus.  We deliberately keep
+            // `head_decoration=None` here at the *graphviz* layer so
+            // DOT routing (and therefore the spline endpoints) remain
+            // identical to the previous baseline regardless of `>>`
+            // vs `>`.  The arrow shape (rhombus vs triangle) is
+            // selected at SVG render time from the per-edge
+            // `ComponentEdgeLayout.head_decoration` field that we
+            // populate downstream from `link.head_arrow_triangle`.
+            let head_decoration = crate::svek::edge::LinkDecoration::None;
+            let tail_decoration = crate::svek::edge::LinkDecoration::None;
             LayoutEdge {
                 from: edge_from,
                 to: edge_to,
@@ -931,8 +949,8 @@ pub fn layout_component(
                 head_label: None,
                 head_label_dimension: None,
                 head_label_boxed: false,
-                tail_decoration: crate::svek::edge::LinkDecoration::None,
-                head_decoration: crate::svek::edge::LinkDecoration::None,
+                tail_decoration,
+                head_decoration,
                 line_style: crate::svek::edge::LinkStyle::Normal,
                 minlen,
                 invisible: false,
@@ -1376,6 +1394,15 @@ pub fn layout_component(
                         ly + gl.move_delta.1 + gl.render_offset.1 - gl.normalize_offset.1,
                     )
                 });
+                // Only mark `ArrowTriangle` here so the legacy `None`-default
+                // path (used by `Arrow`) is preserved for diagrams that don't
+                // use C4 `Rel(...)`.  When `head_decoration` is `None`, the
+                // renderer falls through to the original 5-point rhombus.
+                let head_decoration = if link.head_arrow_triangle {
+                    crate::svek::edge::LinkDecoration::ArrowTriangle
+                } else {
+                    crate::svek::edge::LinkDecoration::None
+                };
                 ComponentEdgeLayout {
                     from,
                     to,
@@ -1387,6 +1414,7 @@ pub fn layout_component(
                     dashed: link.dashed,
                     reversed_for_svg: inverted,
                     label_xy,
+                    head_decoration,
                 }
             })
             .collect();
@@ -1786,6 +1814,11 @@ fn layout_edges(
             points
         );
 
+        let head_decoration = if link.head_arrow_triangle {
+            crate::svek::edge::LinkDecoration::ArrowTriangle
+        } else {
+            crate::svek::edge::LinkDecoration::Arrow
+        };
         result.push(ComponentEdgeLayout {
             from: link.from.clone(),
             to: link.to.clone(),
@@ -1795,6 +1828,7 @@ fn layout_edges(
             dashed: link.dashed,
             reversed_for_svg: false,
             label_xy: None,
+            head_decoration,
         });
     }
 
@@ -1913,6 +1947,8 @@ mod tests {
             arrow_len: 2,
             source_line: None,
             direction_inverted: false,
+            head_arrow_triangle: false,
+            tail_arrow_triangle: false,
         }
     }
 
@@ -2101,6 +2137,8 @@ mod tests {
                 arrow_len: 2,
                 source_line: None,
                 direction_inverted: false,
+                head_arrow_triangle: false,
+                tail_arrow_triangle: false,
             }],
             groups: vec![],
             notes: vec![],
@@ -2124,6 +2162,8 @@ mod tests {
                 arrow_len: 2,
                 source_line: None,
                 direction_inverted: false,
+                head_arrow_triangle: false,
+                tail_arrow_triangle: false,
             }],
             groups: vec![],
             direction: Default::default(),

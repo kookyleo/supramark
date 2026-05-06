@@ -1920,6 +1920,15 @@ pub fn factory_for_decoration(
     match decor {
         LinkDecoration::None => None,
         LinkDecoration::Arrow => Some(Box::new(ExtremityFactoryArrow)),
+        // Java `LinkDecor.ARROW_TRIANGLE` (`<<`/`>>`):
+        // `new ExtremityFactoryTriangle(null, 8, 3, 8)`
+        // — xWing=8, yAperture=3, decorationLength=8.
+        LinkDecoration::ArrowTriangle => Some(Box::new(ExtremityFactoryTriangle {
+            background_color: None,
+            x_wing: 8,
+            y_aperture: 3,
+            decoration_length: 8,
+        })),
         LinkDecoration::Extends => Some(Box::new(ExtremityFactoryExtends {
             background_color: HColor::simple("#FFFFFF"),
         })),

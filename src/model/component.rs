@@ -66,6 +66,14 @@ pub struct ComponentLink {
     /// This is distinct from backward arrows like `B <-down- A` where the
     /// parser inverts direction but Java does NOT call `getInv()`.
     pub direction_inverted: bool,
+    /// True when the head side of the arrow uses `>>` (Java
+    /// `LinkDecor.ARROW_TRIANGLE`).  C4 stdlib `Rel(...)` expands to
+    /// `-->>`, producing a hollow 4-point triangle instead of the
+    /// 5-point rhombus drawn for plain `>` (`LinkDecor.ARROW`).
+    pub head_arrow_triangle: bool,
+    /// True when the tail side of the arrow uses `<<` (mirror of
+    /// `head_arrow_triangle` for backward links).
+    pub tail_arrow_triangle: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -160,6 +168,8 @@ impl From<&super::usecase::UseCaseDiagram> for ComponentDiagram {
                     arrow_len: 2, // default vertical layout
                     source_line: link.source_line,
                     direction_inverted: false,
+                    head_arrow_triangle: false,
+                    tail_arrow_triangle: false,
                 }
             })
             .collect();
@@ -242,6 +252,8 @@ mod tests {
             arrow_len: 2,
             source_line: Some(3),
             direction_inverted: false,
+            head_arrow_triangle: false,
+            tail_arrow_triangle: false,
         };
         assert_eq!(l.from, "A");
         assert_eq!(l.direction_hint, Some("right".to_string()));
@@ -341,6 +353,8 @@ mod tests {
             arrow_len: 2,
             source_line: None,
             direction_inverted: false,
+            head_arrow_triangle: false,
+            tail_arrow_triangle: false,
         };
         assert!(l.dashed);
         assert!(l.label.is_empty());

@@ -791,6 +791,13 @@ fn try_parse_forward_arrow(line: &str) -> Option<ComponentLink> {
             let direction_inverted = direction_hint
                 .as_deref()
                 .is_some_and(|d| d == "up" || d == "left");
+            // `>>` (or `_>>` for italic-route variants) at the head end maps to
+            // Java `LinkDecor.ARROW_TRIANGLE` — the C4 stdlib `Rel(...)`
+            // procedure expands to `-->>` so this is the common case for C4
+            // diagrams.  Detect by trimming a trailing direction marker like
+            // `[>>]` would already be split out by `extract_direction_hint`.
+            let head_arrow_triangle = arrow_str.trim_end_matches(']').ends_with(">>");
+            let tail_arrow_triangle = false;
 
             return Some(ComponentLink {
                 from: from_id,
@@ -801,6 +808,8 @@ fn try_parse_forward_arrow(line: &str) -> Option<ComponentLink> {
                 arrow_len,
                 source_line: None,
                 direction_inverted,
+                head_arrow_triangle,
+                tail_arrow_triangle,
             });
         }
     }
@@ -851,6 +860,12 @@ fn try_parse_backward_arrow(line: &str) -> Option<ComponentLink> {
             _ => d,
         });
         let arrow_len = count_arrow_len(&full_arrow);
+        // For backward arrows, the original `<<` decoration ends up at the
+        // semantic head after the from/to swap (we already swapped to/from
+        // above); track it as `head_arrow_triangle` so the renderer applies
+        // the triangle at the same end Java does.
+        let head_arrow_triangle = full_arrow.starts_with("<<");
+        let tail_arrow_triangle = false;
 
         // Backward arrows do NOT trigger Java's Link.getInv(), so no extra UID.
         return Some(ComponentLink {
@@ -862,6 +877,8 @@ fn try_parse_backward_arrow(line: &str) -> Option<ComponentLink> {
             arrow_len,
             source_line: None,
             direction_inverted: false,
+            head_arrow_triangle,
+            tail_arrow_triangle,
         });
     }
     None
