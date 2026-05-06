@@ -809,10 +809,18 @@ pub(super) fn wrap_with_meta(
 
     // Title (CENTER-aligned)
     if let Some(ref title) = meta.title {
-        // Java centres the title using the bordered dimension directly.
-        // No extra BORDERED_EXTRA needed: it would shift the title 0.5px left.
-        let title_block_x =
-            outer_inner_x + cap_inner_x + ((after_title.0 - title_dim.0) / 2.0).max(0.0);
+        // Java centres the title using `dimOriginal.width` (the activity tile
+        // span max-min, no margins).  Our `body_w` for activity equals
+        // `layout.width = dimOriginal + TOP_MARGIN(11) + right_pad(10) =
+        // dimOriginal + 21`, while Java's `dimTotal = dimOriginal + 2*margin.left
+        // = dimOriginal + 20`.  The +1 asymmetry from TOP_MARGIN vs right_pad
+        // shifts our centring 0.5px right.  Compensate by trimming 1 from the
+        // centring denominator for ACTIVITY only — body_w remains untouched so
+        // the canvas size keeps using the unadjusted layout.width.
+        let activity_centering_adjust = if diagram_type == "ACTIVITY" { 1.0 } else { 0.0 };
+        let title_block_x = outer_inner_x
+            + cap_inner_x
+            + ((after_title.0 - activity_centering_adjust - title_dim.0) / 2.0).max(0.0);
         let text_x = title_block_x + TITLE_MARGIN + TITLE_PADDING;
         let text_y = meta_dy
             + hdr_dim.1
