@@ -1,7 +1,7 @@
-plantuml_jar: plantuml-1.2026.2.jar (sha256 3cdce52133c424dea22425b947ae9d47f2167b0866dfcf99e714d4ea1689975c)
+plantuml_jar: plantuml-1.2026.2.jar (from github.com/plantuml/plantuml releases)
 java_version: openjdk version "21.0.10" 2026-01-20 LTS
-graphviz_backend: @kookyleo/graphviz-anywhere-web@0.1.7 (wasm, Graphviz 14.1.5 + libexpat)
+graphviz_backend: @kookyleo/graphviz-anywhere-web (wasm, Graphviz 14.1.5 + libexpat)
 font_stack: DejaVu Sans via fontconfig (fonts-dejavu-core)
-regenerated_at: 2026-04-21T05:05:59Z
+regenerated_at: 2026-05-06T06:58:31Z
 wrapper: scripts/wasm-dot-wrapper.sh
-runner: ubuntu-latest (GitHub Actions; see .github/workflows/regenerate-refs.yml)
+runner: ubuntu-latest (Linux runnervmeorf1 6.17.0-1010-azure #10~24.04.1-Ubuntu SMP Fri Mar  6 22:00:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux)
