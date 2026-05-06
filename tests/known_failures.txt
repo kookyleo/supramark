@@ -30,9 +30,21 @@ reference_fixtures_jcckit_basic_puml
 reference_fixtures_dev_newline_link_URL_tooltip_puml
 reference_fixtures_wbs_link_url_tooltip_01_puml
 
-# Residual layout drift in less-trodden diagram types — small height /
-# polygon-point differences that exceed the fuzzy 2.51 tolerance.
-# Each is worth investigating and fixing in a follow-up.
+# `\n`-escaped inline note containing `{{ !theme … }}` triggers Java's
+# error path (preprocessor never expands `!theme` inside an inline-form
+# embedded subdiagram). The error page is then decorated by
+# `PSystemError.getTextBlock12026` with a wallclock-based message banner
+# (Patreon at min 1/8/13/55, Liberapay at 15, Dedication at 30/39/48).
+# Both committed reference SVGs were captured during a Patreon minute
+# and contain Java's Patreon banner PNG + QR-code asset. Reproducing
+# byte-exact output requires bundling those Java-internal PNGs and
+# pinning the wallclock minute, so this is intentionally left as a
+# known failure. plantuml-little still emits a structurally-equivalent
+# (un-decorated) error page; functional behaviour matches.
 reference_fixtures_component_subdiagram_theme_02_puml
 reference_fixtures_dev_newline_subdiagram_theme_puml
+
+# Residual layout drift in less-trodden diagram types — small height /
+# polygon-point differences that exceed the fuzzy 2.51 tolerance.
+# Worth investigating and fixing in a follow-up.
 reference_fixtures_sprite_svg2GroupsWithStyle_puml
