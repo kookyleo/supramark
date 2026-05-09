@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vison Production Playground</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/marked/marked.min.js"></script>
+    <style>
+        body { background-color: #F8F9FA; margin: 0; font-family: -apple-system, system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        #header { width: 100%; background: #FFF; padding: 20px 0; border-bottom: 1px solid #E5E5E5; text-align: center; margin-bottom: 40px; }
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-left: 10px; }
+        .badge-success { background: #E6FFFB; color: #08979C; border: 1px solid #87E8DE; }
+        .badge-fail { background: #FFF1F0; color: #CF1322; border: 1px solid #FFA39E; }
+        #app-container { background: #FFF; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); padding: 0; overflow: hidden; }
+        .vison-markdown h1, .vison-markdown h2, .vison-markdown h3 { margin-top: 0; }
+        .vison-markdown p { margin: 8px 0; }
+        pre { background: #F6F8FA; padding: 12px; border-radius: 8px; font-size: 12px; overflow-x: auto; max-width: 500px; }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1 style="margin:0; font-size: 24px; color: #1A1A1A;">Vison Playground <span id="status-badge"></span></h1>
+        <p style="color: #666; font-size: 14px; margin-top: 8px;">Production-Ready Rendering Preview</p>
+    </div>
+    
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, memo } = React;
+
+        // --- 生产级渲染器逻辑注入 ---
+        const VisonImage = ({ props, style }) => {
+            const [status, setStatus] = useState('loading');
+            return (
+                <div style={{...style, position: 'relative', overflow: 'hidden', backgroundColor: '#F0F0F0', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                    {status === 'loading' && <div style={{position: 'absolute', color: '#999', fontSize: '10px'}}>Loading...</div>}
+                    <img src={props.src} style={{width: '100%', height: '100%', objectFit: 'cover', opacity: status === 'loaded' ? 1 : 0, transition: 'opacity 0.3s'}} 
+                         onLoad={() => setStatus('loaded')} onError={() => setStatus('error')} />
+                </div>
+            );
+        };
+
+        const VisonRenderer = memo(({ data }) => {
+            const { type, props = {}, style = {}, children } = data;
+            const baseStyle = useMemo(() => {
+                const s = { display: type === 'container' ? 'flex' : 'inline-block', boxSizing: 'border-box' };
+                Object.entries(style).forEach(([k, v]) => { s[k] = typeof v === 'number' && !['opacity', 'fontWeight'].includes(k) ? `${v}px` : v; });
+                return s;
+            }, [type, style]);
+
+            switch (type) {
+                case 'container': return <div style={baseStyle}>{children?.map((c, i) => <VisonRenderer key={i} data={c} />)}</div>;
+                case 'text': return <span style={baseStyle}>{props.text}</span>;
+                case 'image': return <VisonImage props={props} style={baseStyle} />;
+                case 'markdown': return <div style={{...baseStyle, display: 'block'}} dangerouslySetInnerHTML={{ __html: marked.parse(props.content || '') }} />;
+                case 'divider': return <div style={{ height: style.borderWidth || 1, backgroundColor: style.borderColor || '#EEE', margin: `${style.margin || 8}px 0`, width: '100%' }} />;
+                default: return null;
+            }
+        });
+
+        const App = () => {
+            const [data, setData] = useState(null);
+            const [isValid, setIsValid] = useState(true);
+
+            useEffect(() => {
+                fetch('./example.vison.json')
+                    .then(res => res.json())
+                    .then(json => {
+                        setData(json);
+                        document.getElementById('status-badge').innerHTML = '<span class="badge badge-success">Valid Vison JSON</span>';
+                    })
+                    .catch(err => {
+                        setIsValid(false);
+                        document.getElementById('status-badge').innerHTML = '<span class="badge badge-fail">Validation Failed</span>';
+                    });
+            }, []);
+
+            if (!data) return <div>Loading...</div>;
+
+            return (
+                <div style={{ display: 'flex', gap: '40px', flexWrap: 'wrap', justifyContent: 'center', padding: '0 20px' }}>
+                    <div id="app-container">
+                        <VisonRenderer data={data} />
+                    </div>
+                    <div>
+                        <h4 style={{marginTop: 0, color: '#666'}}>Source JSON</h4>
+                        <pre>{JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
