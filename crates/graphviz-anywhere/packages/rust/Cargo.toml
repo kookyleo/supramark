@@ -1,0 +1,22 @@
+[package]
+name = "graphviz-anywhere"
+version = "0.1.8"
+edition = "2021"
+rust-version = "1.64"
+description = "Safe Rust wrapper for the graphviz-anywhere C library with bundled prebuilt binaries (and a wasm32 JS bridge)"
+license = "Apache-2.0"
+authors = ["kookyleo <kookyleo@gmail.com>"]
+repository = "https://github.com/kookyleo/graphviz-anywhere"
+links = "graphviz_api"
+include = [
+    "src/",
+    "build.rs",
+    "Cargo.toml",
+    "prebuilt/",
+]
+
+[dependencies]
+thiserror = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"

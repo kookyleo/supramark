@@ -1,0 +1,6 @@
+# Prebuilt native libraries for graphviz-anywhere
+# These are populated automatically during CI build process
+# Directory structure:
+# - macos/        : macOS universal binary (x86_64 + arm64)
+# - linux/        : Linux x86_64
+# - windows/      : Windows x86_64

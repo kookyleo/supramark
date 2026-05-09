@@ -1,0 +1,419 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - 'test*'
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x86_64]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Resolve graphviz submodule pin
+        id: gvpin
+        run: echo "sha=$(git rev-parse HEAD:graphviz)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache build output
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: output/linux-${{ matrix.arch }}
+          key: gv-build-linux-${{ matrix.arch }}-${{ steps.gvpin.outputs.sha }}-${{ hashFiles('capi/**', 'scripts/build-linux.sh', 'scripts/common.sh') }}
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential bison flex \
+            pkg-config libexpat1-dev zlib1g-dev libltdl-dev \
+            libpango1.0-dev libharfbuzz-dev
+
+      - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/build-linux.sh --arch ${{ matrix.arch }}
+
+      - name: Copy to packages/rust/prebuilt
+        run: |
+          mkdir -p packages/rust/prebuilt/linux
+          cp output/linux-${{ matrix.arch }}/lib/libgraphviz_api.a packages/rust/prebuilt/linux/ || true
+
+      - name: Package
+        run: |
+          cd output/linux-${{ matrix.arch }}
+          tar czf "${GITHUB_WORKSPACE}/graphviz-native-linux-${{ matrix.arch }}.tar.gz" .
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-${{ matrix.arch }}
+          path: graphviz-native-linux-${{ matrix.arch }}.tar.gz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prebuilt-linux
+          path: packages/rust/prebuilt/linux/
+
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Resolve graphviz submodule pin
+        id: gvpin
+        run: echo "sha=$(git rev-parse HEAD:graphviz)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache build output
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: output/macos-universal
+          key: gv-build-macos-universal-${{ steps.gvpin.outputs.sha }}-${{ hashFiles('capi/**', 'scripts/build-macos.sh', 'scripts/common.sh') }}
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: brew install bison flex
+
+      - name: Build universal binary
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          chmod +x scripts/*.sh
+          ./scripts/build-macos.sh --arch universal
+
+      - name: Copy to packages/rust/prebuilt
+        run: |
+          mkdir -p packages/rust/prebuilt/macos
+          cp output/macos-universal/lib/libgraphviz_api.a packages/rust/prebuilt/macos/ || true
+
+      - name: Package
+        run: |
+          cd output/macos-universal
+          tar czf "${GITHUB_WORKSPACE}/graphviz-native-macos-universal.tar.gz" .
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-universal
+          path: graphviz-native-macos-universal.tar.gz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prebuilt-macos
+          path: packages/rust/prebuilt/macos/
+
+  build-ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Resolve graphviz submodule pin
+        id: gvpin
+        run: echo "sha=$(git rev-parse HEAD:graphviz)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache build output
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: output/ios
+          key: gv-build-ios-${{ steps.gvpin.outputs.sha }}-${{ hashFiles('capi/**', 'scripts/build-ios.sh', 'scripts/common.sh') }}
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: brew install bison flex
+
+      - name: Build iOS
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
+          chmod +x scripts/*.sh
+          ./scripts/build-ios.sh
+
+      - name: Package
+        run: |
+          cd output/ios
+          tar czf "${GITHUB_WORKSPACE}/graphviz-native-ios.tar.gz" .
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ios
+          path: graphviz-native-ios.tar.gz
+
+  build-android:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Resolve graphviz submodule pin
+        id: gvpin
+        run: echo "sha=$(git rev-parse HEAD:graphviz)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache build output
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: output/android/${{ matrix.abi }}
+          key: gv-build-android-${{ matrix.abi }}-${{ steps.gvpin.outputs.sha }}-${{ hashFiles('capi/**', 'scripts/build-android.sh', 'scripts/common.sh') }}
+
+      - name: Install dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential bison flex pkg-config curl
+
+      - name: Setup NDK
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;25.2.9519653"
+
+      - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          export ANDROID_NDK_HOME="${ANDROID_SDK_ROOT}/ndk/25.2.9519653"
+          chmod +x scripts/*.sh
+          ./scripts/build-android.sh --abi ${{ matrix.abi }}
+
+      - name: Package
+        run: |
+          cd output/android/${{ matrix.abi }}
+          tar czf "${GITHUB_WORKSPACE}/graphviz-native-android-${{ matrix.abi }}.tar.gz" .
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-${{ matrix.abi }}
+          path: graphviz-native-android-${{ matrix.abi }}.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Resolve graphviz submodule pin
+        id: gvpin
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD:graphviz)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache build output
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: output/windows-x86_64
+          key: gv-build-windows-x86_64-${{ steps.gvpin.outputs.sha }}-${{ hashFiles('capi/**', 'scripts/build-windows.sh', 'scripts/common.sh') }}
+
+      - name: Install dependencies
+        # choco.org serves 503 periodically; retry a few times before
+        # giving up. Each package is installed with its own retry loop
+        # so a transient failure on one doesn't fall through to the next.
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          $pkgs = @('winflexbison3', 'pkgconfiglite')
+          foreach ($pkg in $pkgs) {
+            $success = $false
+            for ($i = 1; $i -le 5; $i++) {
+              Write-Host "Installing $pkg (attempt $i)..."
+              choco install $pkg -y --no-progress
+              if ($LASTEXITCODE -eq 0) { $success = $true; break }
+              Start-Sleep -Seconds 10
+            }
+            if (-not $success) {
+              Write-Error "Failed to install $pkg after 5 attempts"
+              exit 1
+            }
+          }
+
+      - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/build-windows.sh
+
+      - name: Copy to packages/rust/prebuilt
+        shell: bash
+        run: |
+          mkdir -p packages/rust/prebuilt/windows
+          cp output/windows-x86_64/lib/libgraphviz_api.a packages/rust/prebuilt/windows/ || true
+
+      - name: Package
+        shell: bash
+        run: |
+          cd output/windows-x86_64
+          7z a "${GITHUB_WORKSPACE}/graphviz-native-windows-x86_64.zip" .
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-x86_64
+          path: graphviz-native-windows-x86_64.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prebuilt-windows
+          path: packages/rust/prebuilt/windows/
+
+  build-wasm:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Resolve graphviz submodule pin
+        id: gvpin
+        run: echo "sha=$(git rev-parse HEAD:graphviz)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache wasm build output
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/web/dist/viz.js
+            packages/web/dist/viz.wasm
+            packages/web/dist/viz.d.ts
+          key: gv-build-wasm-${{ steps.gvpin.outputs.sha }}-${{ hashFiles('capi/**', 'scripts/build-wasm.sh', 'scripts/common.sh') }}
+
+      - name: Install emscripten
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential bison flex pkg-config
+
+      - name: Setup Emscripten
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: mymindstorm/setup-emsdk@v13
+        with:
+          version: latest
+
+      - name: Build Wasm
+        # scripts/build-wasm.sh now emits viz.{js,wasm,d.ts} directly
+        # into packages/web/dist/ (per the Embind rearch landed in
+        # rearch/hpcc-js-aligned). No more output/wasm/ intermediate.
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/build-wasm.sh
+
+      - name: Package
+        run: |
+          cd packages/web/dist
+          tar czf "${GITHUB_WORKSPACE}/graphviz-native-wasm.tar.gz" viz.js viz.wasm viz.d.ts
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wasm
+          path: graphviz-native-wasm.tar.gz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wasm-dist
+          path: packages/web/dist/
+
+  publish-npm-cargo:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-linux, build-macos, build-windows, build-wasm]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Debug workspace
+        run: |
+          echo "Current dir: $(pwd)"
+          ls -la
+          [ -f package.json ] && echo "✓ package.json found" || echo "✗ package.json NOT found"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download prebuilt artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Restore prebuilt libraries
+        run: |
+          mkdir -p packages/rust/prebuilt/{macos,linux,windows}
+          mkdir -p packages/web/dist
+          # 尽力复制，但不要因为缺失文件而失败
+          cp -r artifacts/prebuilt-macos/* packages/rust/prebuilt/macos/ 2>/dev/null || true
+          cp -r artifacts/prebuilt-linux/* packages/rust/prebuilt/linux/ 2>/dev/null || true
+          cp -r artifacts/prebuilt-windows/* packages/rust/prebuilt/windows/ 2>/dev/null || true
+          cp -r artifacts/wasm-dist/* packages/web/dist/ 2>/dev/null || true
+          echo "=== prebuilt libs ===" && find packages/rust/prebuilt -type f
+          echo "=== web/dist ===" && ls -la packages/web/dist/ || echo "⚠️  wasm-dist may not be available"
+
+      - name: Symlink wasm files for TypeScript compilation
+        run: |
+          mkdir -p output/wasm
+          ln -sf ../../packages/web/dist/viz.js output/wasm/viz.js || true
+          ln -sf ../../packages/web/dist/viz.wasm output/wasm/viz.wasm || true
+          ln -sf ../../packages/web/dist/viz.d.ts output/wasm/viz.d.ts || true
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build packages
+        run: npm run build --workspaces
+
+      - name: Check npm package versions
+        run: npm run check:publish:npm
+
+      - name: Publish to npm
+        run: |
+          npm publish --workspace packages/web --access public --auth-type=legacy
+          npm publish --workspace packages/react-native --access public --auth-type=legacy
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_OTP: ${{ secrets.NPM_OTP }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish to crates.io
+        run: cargo publish --manifest-path packages/rust/Cargo.toml --token ${{ secrets.CARGO_TOKEN }} --allow-dirty --no-verify
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-linux, build-macos, build-ios, build-android, build-windows]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.zip

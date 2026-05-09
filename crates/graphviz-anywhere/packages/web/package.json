@@ -1,0 +1,64 @@
+{
+  "name": "@kookyleo/graphviz-anywhere-web",
+  "version": "0.1.8",
+  "description": "Wasm-powered Graphviz renderer for browsers, Web Workers, and edge runtimes",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicekook/graphviz-anywhere.git",
+    "directory": "packages/web"
+  },
+  "author": "kookyleo <kookyleo@gmail.com>",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    },
+    "./wasm": {
+      "import": "./dist/viz.js",
+      "types": "./dist/viz.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/__tests__"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "lint": "eslint src --ext .ts,.tsx",
+    "fmt": "prettier --write src"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vitest/ui": "^2.1.8",
+    "eslint": "^9.0.0",
+    "happy-dom": "^20.8.4",
+    "prettier": "^3.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8"
+  },
+  "keywords": [
+    "graphviz",
+    "wasm",
+    "web",
+    "worker",
+    "svg",
+    "dot",
+    "visualization"
+  ]
+}
