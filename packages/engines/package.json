@@ -59,7 +59,7 @@
       "default": "./src/rn.ts"
     }
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },

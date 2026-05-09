@@ -2,6 +2,7 @@
   "name": "@supramark/example-react-native",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "supramark 的 React Native 演示程序（react-native 示例）。",
   "main": "index.js",
   "scripts": {

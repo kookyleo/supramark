@@ -1,0 +1,82 @@
+# cargo-deny configuration for the supramark super-monorepo.
+#
+# Activates in step 2 of the merge plan, when the first Rust crate (dagre)
+# is subtree-merged and the root `Cargo.toml` workspace is bootstrapped.
+# Until then, this file documents the policy and is a no-op.
+#
+# Run locally: cargo deny check
+# Docs: https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+# `all-features = true` would inflate the dependency graph past what we
+# actually ship; license auditing only needs the default features.
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+# ── Licenses ────────────────────────────────────────────────────────────
+# This is the heart of the policy. The allow-list is intentionally narrow:
+# anything not listed here requires an explicit code-review decision.
+#
+# Notable choices:
+#   - LGPL-3.0-or-later  → permitted ONLY because plantuml-little is the
+#     designated dependency under that license. Downstream consumers of
+#     @supramark/feature-plantuml inherit that condition; @supramark/core
+#     itself MUST NOT depend on it transitively.
+#   - EPL-1.0            → permitted ONLY for graphviz-anywhere/native-c
+#     (dynamic-link / wasm-import boundary; no source-level mixing with
+#     Apache-2.0 files).
+#   - GPL-* (non-LGPL)   → REJECTED. Add an exception only with an
+#     explicit decision recorded in LICENSE_COMPATIBILITY.md.
+#
+# See docs/architecture/LICENSE_COMPATIBILITY.md for the rationale.
+[licenses]
+version = 2
+confidence-threshold = 0.92
+
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "MPL-2.0",            # d2-little
+    "EPL-1.0",            # graphviz-anywhere/native-c
+    "EPL-2.0",
+    "LGPL-3.0-or-later",  # plantuml-little (gated)
+    "Zlib",
+    "CC0-1.0",
+    "CC-BY-4.0",
+]
+
+# Confidence below this threshold means cargo-deny couldn't reliably
+# match the license text; treat such crates as if they had no license.
+exceptions = []
+
+# ── Bans ───────────────────────────────────────────────────────────────
+# Reserved for step 4+; we'll add explicit `deny` rules for crates that
+# would pull in unwanted GPL-* / SSPL deps once we have a real graph.
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+# ── Sources ─────────────────────────────────────────────────────────────
+# Restrict where crates may come from. Activates in step 2.
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+# ── Advisories ──────────────────────────────────────────────────────────
+[advisories]
+version = 2
+yanked = "warn"
+ignore = []

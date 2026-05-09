@@ -1,0 +1,74 @@
+version = 1
+
+# REUSE specification: https://reuse.software/spec/
+#
+# This file declares default SPDX metadata for files where adding an inline
+# header is impractical (generated artifacts, vendored binaries, JSON/lockfiles,
+# wasm blobs). Source files SHOULD still carry SPDX-FileCopyrightText /
+# SPDX-License-Identifier headers — these annotations are the fallback only.
+#
+# Sub-trees with their own upstream license (crates/* after the subtree
+# merges in step 2) MUST add their own [[annotations]] block, with paths
+# scoped to that sub-tree, declaring the upstream-aligned SPDX identifier.
+# See docs/architecture/LICENSE_COMPATIBILITY.md for the policy.
+
+# ── Repository-wide default ────────────────────────────────────────────
+# All first-party @supramark/* code is Apache-2.0. New files inherit this
+# unless overridden by a more specific [[annotations]] block below.
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Supramark contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+# ── Configuration / metadata files ─────────────────────────────────────
+# These are typically too short or too structural to embed SPDX headers.
+[[annotations]]
+path = [
+    "**/package.json",
+    "**/tsconfig.json",
+    "**/tsconfig.*.json",
+    "pnpm-workspace.yaml",
+    "bunfig.toml",
+    "**/.gitignore",
+    "**/jest.preset.cjs",
+    "jest-environment.cjs",
+    "**/.eslintrc*",
+    "**/.prettierrc*",
+    "REUSE.toml",
+    "deny.toml",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Supramark contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+# ── Lockfiles (auto-generated, no header possible) ─────────────────────
+[[annotations]]
+path = ["pnpm-lock.yaml", "bun.lock", "**/Cargo.lock"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "CC0-1.0"
+
+# ── Documentation ──────────────────────────────────────────────────────
+[[annotations]]
+path = ["docs/**", "README.md", "CLAUDE.md", "**/README.md"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Supramark contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+# ── Examples (treated as user-facing samples; same as repo default) ────
+[[annotations]]
+path = "examples/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Supramark contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+# ── Vendored wasm artifacts (currently @viz-js/viz under output/) ──────
+# These come from upstream packages; the upstream package itself carries
+# the canonical license. We mark them as third-party here so reuse-lint
+# does not treat them as missing.
+[[annotations]]
+path = "packages/renderers/output/wasm/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "@viz-js/viz contributors"
+SPDX-License-Identifier = "MIT"

@@ -23,7 +23,7 @@
       "default": "./src/createSupramark.tsx"
     }
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "build": "tsc -p tsconfig.json --emitDeclarationOnly"
   },
