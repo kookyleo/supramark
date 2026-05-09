@@ -30,5 +30,14 @@ wasm-opt = false
 # fetch features disabled — wasm32 has no stdio, no TCP, no filesystem in
 # the usual sense. graphviz-anywhere installs its own wasm JS bridge
 # automatically when compiled for wasm32.
-plantuml-little = { path = "../..", default-features = false }
+#
+# `metrics-static-dejavu` is selected explicitly because the default
+# feature set was disabled above; the metrics-* family is mutually
+# exclusive and exactly one impl must be active. Static-DejaVu keeps
+# the wasm bundle byte-equivalent to native builds (the 22K-LOC range
+# tables compress well in wasm). Hosts that want layer-1 layout to
+# match their own renderer should rebuild with
+# `--features metrics-host-callback` and install
+# `globalThis.supramark.measureText` before invoking the wasm.
+plantuml-little = { path = "../..", default-features = false, features = ["metrics-static-dejavu"] }
 wasm-bindgen = "0.2"
