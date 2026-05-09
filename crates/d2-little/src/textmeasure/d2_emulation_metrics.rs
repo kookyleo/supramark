@@ -76,8 +76,21 @@ impl Metrics for D2GoEmulationMetrics {
             size: round_to_d2_size(size),
         };
         let mut ruler = self.inner.borrow_mut();
-        let (width, _height) = ruler.measure_precise(font, text);
-        let (ascent, descent) = ruler.face_metrics_for(font);
+        let (width, bounds_h) = ruler.measure_precise(font, text);
+        let (face_asc, face_desc) = ruler.face_metrics_for(font);
+        // Split bounds_h into ascent/descent using the face's natural ratio,
+        // so that ascent + descent == bounds_h exactly (preserves byte-equal Go
+        // for d2 layout callers that compute h = ascent + descent downstream).
+        // This deviates from the text-specific actualBoundingBox semantics that
+        // host_callback uses, but D2GoEmulation is d2-internal — its semantic
+        // is "what d2 layout expects".
+        let face_total = face_asc + face_desc;
+        let (ascent, descent) = if face_total > 0.0 {
+            let ratio = face_asc / face_total;
+            (bounds_h * ratio, bounds_h * (1.0 - ratio))
+        } else {
+            (bounds_h, 0.0)
+        };
         Measured {
             width,
             ascent,
@@ -99,7 +112,7 @@ mod tests {
 
         let mut ruler = D2GoEmulationRuler::new().expect("init ruler");
         let font = FontFamily::SourceSansPro.font(14, FontStyle::Regular);
-        let (w, _h) = ruler.measure_precise(font, "Hello");
+        let (w, h) = ruler.measure_precise(font, "Hello");
 
         assert!(
             (m.width - w).abs() < 0.001,
@@ -107,9 +120,14 @@ mod tests {
             m.width,
             w
         );
+        assert!(
+            (m.ascent + m.descent - h).abs() < 0.001,
+            "height total must equal ruler bounds.h: ascent+descent={}, ruler.h={}",
+            m.ascent + m.descent,
+            h,
+        );
         assert!(m.ascent > 0.0, "ascent should be positive");
-        assert!(m.descent > 0.0, "descent should be positive");
-        assert!((m.ascent + m.descent) > 0.0, "line height should be positive");
+        assert!(m.descent >= 0.0, "descent should be non-negative");
     }
 
     #[test]

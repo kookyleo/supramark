@@ -10,7 +10,9 @@
 //! [`d2_go_emulation`] and slot into the same trait without touching call
 //! sites in `lib.rs` / `target.rs` / `svg_render`.
 
-use crate::fonts::Font;
+use font_metrics_core::Metrics;
+
+use crate::fonts::{Font, FontFamily, FontStyle};
 
 pub mod d2_emulation_metrics;
 pub mod d2_go_emulation;
@@ -112,4 +114,100 @@ pub fn measure_markdown(
     font_size: i32,
 ) -> Result<(i32, i32), String> {
     metrics.measure_markdown(md_text, font_family, mono_font_family, font_size)
+}
+
+// ---------------------------------------------------------------------------
+// d2 layout helpers built on top of `font_metrics_core::Metrics`.
+//
+// These free functions let downstream d2 layout code call into any
+// `Metrics` backend (D2GoEmulationMetrics today, HostCallbackMetrics on
+// wasm, future ttf-parser fallback, ...) using d2's native `Font` enum
+// rather than the trait's stringly-typed `(family, size, bold, italic)`
+// surface. They're additive — no caller has been migrated yet (R4b's
+// job).
+// ---------------------------------------------------------------------------
+
+/// Map a d2 `Font` to (family_str, bold, italic) for trait dispatch.
+fn font_to_trait_args(font: Font) -> (&'static str, bool, bool) {
+    let family = match font.family {
+        FontFamily::SourceSansPro => "Source Sans Pro",
+        FontFamily::SourceCodePro => "Source Code Pro",
+        FontFamily::HandDrawn => "Fuzzy Bubbles",
+    };
+    let bold = matches!(font.style, FontStyle::Bold | FontStyle::Semibold);
+    let italic = matches!(font.style, FontStyle::Italic);
+    (family, bold, italic)
+}
+
+/// d2 layout `measure(font, s) -> (i32, i32)` derived from a Metrics backend.
+/// Equivalent to `D2GoEmulationRuler::measure(font, s)` when backed by
+/// `D2GoEmulationMetrics`.
+pub fn d2_measure(metrics: &dyn Metrics, font: Font, s: &str) -> (i32, i32) {
+    let (w, h) = d2_measure_precise(metrics, font, s);
+    (w.ceil() as i32, h.ceil() as i32)
+}
+
+/// d2 layout `measure_mono(font, s) -> (i32, i32)`. Forces SourceCodePro family.
+pub fn d2_measure_mono(metrics: &dyn Metrics, font: Font, s: &str) -> (i32, i32) {
+    let mono_font = Font {
+        family: FontFamily::SourceCodePro,
+        style: font.style,
+        size: font.size,
+    };
+    d2_measure(metrics, mono_font, s)
+}
+
+/// d2 layout `measure_precise(font, s) -> (f64, f64)` derived from Metrics.
+pub fn d2_measure_precise(metrics: &dyn Metrics, font: Font, s: &str) -> (f64, f64) {
+    let (family, bold, italic) = font_to_trait_args(font);
+    let m = metrics.measure(s, family, font.size as f64, bold, italic);
+    (m.width, m.ascent + m.descent)
+}
+
+/// d2 layout `space_width(font) -> f64` — width of a single space character.
+pub fn d2_space_width(metrics: &dyn Metrics, font: Font) -> f64 {
+    let (family, bold, italic) = font_to_trait_args(font);
+    metrics
+        .measure(" ", family, font.size as f64, bold, italic)
+        .width
+}
+
+/// d2 layout `scale_unicode` — CJK fallback: replace Latin-fallback width with
+/// mono space × cell count. Mirrors `D2GoEmulationRuler::scale_unicode` shape
+/// but works via the `Metrics` trait method only.
+pub fn d2_scale_unicode(metrics: &dyn Metrics, w: f64, font: Font, s: &str) -> f64 {
+    use unicode_segmentation::UnicodeSegmentation;
+    use unicode_width::UnicodeWidthStr;
+
+    let grapheme_count = s.graphemes(true).count();
+    if grapheme_count == s.len() {
+        return w;
+    }
+
+    let (family, bold, italic) = font_to_trait_args(font);
+    let size_f = font.size as f64;
+    let mono_font = Font {
+        family: FontFamily::SourceCodePro,
+        style: font.style,
+        size: font.size,
+    };
+    let mono_space = d2_space_width(metrics, mono_font);
+
+    let mut max_w = 0.0_f64;
+    for line in s.split('\n') {
+        let mut adjusted = metrics.measure(line, family, size_f, bold, italic).width;
+        for grapheme in line.graphemes(true) {
+            let unicode_w = UnicodeWidthStr::width(grapheme);
+            if unicode_w == 1 {
+                continue;
+            }
+            let measured = metrics
+                .measure(grapheme, family, size_f, bold, italic)
+                .width;
+            adjusted -= measured;
+            adjusted += mono_space * unicode_w as f64;
+        }
+        max_w = max_w.max(adjusted);
+    }
+    max_w
 }
