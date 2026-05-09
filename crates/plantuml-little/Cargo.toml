@@ -1,0 +1,80 @@
+[workspace]
+members = [".", "packages/web"]
+
+[package]
+name = "plantuml-little"
+version = "1.2026.2-3"
+edition = "2021"
+rust-version = "1.82"
+license = "GPL-3.0-or-later OR LGPL-3.0-or-later OR Apache-2.0 OR EPL-2.0 OR MIT"
+authors = ["kookyleo <kookyleo@gmail.com>"]
+description = "Lightweight .puml to .svg converter — byte-exact SVG parity with Java PlantUML"
+homepage = "https://github.com/kookyleo/plantuml-little"
+repository = "https://github.com/kookyleo/plantuml-little"
+keywords = ["plantuml", "puml", "svg", "diagram", "uml"]
+categories = ["graphics", "command-line-utilities"]
+exclude = [
+    "AGENTS.md",
+    "PLAN.md",
+    "continue.md",
+    "*.log",
+    "*.rlib",
+    "*.svg",
+    "*.patch",
+    "tmp_debug/",
+    "tests/",
+    "stdlib/",
+    "fonts/",
+    "docs/",
+    ".trace-skill/",
+    ".claude/",
+    "scripts/",
+    "packages/",
+    "patch_java.py",
+    "gen_font_data.py",
+]
+
+[[bin]]
+name = "plantuml-little"
+path = "src/main.rs"
+# The CLI depends on std::process, env_logger, and on-disk file I/O, which
+# are not available on wasm32. Compile the library only on that target.
+required-features = ["cli"]
+
+[features]
+default = ["cli", "remote"]
+# CLI front-end (env_logger + main.rs). Disabled automatically on wasm32.
+cli = ["dep:env_logger"]
+# Remote-resource fetching via ureq (themes, images).
+# Disabled automatically on wasm32 where ureq cannot link.
+remote = ["dep:ureq"]
+
+[dependencies]
+thiserror = "1"
+log = "0.4"
+env_logger = { version = "0.11", optional = true }
+regex = "1"
+# graphviz-anywhere — native Graphviz bindings for the non-wasm code
+# path. 0.1.8+ auto-downloads the matching libgraphviz_api shared
+# library from the GitHub release, so consumers (and our own CI) need
+# no GRAPHVIZ_ANYWHERE_DIR / submodule / pre-installed dot. Earlier
+# releases additionally fixed (a) size_t overflow in the C wrapper on
+# 64-bit targets, (b) WITH_EXPAT=ON for HTML label geometry, and
+# (c) g++ linkage so libstdc++ vtables resolve on Ubuntu/Debian.
+graphviz-anywhere = "0.1.8"
+zip = { version = "0.6.6", default-features = false, features = ["deflate"] }
+ureq = { version = "3", optional = true }
+url = "2"
+# Use the pure-Rust miniz_oxide backend so the library links on wasm32
+# (the zlib C backend requires a cross-compiled libz which isn't available
+# on wasm32-unknown-unknown). Native builds get identical byte output.
+flate2 = { version = "1", features = ["rust_backend"], default-features = false }
+serde_json = "1"
+base64 = "0.22"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

@@ -1,0 +1,47 @@
+/target/
+**/*.rs.bk
+*.swp
+*.swo
+.DS_Store
+.idea/
+.vscode/
+.claude/
+.trace-skill/
+
+# Build artifacts
+*.rlib
+*.class
+*.log
+fonts/
+
+# Test outputs
+actual.svg
+actual_*.svg
+our_*.svg
+out.svg
+svek.dot
+svek.svg
+test_newline.*
+test_output.txt
+test_parse
+test_parse.rs
+tests/fixtures/**/*.svg
+tests/ext_fixtures/
+tmp_debug/
+
+# Dev scripts/patches
+patch_*.patch
+patch_*.py
+scripts/failures.json
+scripts/__pycache__/
+
+# Native graphviz-anywhere prebuilt (downloaded by setup-graphviz-anywhere
+# action in CI, or by developers running tests locally). Byte-varies per
+# platform — never commit.
+.graphviz-anywhere/
+
+# Node modules for the wasm Graphviz backend (tests/support). The package
+# is pinned in tests/support/package.json + package-lock.json, so every
+# install produces the same node_modules — no reason to commit.
+tests/support/node_modules/
+tools/fonts/*.ttf

@@ -1,0 +1,8 @@
+@startwire
+* CPU
+* RAM
+* Disk
+CPU --> RAM : bus
+CPU --> Disk : sata
+RAM --> Disk : dma
+@endwire
