@@ -44,10 +44,17 @@ katex = ["dep:rquickjs"]
 cose_bilkent = ["dep:rquickjs"]
 
 [dependencies]
-# Shared static DejaVu range tables (was crate::font_data; previously
-# hand-vendored from plantuml-little @ commit b32d6aa, now centralised
-# in font-metrics so a single update reaches both sister crates).
-font-metrics = { path = "../font-metrics", version = "0.1" }
+# Shared font metrics. mermaid-little still drives its main code
+# path off the byte-exact static DejaVu tables (gated behind the
+# `static-fixtures` feature) so the *_byte_exact.rs reference suites
+# keep passing. The TtfParser / HostCallback impls in font-metrics
+# will replace this once the dynamic main path lands; until then
+# this dep stays on `static-fixtures`.
+#
+# Imported as `font_metrics_core` (via `package =`) because
+# mermaid-little's own `crate::font_metrics` wrapper module would
+# otherwise shadow the dep in the crate-root namespace.
+font_metrics_core = { package = "font-metrics", path = "../font-metrics", version = "0.1", features = ["static-fixtures"] }
 thiserror = "1"
 log = "0.4"
 env_logger = { version = "0.11", optional = true }

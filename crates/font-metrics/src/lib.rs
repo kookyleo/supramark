@@ -1,34 +1,94 @@
-//! Shared static font metric tables for the `*-little` family of Rust
-//! ports (plantuml-little, mermaid-little).
+//! Font metrics abstraction for the `*-little` family of port crates.
 //!
-//! # Why this crate exists
+//! # Why a trait
 //!
-//! plantuml-little and mermaid-little both need to know "given this
-//! string + this font + this size, what's the bounding box?" to lay
-//! out SVG diagrams whose text geometry must match the upstream
-//! Java / JS reference output. They both solve this with the same
-//! approach: ship pre-computed range tables generated offline from
-//! DejaVu TTFs (via `tools/gen_font_data.py`).
+//! plantuml-little / mermaid-little / d2-little all need to know
+//! "given this string + this font + this size, how wide is the
+//! resulting rendered text?" to lay out SVG diagrams. There are
+//! three legitimate ways to answer that, and they belong on
+//! different code paths:
 //!
-//! Until 2026-05-09 mermaid-little carried a hand-vendored copy of
-//! plantuml-little's range tables (`font_data.rs`, 9.6K LOC) anchored
-//! to plantuml's commit `b32d6aa`. Future plantuml-side font fixes
-//! would not flow through automatically. This crate centralises the
-//! tables so both sister projects depend on a single source of truth.
+//! 1. **`TtfParserMetrics`** — parse a caller-supplied TTF buffer
+//!    with `ttf-parser` and compute glyph advances at runtime. The
+//!    production main path on native / SSR / wasm hosts that have no
+//!    text-measurement bridge.
 //!
-//! # What's in here today (Phase 1)
+//! 2. **`HostCallbackMetrics`** — defer measurement to a JS-side
+//!    callback (e.g. `canvas.measureText` in browsers, RN-Skia
+//!    `SkiaText.measureText` on React Native). The production main
+//!    path inside a wasm host that has a real text renderer:
+//!    measuring with the very font the host will render with
+//!    eliminates Layer 1 / Layer 3 drift that no static table can
+//!    fix.
 //!
-//! - [`font_data`]: the 22K LOC of static `FontMeta` definitions
-//!   covering DejaVu Sans / Sans Mono / Serif in plain + bold + italic
-//!   + bold-italic combinations. Verbatim move from
-//!   plantuml-little/src/font_data.rs.
+//! 3. **`StaticDejaVuMetrics`** (feature `static-fixtures`) —
+//!    pre-computed range tables that match Java FontMetrics on
+//!    DejaVu Sans / Mono / Serif byte-exactly. Used **only** by the
+//!    upstream-byte-equal regression tests in plantuml-little and
+//!    mermaid-little to verify the port still matches Java's output.
+//!    Production code should not depend on it; the Java-flavoured
+//!    numbers diverge from any browser's actual rendering anyway.
 //!
-//! # What's coming (Phase 2 / 3)
+//! # Layer 1 / 2 / 3 architecture (for context)
 //!
-//! A `Metrics` trait + multiple implementations
-//! (`StaticDejaVuMetrics`, `TtfParserMetrics`, `HostCallbackMetrics`)
-//! so callers can pick a measurement strategy at runtime. The static
-//! tables here become one such implementation and serve double-duty
-//! as the byte-exact upstream-parity test fixture.
+//! - **Layer 1**: in-wasm layout (this crate). Needs metrics to
+//!   compute box sizes, line wrap, alignment.
+//! - **Layer 2**: emitted SVG, with `font-family="..."` strings.
+//! - **Layer 3**: host renderer (browser, RN-svg, ImageMagick) that
+//!   actually rasterises the SVG, using whatever font the host's OS
+//!   has installed.
+//!
+//! `TtfParserMetrics` and `HostCallbackMetrics` solve the same
+//! problem from opposite ends: the former lets layer 1 use a known
+//! font that we ship; the latter lets layer 1 ask layer 3 directly.
+//! Pick the one that matches your host environment.
+//!
+//! See `docs/architecture/SHARED_FONT_METRICS.md` (TODO) for the
+//! full design rationale.
 
-pub mod font_data;
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
+/// Font metrics consumed by SVG diagram layout.
+///
+/// All measurements are in the same "user units" the size argument
+/// is expressed in: if you pass `size = 14.0` for "14 px font",
+/// `text_width` returns pixels.
+///
+/// `family` is matched case-insensitively after stripping any
+/// CSS-style fallback list (`"Foo, sans-serif"` → `"Foo"`). Each
+/// implementation chooses how to map family names to actual faces;
+/// see the implementation docs for the resolution table.
+pub trait Metrics {
+    /// Width of a single character (typographic horizontal advance).
+    /// Returns `0.0` for `\n` and `\r`.
+    fn char_width(&self, ch: char, family: &str, size: f64, bold: bool, italic: bool) -> f64;
+
+    /// Total width of a text string, summed character-by-character.
+    fn text_width(&self, text: &str, family: &str, size: f64, bold: bool, italic: bool) -> f64;
+
+    /// Line height — typically `ascent + |descent|` for fonts whose
+    /// `hhea.lineGap` is zero (DejaVu, most browser-installed fonts).
+    fn line_height(&self, family: &str, size: f64, bold: bool, italic: bool) -> f64;
+
+    /// Distance from baseline to top of the tallest glyph.
+    fn ascent(&self, family: &str, size: f64, bold: bool, italic: bool) -> f64;
+
+    /// Distance from baseline to bottom of the lowest glyph
+    /// (positive value).
+    fn descent(&self, family: &str, size: f64, bold: bool, italic: bool) -> f64;
+
+    /// OS/2 typographic ascent (`OS/2.sTypoAscent`). Some
+    /// upstream-Java diagram families use this instead of the hhea
+    /// ascent for their text-block height calculations.
+    fn typo_ascent(&self, family: &str, size: f64, bold: bool, italic: bool) -> f64;
+}
+
+#[cfg(feature = "static-fixtures")]
+#[cfg_attr(docsrs, doc(cfg(feature = "static-fixtures")))]
+pub mod static_dejavu;
+
+pub mod ttf_parser;
+
+#[cfg(target_arch = "wasm32")]
+#[cfg_attr(docsrs, doc(cfg(target_arch = "wasm32")))]
+pub mod host_callback;

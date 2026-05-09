@@ -13,10 +13,15 @@ pub mod decoration;
 pub mod dot;
 pub mod error;
 // Static DejaVu range tables now live in the shared `font-metrics`
-// crate. Re-export under the historical `crate::font_data` path so
-// internal call sites (~150 throughout layout/, render/, skin/) keep
-// resolving without per-call-site edits.
-pub use font_metrics::font_data;
+// crate behind the `static-fixtures` feature. Re-export under the
+// historical `crate::font_data` path so internal call sites
+// (~150 throughout layout/, render/, skin/) keep resolving without
+// per-call-site edits. The wrapper functions in `font_metrics` (this
+// crate's module, not the dep) delegate to font-metrics's
+// `StaticDejaVuMetrics` impl of the `Metrics` trait — the trait is
+// the eventual landing spot for dynamic measurement (ttf-parser /
+// host callback) when the main code path migrates.
+pub use font_metrics_core::static_dejavu::font_data;
 pub mod font_metrics;
 pub mod klimt;
 pub mod layout;

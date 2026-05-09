@@ -51,9 +51,18 @@ cli = ["dep:env_logger"]
 remote = ["dep:ureq"]
 
 [dependencies]
-# Shared static DejaVu range tables (was crate::font_data; extracted to
-# eliminate the manual vendor in mermaid-little/src/font_data.rs).
-font-metrics = { path = "../font-metrics", version = "0.1" }
+# Shared font metrics. plantuml-little still drives its main code
+# path off the byte-exact static DejaVu tables (gated behind the
+# `static-fixtures` feature) so the 268+ Java-byte-equal SVG
+# reference tests keep passing. The TtfParser / HostCallback impls
+# in font-metrics will replace this once the dynamic main path
+# lands; until then this dep stays on `static-fixtures`.
+#
+# Imported as `font_metrics_core` (via `package =`) because plantuml-
+# little's own `crate::font_metrics` wrapper module would otherwise
+# shadow the dep in the crate-root namespace, breaking
+# `pub use font_metrics::static_dejavu::*` in src/lib.rs.
+font_metrics_core = { package = "font-metrics", path = "../font-metrics", version = "0.1", features = ["static-fixtures"] }
 thiserror = "1"
 log = "0.4"
 env_logger = { version = "0.11", optional = true }
