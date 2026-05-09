@@ -67,8 +67,12 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
   renderers: {
     rn: {
       platform: 'rn',
+      // RN path is unsupported in this build. Tracked for a future
+      // mermaid-little RN native FFI binding (mirrors
+      // graphviz-anywhere-rn). Until then, RN renders fall back to an
+      // "unsupported on RN" message — see
+      // crates/mermaid-little/UPSTREAM.md.
       infrastructure: {
-        needsWorker: false,
         needsCache: false,
       },
       dependencies: [
@@ -76,23 +80,23 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
           name: 'react-native-svg',
           version: '^13.0.0',
           type: 'npm',
-          optional: false,
-        },
-        {
-          name: 'beautiful-mermaid',
-          version: '^1.1.3',
-          type: 'npm',
-          optional: false,
+          optional: true,
         },
       ],
     },
     web: {
       platform: 'web',
       infrastructure: {
-        needsClientScript: true,
-        clientScriptBuilder: () =>
-          '<!-- Mermaid integration provided by @supramark/web-diagram (Mermaid → SVG). -->',
+        needsCache: false,
       },
+      dependencies: [
+        {
+          name: '@kookyleo/mermaid-little-web',
+          version: 'workspace:*',
+          type: 'npm',
+          optional: false,
+        },
+      ],
     },
   },
 
@@ -102,7 +106,7 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
     syntaxTests: {
       cases: [
         {
-          name: '解析 mermaid 围栏为 diagram 节点',
+          name: 'Parse a ```mermaid fence into a diagram node',
           input: ['```mermaid', 'graph TD', '  A --> B', '```'].join('\n'),
           expected: {
             type: 'diagram',
@@ -117,7 +121,7 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
     renderTests: {
       web: [
         {
-          name: 'Web 渲染 Mermaid diagram（占位验证输出存在）',
+          name: 'Web Mermaid render (smoke: output exists)',
           input: {
             type: 'diagram',
             engine: 'mermaid',
@@ -127,23 +131,14 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
           snapshot: false,
         },
       ],
-      rn: [
-        {
-          name: 'RN 渲染 Mermaid diagram（占位验证输出存在）',
-          input: {
-            type: 'diagram',
-            engine: 'mermaid',
-            code: 'graph TD\n  A --> B',
-          } as SupramarkDiagramNode,
-          expected: (output: unknown) => output !== null && output !== undefined,
-          snapshot: false,
-        },
-      ],
+      // RN render path is intentionally absent in this build — mermaid
+      // on RN awaits the mermaid-little native FFI binding; until then
+      // DiagramNode returns "unsupported on RN".
     },
     integrationTests: {
       cases: [
         {
-          name: '端到端：markdown 中包含 ```mermaid 围栏',
+          name: 'End-to-end: a markdown doc containing a ```mermaid fence',
           input: ['# Mermaid demo', '', '```mermaid', 'graph TD', '  A --> B', '```'].join('\n'),
           validate: (result: unknown) => {
             if (!result || typeof result !== 'object') return false;
@@ -153,7 +148,7 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
               (n: any) => n.type === 'diagram' && String(n.engine).toLowerCase() === 'mermaid'
             );
           },
-          platforms: ['web', 'rn'],
+          platforms: ['web'],
         },
       ],
     },
@@ -169,36 +164,41 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
     readme: `
 # Mermaid Feature
 
-为 supramark 提供基于 Mermaid 的图表示例支持。
+AST modelling + Web rendering for Mermaid diagrams.
 
-- 语法：使用 \`\\\`\\\`mermaid\` 围栏代码块；
-- AST：解析为 \`diagram\` 节点，engine = "mermaid"；
-- 渲染：Web 端通过统一图表子系统生成 SVG，RN 端直接在本地调用 beautiful-mermaid 生成 SVG。
+- Syntax: \`\\\`\\\`mermaid\` fenced code blocks.
+- AST: parsed into a \`diagram\` node with \`engine = "mermaid"\`.
+- Rendering: on Web, \`@supramark/engines\` calls
+  \`@kookyleo/mermaid-little-web\` (Rust → wasm; no DOM, no headless
+  browser, no upstream JS Mermaid bundle) and inlines the SVG. On RN,
+  mermaid is currently **unsupported** — the legacy WebView worker was
+  retired in 2026-05; replacement is a mermaid-little native FFI
+  binding tracked in \`crates/mermaid-little/UPSTREAM.md\`.
     `.trim(),
 
     api: {
       interfaces: [
         {
           name: 'MermaidFeatureOptions',
-          description: 'Mermaid Feature 的配置选项（当前为空，预留扩展）。',
+          description: 'Mermaid feature options (currently empty; reserved).',
           fields: [],
         },
       ],
       functions: [
         {
           name: 'createMermaidFeatureConfig',
-          description: '创建 Mermaid Feature 的配置对象。',
+          description: 'Create a feature config entry for the Mermaid diagram feature.',
           parameters: [
             {
               name: 'enabled',
               type: 'boolean',
-              description: '是否启用该 Feature',
+              description: 'Enable / disable the feature.',
               optional: false,
             },
             {
               name: 'options',
               type: 'MermaidFeatureOptions',
-              description: '可选配置项',
+              description: 'Optional feature options.',
               optional: true,
             },
           ],
@@ -206,12 +206,12 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
         },
         {
           name: 'getMermaidFeatureOptions',
-          description: '从 SupramarkConfig 中读取 Mermaid Feature 的 options。',
+          description: 'Read this feature\'s options from the global SupramarkConfig.',
           parameters: [
             {
               name: 'config',
               type: 'SupramarkConfig | undefined',
-              description: '全局 supramark 配置',
+              description: 'Global supramark config.',
               optional: true,
             },
           ],
@@ -222,20 +222,20 @@ export const mermaidFeature: SupramarkFeature<SupramarkDiagramNode> = {
     },
 
     bestPractices: [
-      '将 Mermaid 代码保持在最小可复用片段，便于在 Web 与 RN 端共享。',
-      '与其把布局参数塞进 markdown，不如优先使用统一 diagram 配置来控制主题与布局。',
+      'Keep Mermaid source small and reusable so the same fence can be shared across Web hosts.',
+      'Prefer the unified diagram config (theme / layout) over inlining options inside the Markdown source.',
     ],
 
     faq: [
       {
-        question: '为什么 Mermaid 现在也需要独立 Feature 包？',
+        question: 'Why a dedicated feature package for Mermaid?',
         answer:
-          '因为 parser / renderer / feature gating 需要对齐。独立 Feature 包能把 Mermaid 纳入同一套能力发现、配置与文档体系。',
+          'Parser, renderer wiring, and feature gating all need to be aligned per engine. A standalone feature lets Mermaid participate in the same capability-discovery, config, and documentation flow as every other diagram.',
       },
       {
-        question: 'React Native 端还依赖 headless WebView 吗？',
+        question: 'Does React Native still need a headless WebView?',
         answer:
-          '不需要。RN 端直接在本地调用 beautiful-mermaid，把输出的 SVG 样式内联后交给 react-native-svg 渲染。',
+          'No — and Mermaid is also not yet usable on RN. The hidden-WebView worker (@supramark/rn-diagram-worker) was retired in the 2026-05 cleanup. Mermaid on RN will return when the mermaid-little native FFI binding lands; tracked in crates/mermaid-little/UPSTREAM.md.',
       },
     ],
   },

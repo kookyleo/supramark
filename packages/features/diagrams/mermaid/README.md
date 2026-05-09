@@ -14,7 +14,9 @@ graph TD
 ````
 
 - AST：统一解析为 `diagram` 节点，`engine` 为 `mermaid`。
-- 渲染：通过统一图表子系统生成 SVG。Web 端使用 `@supramark/web-diagram`，RN 端由 `@supramark/rn` 直接在本地调用 `beautiful-mermaid` 生成 SVG。
+- 渲染：
+  - **Web**：`@supramark/engines` 调用 `@kookyleo/mermaid-little-web`（Rust → wasm）输出 SVG，零 DOM / 零 headless 浏览器 / 零 upstream JS Mermaid bundle。
+  - **RN**：当前 **未支持**。隐藏 WebView 方案（`@supramark/rn-diagram-worker`）已于 2026-05 退役；后续替代方案是 `mermaid-little` 的 native FFI 绑定（追踪 `crates/mermaid-little/UPSTREAM.md`）。
 
 本包当前主要用于：
 

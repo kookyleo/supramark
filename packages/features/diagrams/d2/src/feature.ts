@@ -9,12 +9,13 @@ import { FeatureRegistry, getFeatureOptionsAs } from '@supramark/core';
 import { d2Examples } from './examples.js';
 
 /**
- * D2 图表 Feature
+ * D2 diagram feature.
  *
- * - 复用通用 `diagram` AST 节点；
- * - 只关心 engine 为 'd2' 的 diagram；
- * - 由 `@supramark/engines` 借助 `@kookyleo/d2-little-web`（Rust wasm，纯 Rust
- *   布局引擎，无需外部 Graphviz 桥）在 Web 端将 D2 源码转换为 SVG。
+ * - Reuses the generic `diagram` AST node.
+ * - Matches diagrams with `engine === 'd2'`.
+ * - On Web, `@supramark/engines` calls `@kookyleo/d2-little-web`
+ *   (Rust → wasm). d2-little ships its own pure-Rust layout engine, so
+ *   no Graphviz bridge is needed (unlike plantuml).
  *
  * @example
  * ```markdown
@@ -83,30 +84,29 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
   renderers: {
     rn: {
       platform: 'rn',
+      // RN path is unsupported in this build. Awaits a d2-little
+      // native FFI binding. See crates/d2-little/UPSTREAM.md.
       infrastructure: {
-        needsWorker: false,
-        needsCache: true,
+        needsCache: false,
       },
       dependencies: [
         {
           name: 'react-native-svg',
           version: '^13.0.0',
           type: 'npm',
-          optional: false,
+          optional: true,
         },
       ],
     },
     web: {
       platform: 'web',
       infrastructure: {
-        needsClientScript: true,
-        clientScriptBuilder: () =>
-          '<!-- D2 rendering provided by @supramark/engines (d2-little-web wasm). -->',
+        needsCache: false,
       },
       dependencies: [
         {
           name: '@kookyleo/d2-little-web',
-          version: '>=0.7.1',
+          version: 'workspace:*',
           type: 'npm',
           optional: false,
         },
@@ -120,7 +120,7 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
     syntaxTests: {
       cases: [
         {
-          name: '解析 d2 围栏为 diagram 节点',
+          name: 'Parse a ```d2 fence into a diagram node',
           input: ['```d2', 'a -> b', '```'].join('\n'),
           expected: {
             type: 'diagram',
@@ -135,7 +135,7 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
     renderTests: {
       web: [
         {
-          name: 'Web 渲染 D2 diagram（占位验证输出存在）',
+          name: 'Web D2 render (smoke: output exists)',
           input: {
             type: 'diagram',
             engine: 'd2',
@@ -145,30 +145,13 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
           snapshot: false,
         },
       ],
-      rn: [
-        {
-          name: 'RN 渲染 D2 diagram（占位验证输出存在）',
-          input: {
-            type: 'diagram',
-            engine: 'd2',
-            code: 'a -> b',
-          } as SupramarkDiagramNode,
-          expected: (output: unknown) => output !== null && output !== undefined,
-          snapshot: false,
-        },
-      ],
+      // RN render path intentionally absent — see infrastructure note.
     },
     integrationTests: {
       cases: [
         {
-          name: '端到端：markdown 中包含 ```d2 围栏',
-          input: [
-            '# D2 demo',
-            '',
-            '```d2',
-            'a -> b',
-            '```',
-          ].join('\n'),
+          name: 'End-to-end: a markdown doc containing a ```d2 fence',
+          input: ['# D2 demo', '', '```d2', 'a -> b', '```'].join('\n'),
           validate: (result: unknown) => {
             if (!result || typeof result !== 'object') return false;
             const root = result as any;
@@ -177,7 +160,7 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
               (n: any) => n.type === 'diagram' && String(n.engine).toLowerCase() === 'd2'
             );
           },
-          platforms: ['web', 'rn'],
+          platforms: ['web'],
         },
       ],
     },
@@ -193,37 +176,41 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
     readme: `
 # Diagram (D2) Feature
 
-为 supramark 提供 D2 围栏代码块的 AST 建模，并在 Web 端通过
-\`@kookyleo/d2-little-web\`（Rust wasm）渲染为 SVG。
+AST modelling + Web rendering for D2 diagrams.
 
-- 语法：使用 \`\\\`\\\`d2\` 围栏；
-- AST：解析为 \`diagram\` 节点，engine = "d2"，code 为 D2 源码；
-- 渲染：由 \`@supramark/engines\` 在 Web 侧调用 d2-little-web 输出 SVG。
+- Syntax: \`\\\`\\\`d2\` fenced code blocks.
+- AST: parsed into a \`diagram\` node with \`engine = "d2"\`,
+  \`code\` carrying the raw D2 source.
+- Rendering: on Web, \`@supramark/engines\` calls
+  \`@kookyleo/d2-little-web\` (Rust → wasm; ships its own dagre-style
+  layout, no Graphviz bridge required). On RN, d2 is currently
+  **unsupported** — replacement is a d2-little native FFI binding
+  tracked in \`crates/d2-little/UPSTREAM.md\`.
     `.trim(),
 
     api: {
       interfaces: [
         {
           name: 'D2FeatureOptions',
-          description: 'D2 Feature 的配置选项（当前为空，预留扩展）。',
+          description: 'D2 feature options (currently empty; reserved).',
           fields: [],
         },
       ],
       functions: [
         {
           name: 'createD2FeatureConfig',
-          description: '创建 D2 Feature 的配置对象。',
+          description: 'Create a feature config entry for the D2 diagram feature.',
           parameters: [
             {
               name: 'enabled',
               type: 'boolean',
-              description: '是否启用该 Feature',
+              description: 'Enable / disable the feature.',
               optional: false,
             },
             {
               name: 'options',
               type: 'D2FeatureOptions',
-              description: '可选配置项',
+              description: 'Optional feature options.',
               optional: true,
             },
           ],
@@ -231,12 +218,12 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
         },
         {
           name: 'getD2FeatureOptions',
-          description: '从 SupramarkConfig 中读取 D2 Feature 的 options。',
+          description: 'Read this feature\'s options from the global SupramarkConfig.',
           parameters: [
             {
               name: 'config',
               type: 'SupramarkConfig | undefined',
-              description: '全局 supramark 配置',
+              description: 'Global supramark config.',
               optional: true,
             },
           ],
@@ -247,20 +234,20 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
     },
 
     bestPractices: [
-      '保持 D2 源码简洁，复杂图建议分模块使用容器 `{}` 组织；',
-      '建议通过 diagram 统一配置启用缓存，避免重复 wasm 调用。',
+      'Keep D2 source readable; for complex layouts, use D2 containers `{}` to break the source into modules.',
+      'Enable diagram-level caching to skip repeated wasm calls for identical sources.',
     ],
 
     faq: [
       {
-        question: 'D2 是如何渲染的？',
+        question: 'How is D2 rendered?',
         answer:
-          'Web 端通过 @kookyleo/d2-little-web（Rust → wasm）把 D2 源码转为 SVG。d2-little 自带纯 Rust 布局引擎，不需要像 PlantUML 那样外挂 Graphviz 桥。',
+          'On Web, @kookyleo/d2-little-web (Rust → wasm) converts the source to SVG. d2-little ships its own pure-Rust layout engine, so unlike PlantUML there is no need for a Graphviz bridge.',
       },
       {
-        question: 'D2 和 mermaid / plantuml 的区别？',
+        question: 'How does D2 differ from mermaid / plantuml?',
         answer:
-          'D2 是一种更现代的声明式图表 DSL，强调容器、样式与现代布局。它与 mermaid / plantuml 互补：mermaid 侧重流程 / 时序，plantuml 覆盖完整 UML，D2 适合软件架构 / 系统图。',
+          'D2 is a more modern declarative diagram DSL with first-class containers, styles, and modern layouts. It complements the others: mermaid leans toward flow / sequence diagrams, plantuml covers the full UML surface, D2 is well suited to software architecture and system diagrams.',
       },
     ],
   },
@@ -269,7 +256,7 @@ export const d2Feature: SupramarkFeature<SupramarkDiagramNode> = {
 FeatureRegistry.register(d2Feature);
 
 export interface D2FeatureOptions {
-  // 预留：未来可加入 theme / sketch 等
+  // Reserved for future options (theme, sketch, etc.).
 }
 
 export type D2FeatureConfig = FeatureConfigWithOptions<D2FeatureOptions>;

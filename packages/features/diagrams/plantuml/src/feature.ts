@@ -9,12 +9,12 @@ import { FeatureRegistry, getFeatureOptionsAs } from '@supramark/core';
 import { plantumlExamples } from './examples.js';
 
 /**
- * PlantUML 图表 Feature
+ * PlantUML diagram feature.
  *
- * - 复用通用 `diagram` AST 节点；
- * - 只关心 engine 为 'plantuml' 的 diagram；
- * - 由 `@supramark/engines` 借助 `@kookyleo/plantuml-little-web`（Rust wasm）
- *   在 Web 端将 `@startuml ... @enduml` 源码转换为 SVG。
+ * - Reuses the generic `diagram` AST node.
+ * - Matches diagrams with `engine === 'plantuml'`.
+ * - On Web, `@supramark/engines` calls `@kookyleo/plantuml-little-web`
+ *   (Rust → wasm) to turn `@startuml … @enduml` source into SVG.
  *
  * @example
  * ```markdown
@@ -85,30 +85,36 @@ export const plantumlFeature: SupramarkFeature<SupramarkDiagramNode> = {
   renderers: {
     rn: {
       platform: 'rn',
+      // RN path is unsupported in this build. Awaits a plantuml-little
+      // native FFI binding (modelled on graphviz-anywhere-rn). See
+      // crates/plantuml-little/UPSTREAM.md.
       infrastructure: {
-        needsWorker: false,
-        needsCache: true,
+        needsCache: false,
       },
       dependencies: [
         {
           name: 'react-native-svg',
           version: '^13.0.0',
           type: 'npm',
-          optional: false,
+          optional: true,
         },
       ],
     },
     web: {
       platform: 'web',
       infrastructure: {
-        needsClientScript: true,
-        clientScriptBuilder: () =>
-          '<!-- PlantUML rendering provided by @supramark/engines (plantuml-little-web wasm). -->',
+        needsCache: false,
       },
       dependencies: [
         {
           name: '@kookyleo/plantuml-little-web',
-          version: '>=1.2026.2-3',
+          version: 'workspace:*',
+          type: 'npm',
+          optional: false,
+        },
+        {
+          name: '@kookyleo/graphviz-anywhere-web',
+          version: 'workspace:*',
           type: 'npm',
           optional: false,
         },
@@ -122,7 +128,7 @@ export const plantumlFeature: SupramarkFeature<SupramarkDiagramNode> = {
     syntaxTests: {
       cases: [
         {
-          name: '解析 plantuml 围栏为 diagram 节点',
+          name: 'Parse a ```plantuml fence into a diagram node',
           input: ['```plantuml', '@startuml', 'Bob -> Alice : hello', '@enduml', '```'].join('\n'),
           expected: {
             type: 'diagram',
@@ -137,7 +143,7 @@ export const plantumlFeature: SupramarkFeature<SupramarkDiagramNode> = {
     renderTests: {
       web: [
         {
-          name: 'Web 渲染 PlantUML diagram（占位验证输出存在）',
+          name: 'Web PlantUML render (smoke: output exists)',
           input: {
             type: 'diagram',
             engine: 'plantuml',
@@ -147,23 +153,12 @@ export const plantumlFeature: SupramarkFeature<SupramarkDiagramNode> = {
           snapshot: false,
         },
       ],
-      rn: [
-        {
-          name: 'RN 渲染 PlantUML diagram（占位验证输出存在）',
-          input: {
-            type: 'diagram',
-            engine: 'plantuml',
-            code: '@startuml\nBob -> Alice : hello\n@enduml',
-          } as SupramarkDiagramNode,
-          expected: (output: unknown) => output !== null && output !== undefined,
-          snapshot: false,
-        },
-      ],
+      // RN render path intentionally absent — see infrastructure note.
     },
     integrationTests: {
       cases: [
         {
-          name: '端到端：markdown 中包含 ```plantuml 围栏',
+          name: 'End-to-end: a markdown doc containing a ```plantuml fence',
           input: [
             '# PlantUML demo',
             '',
@@ -181,7 +176,7 @@ export const plantumlFeature: SupramarkFeature<SupramarkDiagramNode> = {
               (n: any) => n.type === 'diagram' && String(n.engine).toLowerCase() === 'plantuml'
             );
           },
-          platforms: ['web', 'rn'],
+          platforms: ['web'],
         },
       ],
     },
@@ -197,37 +192,44 @@ export const plantumlFeature: SupramarkFeature<SupramarkDiagramNode> = {
     readme: `
 # Diagram (PlantUML) Feature
 
-为 supramark 提供 PlantUML 围栏代码块的 AST 建模，并在 Web 端通过
-\`@kookyleo/plantuml-little-web\`（Rust wasm）渲染为 SVG。
+AST modelling + Web rendering for PlantUML diagrams.
 
-- 语法：使用 \`\\\`\\\`plantuml\` 围栏；
-- AST：解析为 \`diagram\` 节点，engine = "plantuml"，code 为 PlantUML 源码；
-- 渲染：由 \`@supramark/engines\` 在 Web 侧调用 plantuml-little-web 输出 SVG。
+- Syntax: \`\\\`\\\`plantuml\` fenced code blocks.
+- AST: parsed into a \`diagram\` node with \`engine = "plantuml"\`,
+  \`code\` carrying the raw PlantUML source.
+- Rendering: on Web, \`@supramark/engines\` calls
+  \`@kookyleo/plantuml-little-web\` (Rust → wasm). Graphviz layout for
+  the diagram families that need it is served by
+  \`@kookyleo/graphviz-anywhere-web\` through a host-installed
+  \`globalThis.__graphviz_anywhere_render\` bridge. On RN, plantuml
+  is currently **unsupported** — the legacy WebView worker was
+  retired in 2026-05; replacement is a plantuml-little native FFI
+  binding tracked in \`crates/plantuml-little/UPSTREAM.md\`.
     `.trim(),
 
     api: {
       interfaces: [
         {
           name: 'PlantumlFeatureOptions',
-          description: 'PlantUML Feature 的配置选项（当前为空，预留扩展）。',
+          description: 'PlantUML feature options (currently empty; reserved).',
           fields: [],
         },
       ],
       functions: [
         {
           name: 'createPlantumlFeatureConfig',
-          description: '创建 PlantUML Feature 的配置对象。',
+          description: 'Create a feature config entry for the PlantUML diagram feature.',
           parameters: [
             {
               name: 'enabled',
               type: 'boolean',
-              description: '是否启用该 Feature',
+              description: 'Enable / disable the feature.',
               optional: false,
             },
             {
               name: 'options',
               type: 'PlantumlFeatureOptions',
-              description: '可选配置项',
+              description: 'Optional feature options.',
               optional: true,
             },
           ],
@@ -235,12 +237,12 @@ export const plantumlFeature: SupramarkFeature<SupramarkDiagramNode> = {
         },
         {
           name: 'getPlantumlFeatureOptions',
-          description: '从 SupramarkConfig 中读取 PlantUML Feature 的 options。',
+          description: 'Read this feature\'s options from the global SupramarkConfig.',
           parameters: [
             {
               name: 'config',
               type: 'SupramarkConfig | undefined',
-              description: '全局 supramark 配置',
+              description: 'Global supramark config.',
               optional: true,
             },
           ],
@@ -251,20 +253,20 @@ export const plantumlFeature: SupramarkFeature<SupramarkDiagramNode> = {
     },
 
     bestPractices: [
-      '使用 @startuml / @enduml 包裹 PlantUML 源码，保持跨渲染器兼容；',
-      '针对大图建议通过 diagram 统一配置启用缓存，避免重复 wasm 调用。',
+      'Wrap source in @startuml / @enduml so the same fence renders consistently across hosts.',
+      'For large diagrams, enable caching via the unified diagram config so identical sources skip the wasm call.',
     ],
 
     faq: [
       {
-        question: 'PlantUML 是如何渲染的？',
+        question: 'How is PlantUML rendered?',
         answer:
-          'Web 端通过 @kookyleo/plantuml-little-web（Rust → wasm）把 PlantUML 源码转为 SVG；Graphviz 布局通过 @kookyleo/graphviz-anywhere-web 桥接。',
+          'On Web, @kookyleo/plantuml-little-web (Rust → wasm) converts the source to SVG. Graphviz-backed layout is bridged through @kookyleo/graphviz-anywhere-web via a globalThis.__graphviz_anywhere_render bridge installed by the engine loader.',
       },
       {
-        question: '为什么需要 Graphviz 桥？',
+        question: 'Why do you need a Graphviz bridge?',
         answer:
-          'plantuml-little-web 的图族（组件图、用例图等）依赖 Graphviz 做布局，因此默认 loader 会先 fetch graphviz-anywhere-web，再把结果回传给 plantuml-little-web 的 `convert()` 入口。',
+          'PlantUML\'s component / use-case / state diagram families delegate layout to Graphviz. The default loader therefore preloads graphviz-anywhere-web, installs the bridge function on globalThis, and then loads plantuml-little-web — which calls back into Graphviz when layout is needed.',
       },
     ],
   },
@@ -273,7 +275,7 @@ export const plantumlFeature: SupramarkFeature<SupramarkDiagramNode> = {
 FeatureRegistry.register(plantumlFeature);
 
 export interface PlantumlFeatureOptions {
-  // 预留：未来可加入 skin params / 默认主题等
+  // Reserved for future options (skin params, default theme, etc.).
 }
 
 export type PlantumlFeatureConfig = FeatureConfigWithOptions<PlantumlFeatureOptions>;

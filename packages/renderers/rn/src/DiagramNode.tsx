@@ -2,37 +2,38 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import type { SupramarkDiagramNode, SupramarkDiagramConfig } from '@supramark/core';
-import {
-  type DiagramRenderResult as LocalDiagramRenderResult,
-} from '@supramark/engines';
+import { type DiagramRenderResult } from '@supramark/engines';
 import { createReactNativeDiagramEngine } from '@supramark/engines/rn';
-import type { DiagramRenderResult as WorkerDiagramRenderResult } from '@supramark/rn-diagram-worker';
-import { useOptionalDiagramRender } from '@supramark/rn-diagram-worker';
 import { normalizeSvg, normalizeSvgLight } from './svgUtils';
 
 export interface DiagramNodeProps {
   node: SupramarkDiagramNode;
   /**
-   * 图表子系统配置
+   * Diagram subsystem config.
    *
-   * - 由上层通过 SupramarkConfig.diagram 传入；
-   * - 用于给特定 engine 注入默认的 server / timeout 等选项；
-   * - 单个 diagram 的 meta（node.meta）仍然可以覆盖这些默认值。
+   * - Passed in via SupramarkConfig.diagram from the host;
+   * - Used to inject per-engine defaults (server / timeout / etc.);
+   * - Per-node `node.meta` still overrides these defaults.
    */
   diagramConfig?: SupramarkDiagramConfig;
 }
 
-type DiagramRenderResult = LocalDiagramRenderResult | WorkerDiagramRenderResult;
-
 const defaultDiagramEngine = createReactNativeDiagramEngine();
 
+// RN engine support matrix:
+//   - 'dot' / 'graphviz' → handled by createReactNativeDiagramEngine
+//     (graphviz-anywhere-rn native FFI, no DOM, no WebView).
+//   - everything else (mermaid / plantuml / d2 / echarts / vega-lite) →
+//     unsupported on RN in this build. The hidden-WebView worker
+//     (@supramark/rn-diagram-worker) was retired in the 2026-05
+//     cleanup; native FFI bindings are tracked per-engine in the
+//     respective crates/<engine>/UPSTREAM.md.
+const RN_SUPPORTED_ENGINES = new Set(['dot', 'graphviz']);
+
 export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig }) => {
-  const diagramRender = useOptionalDiagramRender();
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [retryCount, setRetryCount] = useState<number>(0);
-  const maxRetries = 2;
 
   useEffect(() => {
     let cancelled = false;
@@ -40,93 +41,73 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
     setError(null);
     setSvg(null);
 
-    const attemptRender = () => {
-      const options = buildRenderOptions(node.engine, node.meta, diagramConfig);
-      const normalizedEngine = String(node.engine || '').toLowerCase();
-      const useLocalEngine =
-        normalizedEngine === 'mermaid' ||
-        normalizedEngine === 'dot' ||
-        normalizedEngine === 'graphviz';
+    const normalizedEngine = String(node.engine || '').toLowerCase();
 
-      const renderPromise: Promise<DiagramRenderResult> =
-        useLocalEngine
-          ? defaultDiagramEngine.render({ engine: normalizedEngine, code: node.code, options })
-          : diagramRender
-            ? diagramRender.render({ engine: node.engine, code: node.code, options })
-            : Promise.resolve({
-                id: `missing_provider_${Date.now()}`,
-                engine: node.engine,
-                success: false,
-                format: 'error',
-                payload: 'DiagramRenderProvider is required for non-mermaid diagram engines.',
-                error: {
-                  code: 'render_error',
-                  message: `${node.engine} rendering requires DiagramRenderProvider`,
-                  details: 'Wrap <Supramark /> with <DiagramRenderProvider /> when using WebView-based diagram engines.',
-                },
-              });
+    if (!RN_SUPPORTED_ENGINES.has(normalizedEngine)) {
+      setError(
+        `Engine "${node.engine}" is not yet supported on React Native. ` +
+          'See crates/<engine>/UPSTREAM.md for the planned native FFI ' +
+          'binding (or use the Web renderer for now).'
+      );
+      setLoading(false);
+      return;
+    }
 
-      renderPromise
-        .then(result => {
-          if (cancelled) return;
+    const options = buildRenderOptions(node.engine, node.meta, diagramConfig);
+    const renderPromise: Promise<DiagramRenderResult> = defaultDiagramEngine.render({
+      engine: normalizedEngine,
+      code: node.code,
+      options,
+    });
 
-          if (!result.success) {
-            // 渲染失败，显示错误
-            const errorMsg = result.error
-              ? `${result.error.message}: ${result.error.details || result.payload}`
-              : result.payload || '未知错误';
+    renderPromise
+      .then(result => {
+        if (cancelled) return;
 
-            // 如果是超时错误且未达到重试上限，自动重试
-            if (result.error?.code === 'timeout' && retryCount < maxRetries) {
-              // debug: Diagram render timeout, retrying...
-              setRetryCount(retryCount + 1);
-              setTimeout(attemptRender, 1000); // 1秒后重试
-              return;
-            }
+        if (!result.success) {
+          const errorMsg = result.error
+            ? `${result.error.message}: ${result.error.details || result.payload}`
+            : result.payload || 'Unknown error';
+          setError(errorMsg);
+          setLoading(false);
+          return;
+        }
 
-            setError(errorMsg);
+        if (result.format === 'svg') {
+          let normalized;
+          try {
+            normalized = result.payload.includes('<style')
+              ? normalizeSvg(result.payload)
+              : normalizeSvgLight(result.payload);
+          } catch (err) {
+            setError(`SVG normalization failed: ${err}`);
             setLoading(false);
             return;
           }
 
-          if (result.format === 'svg') {
-            let normalized;
-            try {
-              normalized = result.payload.includes('<style')
-                ? normalizeSvg(result.payload)
-                : normalizeSvgLight(result.payload);
-            } catch (err) {
-              setError(`SVG 处理错误: ${err}`);
-              setLoading(false);
-              return;
-            }
-
-            setSvg(normalized);
-            setLoading(false);
-          } else {
-            setError(`Unsupported diagram format: ${result.format}`);
-            setLoading(false);
-          }
-        })
-        .catch(err => {
-          if (cancelled) return;
-          setError(String(err));
+          setSvg(normalized);
           setLoading(false);
-        });
-    };
-
-    attemptRender();
+        } else {
+          setError(`Unsupported diagram format: ${result.format}`);
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        if (cancelled) return;
+        setError(String(err));
+        setLoading(false);
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [node.engine, node.code, node.meta, diagramConfig, diagramRender, retryCount]);
+  }, [node.engine, node.code, node.meta, diagramConfig]);
 
   if (loading && !svg && !error) {
     return (
       <View style={styles.placeholder}>
         <ActivityIndicator size="small" />
-        <Text style={styles.placeholderText}>正在渲染图表（{node.engine}）...</Text>
+        <Text style={styles.placeholderText}>Rendering diagram ({node.engine})…</Text>
       </View>
     );
   }
@@ -134,7 +115,7 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
   if (error) {
     return (
       <View style={styles.placeholder}>
-        <Text style={styles.errorText}>图表渲染错误：{error}</Text>
+        <Text style={styles.errorText}>Diagram error: {error}</Text>
       </View>
     );
   }
@@ -193,12 +174,14 @@ export const DiagramNode: React.FC<DiagramNodeProps> = ({ node, diagramConfig })
 };
 
 /**
- * 根据全局 diagramConfig 和节点自身的 meta 构造渲染选项。
+ * Compose render options from per-engine global defaults +
+ * node-specific meta overrides.
  *
- * 优先级约定：
- * - diagramConfig.engines[engine] 提供引擎级默认值（server / timeout 等）；
- * - node.meta 中的字段可以覆盖这些默认值；
- * - 未提供任何配置时，返回 node.meta 原样。
+ * Resolution order:
+ * - diagramConfig.engines[engine] supplies engine-level defaults
+ *   (server / timeout / etc.);
+ * - fields on `node.meta` override those defaults;
+ * - returns `undefined` when neither carries any options.
  */
 function buildRenderOptions(
   engine: string,
@@ -210,7 +193,6 @@ function buildRenderOptions(
   const engineConfig = diagramConfig?.engines?.[engine];
   if (engineConfig) {
     if (typeof engineConfig.server === 'string') {
-      // worker 中同时支持 server / plantumlServer 两种字段
       base.server = engineConfig.server;
       base.plantumlServer = engineConfig.server;
     }
@@ -222,12 +204,8 @@ function buildRenderOptions(
     }
 
     for (const [key, value] of Object.entries(engineConfig as Record<string, unknown>)) {
-      if (value === undefined) {
-        continue;
-      }
-      if (key === 'enabled' || key === 'timeoutMs' || key === 'server' || key === 'cache') {
-        continue;
-      }
+      if (value === undefined) continue;
+      if (key === 'enabled' || key === 'timeoutMs' || key === 'server' || key === 'cache') continue;
       base[key] = value;
     }
   }

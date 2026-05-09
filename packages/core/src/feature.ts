@@ -761,25 +761,34 @@ export interface StyleVariables {
 // ----------------------------------------------------------------------------
 
 /**
- * 渲染基础设施需求
+ * Renderer infrastructure requirements declared by a feature so hosts
+ * can decide whether to wire it up.
  */
 export interface InfrastructureRequirements {
-  /** 是否需要 Worker/WebView */
+  /** Whether a background worker is needed for rendering. */
   needsWorker?: boolean;
 
-  /** Worker 类型 */
-  workerType?: 'webview' | 'web-worker' | 'service-worker';
+  /**
+   * Worker type. Note: 'webview' was removed in the 2026-05 cleanup —
+   * supramark no longer ships a hidden-WebView worker. RN engines that
+   * historically relied on one (mermaid / plantuml / d2 / echarts /
+   * vega-lite) now go through native FFI bindings or are documented as
+   * Web-only. New features should pick 'web-worker' or
+   * 'service-worker' (or omit `workerType` entirely if no worker is
+   * needed).
+   */
+  workerType?: 'web-worker' | 'service-worker';
 
-  /** 是否需要缓存 */
+  /** Whether output caching is desired. */
   needsCache?: boolean;
 
-  /** 缓存配置 */
+  /** Cache configuration. */
   cacheConfig?: CacheConfig;
 
-  /** 是否需要客户端脚本（Web） */
+  /** Whether the feature needs a client-side script (Web). */
   needsClientScript?: boolean;
 
-  /** 客户端脚本生成器 */
+  /** Client-side script generator. */
   clientScriptBuilder?: () => string;
 }
 

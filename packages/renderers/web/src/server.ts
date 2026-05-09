@@ -1,25 +1,26 @@
 /**
  * @supramark/web/server
  *
- * 服务端渲染（SSR）专用导出。
+ * Server-side rendering (SSR) entry point.
  *
- * 此模块提供将 Markdown 转换为 HTML 字符串的功能，
- * 适用于 Node.js 服务端环境和 SSR 场景。
+ * Converts Markdown to an HTML string in Node.js. Use from SSR hosts
+ * that pre-render at build/request time.
  *
  * @example
  * ```typescript
  * import { parseMarkdown, astToHtml, buildDiagramSupportScripts } from '@supramark/web/server';
  *
- * // 解析 Markdown 为 AST
+ * // Parse Markdown into a Supramark AST.
  * const ast = await parseMarkdown(markdown);
  *
- * // 将 AST 转换为 HTML 字符串
+ * // Render the AST to an HTML string.
  * const htmlContent = astToHtml(ast);
  *
- * // 生成图表支持脚本（如果使用了 diagram 功能）
+ * // Generate diagram support scripts (only if diagram features are
+ * // configured).
  * const scripts = buildDiagramSupportScripts();
  *
- * // 在服务端返回完整 HTML
+ * // Compose the full SSR document.
  * const html = `
  *   <!DOCTYPE html>
  *   <html>
@@ -33,12 +34,13 @@
  * ```
  */
 
-// 核心解析功能（从 @supramark/core 导出）
+// Core parsing API re-exported from @supramark/core for convenience.
 export { parseMarkdown } from '@supramark/core';
 export type { SupramarkRootNode, SupramarkNode } from '@supramark/core';
 
-// HTML 渲染功能
+// HTML rendering.
 export { astToHtml, escapeHtml } from './html.js';
 
-// Math 支持脚本生成
-export { buildMathSupportScripts } from './mathSupport.js';
+// Math is now rendered SSR-side via @supramark/engines/mathjax → inline
+// SVG (no CDN script, no DOM-side KaTeX runtime). The legacy
+// buildMathSupportScripts() helper has been retired.

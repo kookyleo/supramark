@@ -5,7 +5,6 @@ import {
   Supramark,
   parseMarkdown,
   buildDiagramSupportScripts,
-  buildMathSupportScripts,
 } from '@supramark/web';
 import { DEMOS } from './demos.mjs';
 import {
@@ -223,7 +222,8 @@ function ReactDemoPage({ demos, activeDemo }) {
 
 function buildReactPage(demos, activeDemo = null) {
   const markup = renderToString(React.createElement(ReactDemoPage, { demos, activeDemo }));
-  const scripts =
-    buildDiagramSupportScripts(BASE_CONFIG.diagram) + buildMathSupportScripts();
+  // Math is rendered SSR-side via @supramark/engines/mathjax (inline
+  // SVG); no separate <script> bundle is needed.
+  const scripts = buildDiagramSupportScripts(BASE_CONFIG.diagram);
   return '<!DOCTYPE html>' + markup + scripts;
 }
