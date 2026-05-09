@@ -149,7 +149,23 @@ impl TextMetrics for HostCallbackRuler {
         self.line_height_factor = value;
     }
 
-    // measure_markdown: defaults to Err from the trait. 3b.3 will port
-    // the markdown layout to be backend-agnostic; for now, callers using
-    // HostCallbackRuler with markdown shapes get a clear error.
+    fn measure_markdown(
+        &mut self,
+        md_text: &str,
+        font_family: Option<crate::fonts::FontFamily>,
+        mono_font_family: Option<crate::fonts::FontFamily>,
+        font_size: i32,
+    ) -> Result<(i32, i32), String> {
+        let original_lh = self.line_height_factor;
+        self.line_height_factor = super::markdown::MARKDOWN_LINE_HEIGHT;
+        let result = super::markdown::measure_markdown_generic(
+            self,
+            md_text,
+            font_family,
+            mono_font_family,
+            font_size,
+        );
+        self.line_height_factor = original_lh;
+        result
+    }
 }
