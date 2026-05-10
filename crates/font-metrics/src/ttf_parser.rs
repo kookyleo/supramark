@@ -256,6 +256,22 @@ mod tests {
     }
 
     #[test]
+    fn extended_latin_and_symbols_resolve_to_real_glyphs() {
+        let m = TtfParserMetrics::default_latin().expect("init");
+        let space = m.measure(" ", "sans-serif", 14.0, false, false).width;
+        // These chars MUST resolve to non-space-fallback widths after 4b.
+        for ch in ['ā', 'ē', '€', '∞', '≤', '—', '…', '★'] {
+            let s = ch.to_string();
+            let w = m.measure(&s, "sans-serif", 14.0, false, false).width;
+            assert!(
+                (w - space).abs() > 0.001,
+                "char '{}' should have a real glyph width, got space-fallback {}",
+                ch, w,
+            );
+        }
+    }
+
+    #[test]
     fn italic_returns_distinct_metrics() {
         let m = TtfParserMetrics::default_latin().expect("init");
         // DejaVu Oblique faces share horizontal advances with their upright
