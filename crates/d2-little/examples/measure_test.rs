@@ -1,8 +1,8 @@
 use d2_little::fonts::{FONT_SIZE_M, Font, FontFamily, FontStyle};
-use d2_little::textmeasure::Ruler;
+use d2_little::textmeasure::D2GoEmulationRuler;
 
 fn main() {
-    let mut ruler = Ruler::new().unwrap();
+    let mut ruler = D2GoEmulationRuler::new().unwrap();
     let font = Font {
         family: FontFamily::SourceSansPro,
         style: FontStyle::Regular,

@@ -9,6 +9,8 @@ use std::cell::RefCell;
 
 use font_metrics_core::{Measured, Metrics};
 
+use super::D2Metrics;
+use super::MarkdownOptions;
 use super::d2_go_emulation::D2GoEmulationRuler;
 use crate::fonts::{FONT_SIZES, Font, FontFamily, FontStyle};
 
@@ -66,6 +68,47 @@ fn round_to_d2_size(size: f64) -> i32 {
         }
     }
     best
+}
+
+impl D2Metrics for D2GoEmulationMetrics {
+    fn line_height_factor(&self) -> f64 {
+        self.inner.borrow().line_height_factor
+    }
+
+    fn set_line_height_factor(&self, value: f64) {
+        self.inner.borrow_mut().line_height_factor = value;
+    }
+
+    fn measure_text(&self, font: Font, s: &str) -> (i32, i32) {
+        self.inner.borrow_mut().measure(font, s)
+    }
+
+    fn measure_mono(&self, font: Font, s: &str) -> (i32, i32) {
+        self.inner.borrow_mut().measure_mono(font, s)
+    }
+
+    fn measure_precise(&self, font: Font, s: &str) -> (f64, f64) {
+        self.inner.borrow_mut().measure_precise(font, s)
+    }
+
+    fn space_width(&self, font: Font) -> f64 {
+        self.inner.borrow_mut().space_width(font)
+    }
+
+    fn scale_unicode(&self, w: f64, font: Font, s: &str) -> f64 {
+        self.inner.borrow_mut().scale_unicode(w, font, s)
+    }
+
+    fn measure_markdown(
+        &self,
+        md_text: &str,
+        opts: MarkdownOptions,
+        font_size: i32,
+    ) -> Result<(i32, i32), String> {
+        self.inner
+            .borrow_mut()
+            .measure_markdown(md_text, opts.font_family, opts.mono_font_family, font_size)
+    }
 }
 
 impl Metrics for D2GoEmulationMetrics {

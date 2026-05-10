@@ -1,5 +1,5 @@
 fn main() {
-    let mut ruler = d2_little::textmeasure::Ruler::new().unwrap();
+    let mut ruler = d2_little::textmeasure::D2GoEmulationRuler::new().unwrap();
     let f1 = d2_little::fonts::Font::new(
         d2_little::fonts::FontFamily::SourceSansPro,
         d2_little::fonts::FontStyle::Bold,

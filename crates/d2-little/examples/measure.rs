@@ -2,7 +2,7 @@
 //!
 //! Run: cargo run -p d2-textmeasure --example measure
 use d2_little::fonts::{Font, FontFamily, FontStyle};
-use d2_little::textmeasure::Ruler;
+use d2_little::textmeasure::D2GoEmulationRuler as Ruler;
 
 fn main() {
     let mut r = Ruler::new().unwrap();

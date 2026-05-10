@@ -104,8 +104,15 @@ fn apply_text_transform(
 // ---------------------------------------------------------------------------
 
 /// Options controlling the compile phase.
+///
+/// `metrics` lets the caller inject an alternative
+/// [`crate::textmeasure::D2Metrics`] backend (e.g. the wasm
+/// [`crate::textmeasure::D2HostMetrics`] which bridges
+/// `canvas.measureText`). When `None`, the compile pipeline constructs
+/// the platform default via
+/// [`crate::textmeasure::default_d2_metrics`].
 pub struct CompileOptions {
-    pub ruler: Option<crate::textmeasure::D2GoEmulationRuler>,
+    pub metrics: Option<Box<dyn crate::textmeasure::D2Metrics>>,
     pub theme_id: Option<i64>,
     pub dark_theme_id: Option<i64>,
     pub pad: Option<i64>,
@@ -117,7 +124,7 @@ pub struct CompileOptions {
 impl Default for CompileOptions {
     fn default() -> Self {
         Self {
-            ruler: None,
+            metrics: None,
             theme_id: None,
             dark_theme_id: None,
             pad: None,
@@ -191,9 +198,23 @@ pub fn compile(
     let theme_id = theme_id.unwrap_or(0);
 
     // Step 2-5: recursively compile graph (theme, dimensions, layout, export)
-    let mut ruler =
-        crate::textmeasure::default_metrics().map_err(|e| format!("ruler init: {}", e))?;
-    let mut diagram = compile_graph(&mut g, theme_id, sketch, &mut ruler)?;
+    //
+    // Pick the metrics backend: caller-supplied via CompileOptions::metrics
+    // (e.g. a wasm host bridge), or the platform default (D2GoEmulationMetrics
+    // on native, D2HostMetrics on wasm).
+    let owned_metrics: Option<Box<dyn crate::textmeasure::D2Metrics>> = if opts.metrics.is_some() {
+        None
+    } else {
+        Some(
+            crate::textmeasure::default_d2_metrics()
+                .map_err(|e| format!("metrics init: {}", e))?,
+        )
+    };
+    let metrics: &dyn crate::textmeasure::D2Metrics = match opts.metrics.as_deref() {
+        Some(m) => m,
+        None => owned_metrics.as_deref().expect("owned_metrics set when opts.metrics is None"),
+    };
+    let mut diagram = compile_graph(&mut g, theme_id, sketch, metrics)?;
 
     // Match Go d2lib.Compile: copy selected render options back into
     // diagram.Config so the diagram hash (used for CSS scoping) accounts for
@@ -262,7 +283,7 @@ fn compile_graph(
     g: &mut Graph,
     theme_id: i64,
     sketch: bool,
-    ruler: &mut crate::textmeasure::D2GoEmulationRuler,
+    metrics: &dyn crate::textmeasure::D2Metrics,
 ) -> Result<crate::target::Diagram, String> {
     // Apply theme
     if let Some(theme) = crate::themes::catalog::find(theme_id) {
@@ -271,10 +292,10 @@ fn compile_graph(
 
     if g.objects.len() > 1 || !g.edges.is_empty() {
         // Set dimensions. When sketch is on, Go sets compileOpts.FontFamily =
-        // HandDrawn which flows into the ruler defaults; mirror here.
-        set_dimensions_with_font(
+        // HandDrawn which flows into the metrics defaults; mirror here.
+        set_dimensions_with_font_via_metrics(
             g,
-            ruler,
+            metrics,
             if sketch {
                 Some(crate::fonts::FontFamily::HandDrawn)
             } else {
@@ -298,15 +319,15 @@ fn compile_graph(
 
     // Recursively compile nested boards
     for layer in &mut g.layers {
-        let ld = compile_graph(layer, theme_id, sketch, ruler)?;
+        let ld = compile_graph(layer, theme_id, sketch, metrics)?;
         diagram.layers.push(ld);
     }
     for scenario in &mut g.scenarios {
-        let sd = compile_graph(scenario, theme_id, sketch, ruler)?;
+        let sd = compile_graph(scenario, theme_id, sketch, metrics)?;
         diagram.scenarios.push(sd);
     }
     for step in &mut g.steps {
-        let sd = compile_graph(step, theme_id, sketch, ruler)?;
+        let sd = compile_graph(step, theme_id, sketch, metrics)?;
         diagram.steps.push(sd);
     }
 
@@ -1504,12 +1525,14 @@ pub fn d2_to_svg(input: &str) -> Result<Vec<u8>, String> {
 
 /// Measure label text for each object and edge, then set their width/height.
 ///
-/// This is a simplified port of Go's `Graph.SetDimensions`.
+/// This is a simplified port of Go's `Graph.SetDimensions`. Dispatches
+/// through the [`crate::textmeasure::D2Metrics`] trait so wasm hosts can
+/// substitute their `canvas.measureText` bridge.
 pub fn set_dimensions(
     g: &mut Graph,
-    ruler: &mut crate::textmeasure::D2GoEmulationRuler,
+    metrics: &dyn crate::textmeasure::D2Metrics,
 ) -> Result<(), String> {
-    set_dimensions_with_font(g, ruler, None)
+    set_dimensions_with_font_via_metrics(g, metrics, None)
 }
 
 /// Variant that accepts an explicit default font family (used for sketch mode
@@ -1517,7 +1540,18 @@ pub fn set_dimensions(
 /// `compileOpts.FontFamily = HandDrawn` in `applyDefaults`.
 pub fn set_dimensions_with_font(
     g: &mut Graph,
-    ruler: &mut crate::textmeasure::D2GoEmulationRuler,
+    metrics: &dyn crate::textmeasure::D2Metrics,
+    override_family: Option<FontFamily>,
+) -> Result<(), String> {
+    set_dimensions_with_font_via_metrics(g, metrics, override_family)
+}
+
+/// Implementation entry point — takes the trait object directly. Both
+/// public wrappers above forward here. Kept as a separate name so the
+/// trait-shape is documented at the lowest level.
+pub fn set_dimensions_with_font_via_metrics(
+    g: &mut Graph,
+    metrics: &dyn crate::textmeasure::D2Metrics,
     override_family: Option<FontFamily>,
 ) -> Result<(), String> {
     // Default font family for the diagram. Themes with the `mono` special
@@ -1533,7 +1567,7 @@ pub fn set_dimensions_with_font(
         FontFamily::SourceSansPro
     };
 
-    let measure_label = |ruler: &mut crate::textmeasure::D2GoEmulationRuler,
+    let measure_label = |metrics: &dyn crate::textmeasure::D2Metrics,
                          shape: &str,
                          language: &str,
                          font_family: FontFamily,
@@ -1542,20 +1576,20 @@ pub fn set_dimensions_with_font(
                          label: &str|
      -> Result<(i32, i32), String> {
         // Code shapes with an explicit language go through the mono
-        // ruler path in Go `GetTextDimensionsWithMono`. The label is
+        // path in Go `GetTextDimensionsWithMono`. The label is
         // measured in SourceCodePro at CODE_LINE_HEIGHT, then Go adds
         // a vertical fudge for leading/trailing blank lines that the
-        // ruler cannot account for on its own.
+        // measurer cannot account for on its own.
         if !language.is_empty() && shape == crate::target::SHAPE_CODE {
-            let original_lh = ruler.line_height_factor();
-            ruler.set_line_height_factor(crate::textmeasure::CODE_LINE_HEIGHT);
+            let original_lh = metrics.line_height_factor();
+            metrics.set_line_height_factor(crate::textmeasure::CODE_LINE_HEIGHT);
             let mono_font = crate::fonts::Font::new(
                 FontFamily::SourceCodePro,
                 crate::fonts::FontStyle::Regular,
                 font_size,
             );
-            let (w, mut h) = ruler.measure_mono(mono_font, label);
-            ruler.set_line_height_factor(original_lh);
+            let (w, mut h) = metrics.measure_mono(mono_font, label);
+            metrics.set_line_height_factor(original_lh);
 
             // Leading / trailing empty lines: Go counts them separately
             // because `MeasureMono` strips them from the bounds. A leading
@@ -1581,24 +1615,19 @@ pub fn set_dimensions_with_font(
         }
         if language == "latex" {
             crate::latex::measure(label).map_err(|e| format!("latex measure: {}", e))
-        } else if language == "markdown" {
-            ruler.measure_markdown(
+        } else if language == "markdown" || !language.is_empty() {
+            // Markdown (or any non-empty non-code language) uses the
+            // markdown layout walker. Mirrors Go GetLabelSize.
+            metrics.measure_markdown(
                 label,
-                Some(font_family),
-                Some(FontFamily::SourceCodePro),
-                font_size,
-            )
-        } else if !language.is_empty() {
-            // Non-code shapes with a non-markdown language are still
-            // treated as markdown by Go (see GetLabelSize).
-            ruler.measure_markdown(
-                label,
-                Some(font_family),
-                Some(FontFamily::SourceCodePro),
+                crate::textmeasure::MarkdownOptions {
+                    font_family: Some(font_family),
+                    mono_font_family: Some(FontFamily::SourceCodePro),
+                },
                 font_size,
             )
         } else {
-            Ok(ruler.measure(font, label))
+            Ok(metrics.measure_text(font, label))
         }
     };
 
@@ -1715,7 +1744,7 @@ pub fn set_dimensions_with_font(
                 header_font_size,
             );
             let (header_w, header_h) = if !label.is_empty() {
-                ruler.measure(header_font, &label)
+                metrics.measure_text(header_font, &label)
             } else {
                 (0, 0)
             };
@@ -1751,13 +1780,13 @@ pub fn set_dimensions_with_font(
             if let Some(ref cls) = class_ref_opt {
                 for f in &cls.fields {
                     let combined = format!("{}{}", f.name, f.type_);
-                    let (fw, fh) = ruler.measure(row_font, &combined);
+                    let (fw, fh) = metrics.measure_text(row_font, &combined);
                     max_width = max_width.max(fw);
                     row_h = row_h.max(fh);
                 }
                 for m in &cls.methods {
                     let combined = format!("{}{}", m.name, m.return_);
-                    let (mw, mh) = ruler.measure(row_font, &combined);
+                    let (mw, mh) = metrics.measure_text(row_font, &combined);
                     max_width = max_width.max(mw);
                     row_h = row_h.max(mh);
                 }
@@ -1848,7 +1877,7 @@ pub fn set_dimensions_with_font(
             let (raw_header_w, raw_header_h) = if header_text.is_empty() {
                 (0, 0)
             } else {
-                ruler.measure(header_font, header_text)
+                metrics.measure_text(header_font, header_text)
             };
             g.objects[i].label_dimensions = crate::graph::Dimensions {
                 width: raw_header_w,
@@ -1877,18 +1906,18 @@ pub fn set_dimensions_with_font(
 
             let mut table = g.objects[i].sql_table.clone().unwrap_or_default();
             for col in &mut table.columns {
-                let (nw, nh) = ruler.measure(col_font, &col.name.label);
+                let (nw, nh) = metrics.measure_text(col_font, &col.name.label);
                 col.name.label_width = nw;
                 col.name.label_height = nh;
                 longest_name_w = longest_name_w.max(nw);
-                let (tw, th) = ruler.measure(col_font, &col.type_.label);
+                let (tw, th) = metrics.measure_text(col_font, &col.type_.label);
                 col.type_.label_width = tw;
                 col.type_.label_height = th;
                 longest_type_w = longest_type_w.max(tw);
                 let _ = th;
                 if !col.constraint.is_empty() {
                     let cstr = col.constraint_abbr();
-                    let (cw, _) = ruler.measure(col_font, &cstr);
+                    let (cw, _) = metrics.measure_text(col_font, &cstr);
                     longest_constraint_w = longest_constraint_w.max(cw);
                 }
             }
@@ -1949,7 +1978,7 @@ pub fn set_dimensions_with_font(
             // Still measure the label so SVG can render it next to the icon.
             if !label.is_empty() {
                 let (tw, th) = measure_label(
-                    ruler,
+                    metrics,
                     &shape,
                     &g.objects[i].language,
                     font_family,
@@ -1996,7 +2025,7 @@ pub fn set_dimensions_with_font(
 
         // Measure the label text
         let (tw, th) = measure_label(
-            ruler,
+            metrics,
             &shape,
             &g.objects[i].language,
             font_family,
@@ -2212,26 +2241,28 @@ pub fn set_dimensions_with_font(
             // - Otherwise: regular text measurement with font style
             let edge_language = &g.edges[i].language;
             let (tw, th) = if edge_language == "latex" {
-                crate::latex::measure(&label).unwrap_or_else(|_| ruler.measure(font, &label))
+                crate::latex::measure(&label).unwrap_or_else(|_| metrics.measure_text(font, &label))
             } else if edge_language == "markdown" {
-                ruler.measure_markdown(
+                metrics.measure_markdown(
                     &label,
-                    Some(edge_font_family),
-                    Some(FontFamily::SourceCodePro),
+                    crate::textmeasure::MarkdownOptions {
+                        font_family: Some(edge_font_family),
+                        mono_font_family: Some(FontFamily::SourceCodePro),
+                    },
                     font_size,
                 )?
             } else if !edge_language.is_empty() {
                 // Non-empty language: Go's GetTextDimensions uses
                 // MeasureMono with SourceCodePro Regular + CODE_LINE_HEIGHT
-                let original_lh = ruler.line_height_factor();
-                ruler.set_line_height_factor(crate::textmeasure::CODE_LINE_HEIGHT);
+                let original_lh = metrics.line_height_factor();
+                metrics.set_line_height_factor(crate::textmeasure::CODE_LINE_HEIGHT);
                 let mono_font = crate::fonts::Font::new(
                     FontFamily::SourceCodePro,
                     crate::fonts::FontStyle::Regular,
                     font_size,
                 );
-                let (w, mut h) = ruler.measure_mono(mono_font, &label);
-                ruler.set_line_height_factor(original_lh);
+                let (w, mut h) = metrics.measure_mono(mono_font, &label);
+                metrics.set_line_height_factor(original_lh);
 
                 // Count empty leading/trailing lines (same as object code)
                 let lines: Vec<&str> = label.split('\n').collect();
@@ -2254,7 +2285,7 @@ pub fn set_dimensions_with_font(
                 (w, h)
             } else {
                 // Regular text measurement
-                ruler.measure(font, &label)
+                metrics.measure_text(font, &label)
             };
             g.edges[i].label_dimensions = crate::graph::Dimensions {
                 width: tw,
@@ -2265,7 +2296,7 @@ pub fn set_dimensions_with_font(
         // the block in Go d2graph.SetDimensions that runs before the
         // edge-label branch.
         if !src_ah_label.is_empty() {
-            let (tw, th) = ruler.measure(font, &src_ah_label);
+            let (tw, th) = metrics.measure_text(font, &src_ah_label);
             if let Some(ref mut ah) = g.edges[i].src_arrowhead {
                 ah.label_dimensions = crate::graph::Dimensions {
                     width: tw,
@@ -2274,7 +2305,7 @@ pub fn set_dimensions_with_font(
             }
         }
         if !dst_ah_label.is_empty() {
-            let (tw, th) = ruler.measure(font, &dst_ah_label);
+            let (tw, th) = metrics.measure_text(font, &dst_ah_label);
             if let Some(ref mut ah) = g.edges[i].dst_arrowhead {
                 ah.label_dimensions = crate::graph::Dimensions {
                     width: tw,

@@ -1,16 +1,17 @@
 //! Text measurement for d2 rendering.
 //!
 //! Hosts the byte-equal Go-upstream engine ([`D2GoEmulationRuler`]), the
-//! markdown rendering helper ([`render_markdown`]), and the
-//! [`default_metrics`] factory.
+//! markdown rendering helper ([`render_markdown`]), the [`default_metrics`]
+//! factory, and the d2-internal [`D2Metrics`] sub-trait that the lib.rs
+//! layout pipeline dispatches through.
 //!
-//! d2 layout uses the concrete [`D2GoEmulationRuler`] type directly because
-//! its `line_height_factor` is a stateful d2-internal concept that other
-//! backends cannot cleanly substitute. The [`D2GoEmulationMetrics`] adapter
-//! exposes the same engine through the cross-crate
-//! [`font_metrics_core::Metrics`] trait, and is reserved for the wasm
-//! production wiring (where the host bridge needs to plug into the same
-//! abstract surface).
+//! d2 layout uses [`D2Metrics`] (an extension of
+//! [`font_metrics_core::Metrics`]) so the wasm production path can swap in
+//! a [`D2HostMetrics`](d2_host_metrics::D2HostMetrics) backed by the host
+//! `canvas.measureText` bridge while native / regression tests keep using
+//! [`D2GoEmulationMetrics`] for byte-equal Go output. The d2-specific
+//! `line_height_factor` save/restore idiom stays available through the
+//! sub-trait without leaking into the cross-crate `Metrics` surface.
 
 use font_metrics_core::Metrics;
 
@@ -18,11 +19,90 @@ use crate::fonts::{Font, FontFamily, FontStyle};
 
 pub mod d2_emulation_metrics;
 pub mod d2_go_emulation;
+#[cfg(target_arch = "wasm32")]
+pub mod d2_host_metrics;
 
 mod markdown;
 
 pub use d2_emulation_metrics::D2GoEmulationMetrics;
 pub use d2_go_emulation::D2GoEmulationRuler;
+#[cfg(target_arch = "wasm32")]
+pub use d2_host_metrics::D2HostMetrics;
+
+// ---------------------------------------------------------------------------
+// MarkdownOptions — explicit-shape carrier for measure_markdown arguments.
+// Mirrors the existing 4-tuple so future backends (e.g. host wasm) can take
+// it as a single value rather than a tower of Options.
+// ---------------------------------------------------------------------------
+
+/// Options for [`D2Metrics::measure_markdown`]. Mirrors
+/// [`D2GoEmulationRuler::measure_markdown`]'s argument shape.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MarkdownOptions {
+    pub font_family: Option<FontFamily>,
+    pub mono_font_family: Option<FontFamily>,
+}
+
+// ---------------------------------------------------------------------------
+// D2Metrics — d2-internal extension of font_metrics_core::Metrics.
+//
+// The cross-crate Metrics trait is intentionally pure (single-line measure
+// only). d2's layout pipeline additionally needs:
+//   1. `line_height_factor` get/set — stateful, d2-specific (mermaid /
+//      plantuml have no equivalent; keeping it here means the cross-crate
+//      trait stays uncontaminated).
+//   2. d2 `Font` enum convenience accessors — every callsite already has a
+//      `Font`, so reshaping to (family_str, bold, italic) on the spot is
+//      noisy.
+//   3. `measure_markdown` — d2-specific markdown-to-box layout. The native
+//      path delegates to the byte-equal Go emulation; the wasm
+//      D2HostMetrics adapter currently returns Err pending a separate
+//      port.
+//
+// All stateful methods take `&self` (interior mutability via RefCell /
+// Cell in implementors) so callers don't need `&mut`.
+// ---------------------------------------------------------------------------
+
+/// d2-internal extension over [`font_metrics_core::Metrics`].
+///
+/// d2 layout's `set_dimensions` / markdown walker dispatch through this
+/// trait. Two implementors:
+/// - [`D2GoEmulationMetrics`] — native + byte-equal Go regression path.
+/// - [`D2HostMetrics`](d2_host_metrics::D2HostMetrics) — wasm path
+///   bridging `canvas.measureText` (target_arch = "wasm32" only).
+pub trait D2Metrics: Metrics {
+    /// Current line-height factor used when advancing past a `\n`.
+    fn line_height_factor(&self) -> f64;
+    /// Override the line-height factor. Callers usually save the previous
+    /// value and restore it after the temporary override.
+    fn set_line_height_factor(&self, value: f64);
+
+    /// Integer-rounded measurement convenience: ceil(width), ceil(height).
+    /// Renamed from plain `measure` to avoid shadowing the
+    /// [`Metrics::measure`] super-trait method (which has a different,
+    /// string-based family signature). All d2 layout callsites use this
+    /// name.
+    fn measure_text(&self, font: Font, s: &str) -> (i32, i32);
+    /// Measure with `bounds_with_dot=true` and the SourceCodePro family.
+    fn measure_mono(&self, font: Font, s: &str) -> (i32, i32);
+    /// Floating-point measurement: (width, height) without ceil.
+    fn measure_precise(&self, font: Font, s: &str) -> (f64, f64);
+    /// Width of the space glyph in the supplied font.
+    fn space_width(&self, font: Font) -> f64;
+    /// CJK width-fallback heuristic: replace measured Latin-fallback width
+    /// with `space_width(mono) * unicode_width` for non-1-cell graphemes.
+    fn scale_unicode(&self, w: f64, font: Font, s: &str) -> f64;
+
+    /// Measure a markdown blob and return the rendered (width, height).
+    /// Native path drives the byte-equal Go emulation walker; wasm path
+    /// returns Err (Phase 3 follow-up).
+    fn measure_markdown(
+        &self,
+        md_text: &str,
+        opts: MarkdownOptions,
+        font_size: i32,
+    ) -> Result<(i32, i32), String>;
+}
 
 /// Default font size used when measuring markdown content.
 pub const MARKDOWN_FONT_SIZE: i32 = crate::fonts::FONT_SIZE_M;
@@ -40,8 +120,30 @@ const H6_EM: f64 = 0.85;
 
 /// Construct the default d2 text-measurement engine (the byte-equal
 /// reproduction of Go upstream's freetype + Int26_6 path).
+///
+/// This returns the concrete [`D2GoEmulationRuler`] for callers that need
+/// `&mut Ruler` (the legacy public `set_dimensions` shim, regression
+/// fixtures). Layout pipeline code path goes through
+/// [`default_d2_metrics`] instead.
 pub fn default_metrics() -> Result<D2GoEmulationRuler, String> {
     D2GoEmulationRuler::new()
+}
+
+/// Construct the default [`D2Metrics`] backend.
+///
+/// On native targets returns a [`D2GoEmulationMetrics`] (byte-equal Go
+/// upstream layout). On wasm targets returns a
+/// [`D2HostMetrics`](d2_host_metrics::D2HostMetrics) backed by the host
+/// `canvas.measureText` bridge.
+pub fn default_d2_metrics() -> Result<Box<dyn D2Metrics>, String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        Ok(Box::new(d2_host_metrics::D2HostMetrics::new()))
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Ok(Box::new(D2GoEmulationMetrics::new()?))
+    }
 }
 
 /// Render markdown source to sanitised HTML. No font work involved.
