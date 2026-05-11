@@ -1,4 +1,4 @@
-// Minimal App.tsx for native d2 simulator smoke verification.
+// Minimal App.tsx for native FFI simulator smoke verification across d2 / mermaid / plantuml.
 // Original demo App is stashed at App.full.tsx.bak — restore once
 // @supramark/rn-diagram-worker (or equivalent) is back in the workspace.
 
@@ -12,42 +12,82 @@ import {
   NativeModules,
 } from 'react-native';
 
-interface NativeD2 {
+interface NativeEngine {
   render: (source: string) => Promise<string>;
   getVersion: () => Promise<string>;
 }
-const D2: NativeD2 | undefined = NativeModules.SupramarkD2Native;
 
 type Status = 'pending' | 'ok' | 'error';
+interface EngineResult {
+  name: string;
+  module: NativeEngine | undefined;
+  source: string;
+  status: Status;
+  detail: string;
+}
+
+const ENGINES_SPEC: Array<{ name: string; key: string; source: string }> = [
+  { name: 'd2', key: 'SupramarkD2Native', source: 'a -> b -> c' },
+  {
+    name: 'mermaid',
+    key: 'SupramarkMermaidNative',
+    source: 'graph TD; A-->B; A-->C; B-->D; C-->D;',
+  },
+  {
+    name: 'plantuml',
+    key: 'SupramarkPlantumlNative',
+    source: '@startuml\nAlice -> Bob: hi\nBob --> Alice: hello\n@enduml',
+  },
+];
 
 export default function App() {
-  const [status, setStatus] = useState<Status>('pending');
-  const [detail, setDetail] = useState<string>('booting...');
+  const [results, setResults] = useState<EngineResult[]>(
+    ENGINES_SPEC.map((s) => ({
+      name: s.name,
+      module: NativeModules[s.key] as NativeEngine | undefined,
+      source: s.source,
+      status: 'pending',
+      detail: 'booting...',
+    })),
+  );
 
   useEffect(() => {
     (async () => {
-      try {
-        if (!D2) {
-          throw new Error(
-            'NativeModules.SupramarkD2Native is undefined — module not linked',
-          );
+      for (let i = 0; i < ENGINES_SPEC.length; i++) {
+        const spec = ENGINES_SPEC[i];
+        const mod = NativeModules[spec.key] as NativeEngine | undefined;
+        let next: EngineResult;
+        try {
+          if (!mod) {
+            throw new Error(`NativeModules.${spec.key} is undefined — not linked`);
+          }
+          const version = await mod.getVersion();
+          const svg = await mod.render(spec.source);
+          const line = `[${spec.name.toUpperCase()}_SMOKE_OK] v=${version} len=${svg.length}`;
+          console.log(line);
+          next = {
+            name: spec.name,
+            module: mod,
+            source: spec.source,
+            status: 'ok',
+            detail: `v=${version}  svg.length=${svg.length}\n${svg.slice(0, 400)}`,
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.log(`[${spec.name.toUpperCase()}_SMOKE_ERROR] ${msg.slice(0, 300)}`);
+          next = {
+            name: spec.name,
+            module: mod,
+            source: spec.source,
+            status: 'error',
+            detail: msg.slice(0, 600),
+          };
         }
-        const version = await D2.getVersion();
-        const svg = await D2.render('a -> b -> c');
-        const line = `[D2_SMOKE_OK] v=${version} len=${svg.length} head=${svg.slice(0, 120)}`;
-        console.log(line);
-        setStatus('ok');
-        setDetail(
-          `version=${version}\nsvg.length=${svg.length}\n\n${svg.slice(0, 800)}`,
-        );
-      } catch (err) {
-        const msg =
-          err instanceof Error
-            ? `${err.message}\n${err.stack ?? ''}`
-            : String(err);
-        console.log(`[D2_SMOKE_ERROR] ${msg.slice(0, 500)}`);
-        setStatus('error');
-        setDetail(msg.slice(0, 800));
+        setResults((prev) => {
+          const arr = [...prev];
+          arr[i] = next;
+          return arr;
+        });
       }
     })();
   }, []);
@@ -55,13 +95,22 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>supramark · d2 native smoke</Text>
-        <Text style={[styles.badge, badgeStyle(status)]}>{status.toUpperCase()}</Text>
+        <Text style={styles.title}>supramark · native FFI smoke</Text>
       </View>
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.mono} selectable>
-          {detail}
-        </Text>
+        {results.map((r) => (
+          <View key={r.name} style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>{r.name}</Text>
+              <Text style={[styles.badge, badgeStyle(r.status)]}>
+                {r.status.toUpperCase()}
+              </Text>
+            </View>
+            <Text style={styles.mono} selectable>
+              {r.detail}
+            </Text>
+          </View>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -81,22 +130,34 @@ function badgeStyle(s: Status) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0d1117' },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     padding: 16,
     borderBottomColor: '#21262d',
     borderBottomWidth: 1,
   },
   title: { color: '#f0f6fc', fontSize: 18, fontWeight: '600' },
+  body: { padding: 16 },
+  card: {
+    marginBottom: 16,
+    borderColor: '#21262d',
+    borderWidth: 1,
+    borderRadius: 6,
+    padding: 12,
+    backgroundColor: '#161b22',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  cardTitle: { color: '#f0f6fc', fontSize: 16, fontWeight: '600' },
   badge: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 3,
     overflow: 'hidden',
   },
-  body: { padding: 16 },
-  mono: { color: '#c9d1d9', fontFamily: 'Menlo', fontSize: 11, lineHeight: 16 },
+  mono: { color: '#c9d1d9', fontFamily: 'Menlo', fontSize: 10, lineHeight: 14 },
 });
