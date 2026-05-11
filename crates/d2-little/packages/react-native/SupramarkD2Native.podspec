@@ -1,13 +1,10 @@
 require "json"
 
-package = JSON.parse(File.read(File.join(__dir__, "..", "package.json")))
+package = JSON.parse(File.read(File.join(__dir__, "package.json")))
 
-# Podspec lives at ios/SupramarkD2Native.podspec; sources / xcframework
-# are next to it. Host Podfile adds it via:
-#   pod 'SupramarkD2Native',
-#     :path => '../node_modules/@kookyleo/supramark-d2-native-rn/ios'
-# (RN autolinking doesn't reliably pick up nested-podspec workspace
-# packages, so the explicit Podfile entry is the supported integration.)
+# Podspec is at the package root (not ios/) so Expo / RN autolinking discovers
+# it via `findPodspecFile(packageRoot)`. All path references inside point under
+# ios/ where the actual sources + vendored xcframework live.
 
 Pod::Spec.new do |s|
   s.name         = "SupramarkD2Native"
@@ -24,19 +21,18 @@ Pod::Spec.new do |s|
   s.ios.deployment_target = "15.1"
   s.osx.deployment_target = "11.0"
 
-  # Source / xcframework paths are relative to the podspec dir (ios/).
-  s.source_files = "*.{h,m,mm}"
-  s.public_header_files = "SupramarkD2Module.h"
+  s.source_files = "ios/*.{h,m,mm}"
+  s.public_header_files = "ios/SupramarkD2Module.h"
 
   # The vendored xcframework is staged under ios/Frameworks/ by
   # scripts/prepare-native.js (consuming target/ios-xcframeworks/ from
   # the workspace root after cargo build + scripts/build-ios-xcframework.sh).
-  s.preserve_paths = "Frameworks/**"
-  s.vendored_frameworks = "Frameworks/SupramarkD2.xcframework"
+  s.preserve_paths = "ios/Frameworks/**"
+  s.vendored_frameworks = "ios/Frameworks/SupramarkD2.xcframework"
   s.xcconfig = {
     "HEADER_SEARCH_PATHS" =>
-      "\"$(PODS_TARGET_SRCROOT)/Frameworks/SupramarkD2.xcframework/ios-arm64/Headers\" " \
-      "\"$(PODS_TARGET_SRCROOT)/Frameworks/SupramarkD2.xcframework/ios-arm64_x86_64-simulator/Headers\"",
+      "\"$(PODS_TARGET_SRCROOT)/ios/Frameworks/SupramarkD2.xcframework/ios-arm64/Headers\" " \
+      "\"$(PODS_TARGET_SRCROOT)/ios/Frameworks/SupramarkD2.xcframework/ios-arm64_x86_64-simulator/Headers\"",
     "OTHER_LDFLAGS" => "$(inherited)",
   }
 

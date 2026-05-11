@@ -33,6 +33,15 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     };
   }
 
+  // @supramark/engines 的 ./rn subpath — Metro 同样不支持 package.json exports
+  // 的 subpath；手动映射到 source 文件。
+  if (moduleName === '@supramark/engines/rn') {
+    return {
+      filePath: path.resolve(workspaceRoot, 'packages/engines/src/rn.ts'),
+      type: 'sourceFile',
+    };
+  }
+
   // 处理 devlop 包的 exports 字段
   if (moduleName === 'devlop') {
     return {

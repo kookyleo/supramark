@@ -21,7 +21,7 @@
 
 @interface SupramarkD2Module : NSObject <RCTBridgeModule
 #ifdef RCT_NEW_ARCH_ENABLED
-  , NativeSupramarkD2NativeSpec
+  , NativeSupramarkD2Spec
 #endif
 >
 

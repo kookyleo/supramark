@@ -47,12 +47,12 @@ RCT_EXPORT_METHOD(render:(NSString *)source
     }
 
     dispatch_async(_renderQueue, ^{
-        uint8_t *outBuf = NULL;
+        char *outBuf = NULL;
         size_t outLen = 0;
-        int status = supramark_d2_render([sourceData bytes],
-                                         [sourceData length],
-                                         &outBuf,
-                                         &outLen);
+        int32_t status = supramark_d2_render((const char *)[sourceData bytes],
+                                             [sourceData length],
+                                             &outBuf,
+                                             &outLen);
         if (status != SUPRAMARK_D2_OK) {
             NSString *code;
             switch (status) {
@@ -98,7 +98,7 @@ RCT_EXPORT_METHOD(getVersion:(RCTPromiseResolveBlock)resolve
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
     (const facebook::react::ObjCTurboModule::InitParams &)params
 {
-    return std::make_shared<facebook::react::NativeSupramarkD2NativeSpecJSI>(params);
+    return std::make_shared<facebook::react::NativeSupramarkD2SpecJSI>(params);
 }
 #endif
 

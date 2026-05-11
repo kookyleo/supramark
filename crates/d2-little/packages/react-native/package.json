@@ -6,6 +6,7 @@
   "module": "lib/module/index.js",
   "types": "lib/typescript/index.d.ts",
   "source": "src/index.ts",
+  "react-native": "src/index.ts",
   "license": "MPL-2.0",
   "repository": {
     "type": "git",
@@ -43,5 +44,13 @@
     "react": "*",
     "react-native": "*"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "codegenConfig": {
+    "name": "SupramarkD2NativeSpec",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "android": {
+      "javaPackageName": "com.supramark.d2native"
+    }
+  }
 }
