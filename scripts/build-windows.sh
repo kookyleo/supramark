@@ -216,9 +216,13 @@ for lib in "${GV_LIBS[@]}"; do
     GV_LIBS_WIN+=("$(cygpath -w "$lib")")
 done
 
-MSYS2_ARG_CONV_EXCL='*' "${LIBEXE}" //NOLOGO \
-    "//MACHINE:${LIB_MACHINE}" \
-    "//OUT:${STATIC_OUT_WIN}" \
+# Single-slash MSVC-style flags. MSYS2_ARG_CONV_EXCL='*' prevents Git Bash
+# from rewriting them (e.g. /NOLOGO → C:\Program Files\Git\NOLOGO). Earlier
+# attempts with `//NOLOGO` produced LNK4044 unknown-option warnings because
+# the env var also suppresses MSYS's `//foo → /foo` collapse.
+MSYS2_ARG_CONV_EXCL='*' "${LIBEXE}" /NOLOGO \
+    "/MACHINE:${LIB_MACHINE}" \
+    "/OUT:${STATIC_OUT_WIN}" \
     "${WRAPPER_OBJ_WIN}" \
     "${GV_LIBS_WIN[@]}"
 # ─────────────────────────────────────────────────────────────────────────────
