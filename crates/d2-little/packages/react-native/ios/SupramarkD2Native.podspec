@@ -1,0 +1,48 @@
+require "json"
+
+package = JSON.parse(File.read(File.join(__dir__, "..", "package.json")))
+
+# Podspec lives at ios/SupramarkD2Native.podspec; sources / xcframework
+# are next to it. Host Podfile adds it via:
+#   pod 'SupramarkD2Native',
+#     :path => '../node_modules/@kookyleo/supramark-d2-native-rn/ios'
+# (RN autolinking doesn't reliably pick up nested-podspec workspace
+# packages, so the explicit Podfile entry is the supported integration.)
+
+Pod::Spec.new do |s|
+  s.name         = "SupramarkD2Native"
+  s.version      = package["version"]
+  s.summary      = package["description"]
+  s.homepage     = package["repository"]["url"]
+  s.license      = package["license"]
+  s.authors      = package["author"]
+  s.source       = { :git => package["repository"]["url"], :tag => "v#{s.version}" }
+
+  # iOS 15.1 matches what scripts/build-ios.sh / Xcode crosscompile target
+  # the supramark-d2-native staticlib for. Lowering this without a rebuild
+  # would cause an SDK/ABI mismatch at link time.
+  s.ios.deployment_target = "15.1"
+  s.osx.deployment_target = "11.0"
+
+  # Source / xcframework paths are relative to the podspec dir (ios/).
+  s.source_files = "*.{h,m,mm}"
+  s.public_header_files = "SupramarkD2Module.h"
+
+  # The vendored xcframework is staged under ios/Frameworks/ by
+  # scripts/prepare-native.js (consuming target/ios-xcframeworks/ from
+  # the workspace root after cargo build + scripts/build-ios-xcframework.sh).
+  s.preserve_paths = "Frameworks/**"
+  s.vendored_frameworks = "Frameworks/SupramarkD2.xcframework"
+  s.xcconfig = {
+    "HEADER_SEARCH_PATHS" =>
+      "\"$(PODS_TARGET_SRCROOT)/Frameworks/SupramarkD2.xcframework/ios-arm64/Headers\" " \
+      "\"$(PODS_TARGET_SRCROOT)/Frameworks/SupramarkD2.xcframework/ios-arm64_x86_64-simulator/Headers\"",
+    "OTHER_LDFLAGS" => "$(inherited)",
+  }
+
+  if respond_to?(:install_modules_dependencies, true)
+    install_modules_dependencies(s)
+  else
+    s.dependency "React-Core"
+  end
+end
