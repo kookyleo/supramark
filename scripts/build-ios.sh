@@ -111,10 +111,25 @@ build_ios_arch() {
     cp "${build_dir}/graphviz_api.o" "${tmpdir}/"
 
     mkdir -p "${build_dir}/out"
-    ar rcs "${build_dir}/out/libGraphviz.a" "${tmpdir}"/*.o "${tmpdir}"/**/*.o 2>/dev/null || \
-        find "${tmpdir}" -name "*.o" -exec ar rcs "${build_dir}/out/libGraphviz.a" {} +
+    # Lib name matches all other platforms (linux/macos/android produce
+    # libgraphviz_api.{so,dylib}); Rust build.rs links via
+    # `cargo:rustc-link-lib=static=graphviz_api` so the .a MUST be named
+    # libgraphviz_api.a for cargo to find it.
+    ar rcs "${build_dir}/out/libgraphviz_api.a" "${tmpdir}"/*.o "${tmpdir}"/**/*.o 2>/dev/null || \
+        find "${tmpdir}" -name "*.o" -exec ar rcs "${build_dir}/out/libgraphviz_api.a" {} +
 
     rm -rf "${tmpdir}"
+
+    # Install per-slice artifacts under INSTALL_DIR so CI packaging and
+    # Rust build.rs's try_repo_output can find them at a stable path:
+    #   output/ios/<slice>/lib/libgraphviz_api.a
+    #   output/ios/<slice>/include/graphviz_api.h
+    # where <slice> is "${sdk}-${arch}" i.e. iphoneos-arm64,
+    # iphonesimulator-arm64, iphonesimulator-x86_64.
+    local slice_install="${INSTALL_DIR}/${sdk}-${arch}"
+    mkdir -p "${slice_install}/lib" "${slice_install}/include"
+    cp "${build_dir}/out/libgraphviz_api.a" "${slice_install}/lib/"
+    cp "${WRAPPER_SRC}/graphviz_api.h" "${slice_install}/include/"
 }
 
 # Build for device (arm64) and both simulator slices (arm64 + x86_64).
@@ -142,9 +157,9 @@ log_info "Lipo-ing simulator slices (arm64 + x86_64)..."
 SIMULATOR_FAT="${BUILD_DIR}/iphonesimulator-fat/out"
 mkdir -p "${SIMULATOR_FAT}"
 lipo -create \
-    "${BUILD_DIR}/iphonesimulator-arm64/out/libGraphviz.a" \
-    "${BUILD_DIR}/iphonesimulator-x86_64/out/libGraphviz.a" \
-    -output "${SIMULATOR_FAT}/libGraphviz.a"
+    "${BUILD_DIR}/iphonesimulator-arm64/out/libgraphviz_api.a" \
+    "${BUILD_DIR}/iphonesimulator-x86_64/out/libgraphviz_api.a" \
+    -output "${SIMULATOR_FAT}/libgraphviz_api.a"
 
 # Create XCFramework
 log_info "Creating XCFramework..."
@@ -152,8 +167,8 @@ rm -rf "${INSTALL_DIR}/Graphviz.xcframework"
 mkdir -p "${INSTALL_DIR}"
 
 xcodebuild -create-xcframework \
-    -library "${BUILD_DIR}/iphoneos-arm64/out/libGraphviz.a" -headers "${HEADER_DIR}" \
-    -library "${SIMULATOR_FAT}/libGraphviz.a" -headers "${HEADER_DIR}" \
+    -library "${BUILD_DIR}/iphoneos-arm64/out/libgraphviz_api.a" -headers "${HEADER_DIR}" \
+    -library "${SIMULATOR_FAT}/libgraphviz_api.a" -headers "${HEADER_DIR}" \
     -output "${INSTALL_DIR}/Graphviz.xcframework"
 
 log_info "Verifying outputs..."
