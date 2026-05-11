@@ -1,6 +1,10 @@
 // Minimal App.tsx for native FFI simulator smoke verification across d2 / mermaid / plantuml.
-// Original demo App is stashed at App.full.tsx.bak — restore once
-// @supramark/rn-diagram-worker (or equivalent) is back in the workspace.
+//
+// The full feature-rich demo (App.full.tsx.bak) imports outdated `createXxxFeatureConfig(...)`
+// factories that no longer exist — the feature API moved to direct exports of
+// per-feature objects (`admonitionFeature`, etc.) per the engines + container
+// refactor. Restoring App.full.tsx is its own migration; until then this minimal
+// app exercises the three native FFI wrappers end-to-end.
 
 import React, { useEffect, useState } from 'react';
 import {

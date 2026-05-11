@@ -19,6 +19,13 @@ export type {
 // Feature Interface - 功能扩展接口系统
 export * from './feature.js';
 
+// Diagram Feature 工厂(diagram features 用 defineDiagramFeature(...) 注册;
+// 跨平台,与 web 入口保持一致)
+export * from './diagram-feature.js';
+
+// Container 扩展接口(features/containers/* 在 web + RN 都用 :::container 语法)
+export * from './container-extension.js';
+
 // 语法家族运行时 hook(供 Feature 使用)
 export {
   type ContainerProcessorContext,

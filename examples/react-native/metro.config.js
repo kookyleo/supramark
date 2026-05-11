@@ -21,14 +21,40 @@ const defaultResolver = config.resolver.resolveRequest;
 
 // 配置模块解析,处理 package.json exports 和 imports 字段
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // workspace 内多个 TS 源文件用 Node-ESM 风格的 `./foo.js` 导入兄弟 `.ts`。
+  // Metro 默认不会把 `.js` 重映射到 `.ts` —— 我们对仅相对路径 + .js 后缀的
+  // 失败 case 退一步尝试同名 .ts / .tsx，保持源码端的 ESM 风格不变。
+  if (
+    (moduleName.startsWith('./') || moduleName.startsWith('../')) &&
+    moduleName.endsWith('.js')
+  ) {
+    const stripped = moduleName.slice(0, -3);
+    try {
+      return context.resolveRequest(context, stripped, platform);
+    } catch {
+      // fall through to other resolvers
+    }
+  }
+
+  // RN 不走 web wasm 路径 — diagram 都由 @kookyleo/supramark-<engine>-native-rn
+  // 经原生 FFI 渲染。但 @supramark/engines/src/*/index.ts 仍静态引用了对应的
+  // *-web 包名，Metro 不会跳过未调用的 `await import(...)`，所以把这些 web 入口
+  // 短路到一个空的 stub，让 RN 端 bundle 通过。运行时由 createReactNativeDiagramEngine
+  // 选路，永远不会真的访问 stub 的导出。
+  if (/^@kookyleo\/(d2|mermaid|plantuml)-little-web$|^@kookyleo\/graphviz-anywhere-web$/.test(moduleName)) {
+    return {
+      filePath: path.resolve(projectRoot, 'stubs/empty.js'),
+      type: 'sourceFile',
+    };
+  }
+
   // 处理 @supramark/core 包的 react-native 入口
-  // Metro 不支持 package.json 的 exports 条件导出,需要手动指定 RN 入口
+  // Metro 不支持 package.json 的 exports 条件导出,需要手动指定 RN 入口。
+  // 早期版本指向 dist/index.rn.js（已不存在；core 现在源码直出），改用源
+  // 文件直供 Metro，避免依赖一次额外的 tsc --emit 步骤。
   if (moduleName === '@supramark/core') {
     return {
-      filePath: path.resolve(
-        workspaceRoot,
-        'packages/core/dist/index.rn.js'
-      ),
+      filePath: path.resolve(workspaceRoot, 'packages/core/src/index.rn.ts'),
       type: 'sourceFile',
     };
   }
