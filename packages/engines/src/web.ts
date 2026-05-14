@@ -215,8 +215,29 @@ async function loadWebD2Render(): Promise<DiagramRenderFn> {
     if (!normalized.includes('<svg')) {
       throw new Error('D2 renderer did not return SVG output.');
     }
-    return normalized;
+    // d2-little ships an SVG with only `viewBox`, no width/height (upstream
+    // design: meant to fit any container when used as a standalone file).
+    // When embedded as inline SVG via dangerouslySetInnerHTML, browsers
+    // stretch width to fill the parent and scale height by aspect ratio,
+    // which blows up extreme viewBoxes. Inject width/height from viewBox
+    // so the SVG renders at its intrinsic size (CSS can shrink it if needed).
+    return injectD2Dimensions(normalized);
   };
+}
+
+function injectD2Dimensions(svg: string): string {
+  const openTag = svg.match(/<svg\b[^>]*>/);
+  if (!openTag) return svg;
+  const tag = openTag[0];
+  if (/\swidth=/.test(tag) || /\sheight=/.test(tag)) return svg;
+  const vb = tag.match(/viewBox="([^"]+)"/);
+  if (!vb) return svg;
+  const parts = vb[1].trim().split(/\s+/).map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return svg;
+  const [, , w, h] = parts;
+  if (w <= 0 || h <= 0) return svg;
+  const replaced = tag.replace('<svg', `<svg width="${w}" height="${h}"`);
+  return svg.replace(tag, replaced);
 }
 
 function createWebGraphvizAdapterLoader(): () => Promise<GraphvizRenderAdapter> {
