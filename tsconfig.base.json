@@ -31,6 +31,7 @@
       "@supramark/engines/web": ["packages/engines/src/web.ts"],
       "@supramark/engines/rn": ["packages/engines/src/rn.ts"],
       "@supramark/engines/host-bridge": ["packages/engines/src/host-bridge.ts"],
+      "@supramark/engines/code-highlight": ["packages/engines/src/code-highlight.ts"],
 
       "@supramark/web": ["packages/renderers/web/src/index.ts"],
       "@supramark/web/createSupramark": ["packages/renderers/web/src/createSupramark.tsx"],
@@ -42,6 +43,16 @@
       "@supramark/feature-footnote": ["packages/features/main/footnote/src/index.ts"],
       "@supramark/feature-emoji": ["packages/features/main/emoji/src/index.ts"],
       "@supramark/feature-definition-list": ["packages/features/main/definition-list/src/index.ts"],
+      "@supramark/feature-code-highlight": ["packages/features/main/code-highlight/src/index.ts"],
+      "@supramark/feature-code-highlight-preset-docs": [
+        "packages/features/main/code-highlight-preset-docs/src/index.ts"
+      ],
+      "@supramark/feature-code-highlight-preset-dev": [
+        "packages/features/main/code-highlight-preset-dev/src/index.ts"
+      ],
+      "@supramark/feature-code-highlight-preset-full": [
+        "packages/features/main/code-highlight-preset-full/src/index.ts"
+      ],
       "@supramark/feature-admonition": ["packages/features/containers/admonition/src/index.ts"],
       "@supramark/feature-weather": ["packages/features/containers/weather/src/index.ts"],
       "@supramark/feature-html-page": ["packages/features/containers/html-page/src/index.ts"],

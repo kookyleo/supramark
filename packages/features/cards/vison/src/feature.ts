@@ -108,6 +108,20 @@ export const visonFeature: SupramarkFeature<SupramarkVisonContainerNode> = {
           containerName: 'vison',
         },
       },
+      examples: [
+        {
+          type: 'container',
+          name: 'vison',
+          data: {
+            source: '{ "version": "1", "type": "text" }',
+            spec: {
+              version: '1',
+              type: 'text',
+            },
+          },
+          children: [],
+        } as SupramarkVisonContainerNode,
+      ],
     },
   },
 
@@ -183,7 +197,12 @@ The RN wiring is the same with \`renderVisonContainerRN\` from
           description: 'Create a feature config entry for the Vison card feature.',
           parameters: [
             { name: 'enabled', type: 'boolean', description: 'Enable / disable.' },
-            { name: 'options', type: 'VisonFeatureOptions', description: 'Reserved.', optional: true },
+            {
+              name: 'options',
+              type: 'VisonFeatureOptions',
+              description: 'Reserved.',
+              optional: true,
+            },
           ],
           returns: 'VisonFeatureConfig',
         },
@@ -214,8 +233,6 @@ export interface VisonFeatureOptions {
 
 export type VisonFeatureConfig = FeatureConfigWithOptions<VisonFeatureOptions>;
 
-const visonHelpers = makeFeatureConfigHelpers<VisonFeatureOptions>(
-  '@supramark/feature-card-vison'
-);
+const visonHelpers = makeFeatureConfigHelpers<VisonFeatureOptions>('@supramark/feature-card-vison');
 export const createVisonFeatureConfig = visonHelpers.create;
 export const getVisonFeatureOptions = visonHelpers.getOptions;

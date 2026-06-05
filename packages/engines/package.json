@@ -61,6 +61,10 @@
     "./host-bridge": {
       "types": "./src/host-bridge.ts",
       "default": "./src/host-bridge.ts"
+    },
+    "./code-highlight": {
+      "types": "./src/code-highlight.ts",
+      "default": "./src/code-highlight.ts"
     }
   },
   "license": "Apache-2.0",
@@ -73,20 +77,32 @@
     "mathjax-full": "^3.2.2"
   },
   "peerDependencies": {
-    "echarts":   "^5",
-    "vega":      "^5",
+    "echarts": "^5",
+    "vega": "^5",
     "vega-lite": "^5",
     "@kookyleo/plantuml-little-web": "workspace:*",
     "@kookyleo/d2-little-web": "workspace:*",
     "@kookyleo/mermaid-little-web": "workspace:*"
   },
   "peerDependenciesMeta": {
-    "echarts":   { "optional": true },
-    "vega":      { "optional": true },
-    "vega-lite": { "optional": true },
-    "@kookyleo/plantuml-little-web": { "optional": true },
-    "@kookyleo/d2-little-web": { "optional": true },
-    "@kookyleo/mermaid-little-web": { "optional": true }
+    "echarts": {
+      "optional": true
+    },
+    "vega": {
+      "optional": true
+    },
+    "vega-lite": {
+      "optional": true
+    },
+    "@kookyleo/plantuml-little-web": {
+      "optional": true
+    },
+    "@kookyleo/d2-little-web": {
+      "optional": true
+    },
+    "@kookyleo/mermaid-little-web": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "typescript": "^5.5.0"

@@ -39,11 +39,7 @@
  * @license Apache-2.0
  */
 
-import type {
-  SupramarkNode,
-  SupramarkDiagramConfig,
-  SupramarkDiagramEngineId,
-} from './ast';
+import type { SupramarkNode, SupramarkDiagramConfig, SupramarkDiagramEngineId } from './ast';
 import { warnIfUnknownDiagramEngine } from './ast';
 import type MarkdownIt from 'markdown-it';
 import type Token from 'markdown-it/lib/token.mjs';
@@ -127,11 +123,73 @@ export interface SupramarkFeature<TNode extends SupramarkNode = SupramarkNode> {
   dependencies?: string[];
 
   /**
+   * 编译期能力提示（可选）。
+   *
+   * 运行时通过 `config.features` 决定 Feature 是否启用；构建工具则可以读取
+   * 已启用 Feature 的 `compile` 信息，生成只包含所需重资产的 runtime。
+   * 例如 code highlight 的 syntect/two_face 语法和主题资产。
+   */
+  compile?: FeatureCompileHints;
+
+  /**
    * 生命周期钩子（可选）
    *
    * 用于在 Feature 注册、解析、渲染等阶段执行自定义逻辑
    */
   hooks?: FeatureHooks<TNode>;
+}
+
+export interface FeatureCompileHints {
+  codeHighlight?: CodeHighlightCompileHints;
+}
+
+export interface CodeHighlightCompileHints {
+  /**
+   * 是否启用高亮 runtime 基础能力。语言/主题资产仍由下方字段或其他 Feature
+   * 贡献，便于宿主通过 Feature 集合裁剪体积。
+   */
+  runtime?: boolean;
+
+  /**
+   * 需要编译进高亮 runtime 的 syntect/two_face 语法名。
+   *
+   * `'*'` 表示使用 two_face 全量语法集合；构建工具可以据此选择 full artifact。
+   */
+  languages?: string[];
+
+  /**
+   * Markdown fence lang 到语法名的别名映射。
+   */
+  languageAliases?: Record<string, string>;
+
+  /**
+   * 需要编译进高亮 runtime 的主题名。
+   *
+   * `'*'` 表示使用 two_face 全量主题集合。
+   */
+  themes?: string[];
+
+  /**
+   * 默认亮色/暗色主题。构建工具只汇总，renderer 或宿主决定最终使用哪个。
+   */
+  defaultThemes?: {
+    light?: string;
+    dark?: string;
+  };
+}
+
+export interface CodeHighlightCompileManifest {
+  runtime: boolean;
+  languages: string[];
+  languageAliases: Record<string, string>;
+  themes: string[];
+  defaultThemes: {
+    light?: string;
+    dark?: string;
+  };
+  fullLanguages: boolean;
+  fullThemes: boolean;
+  featureIds: string[];
 }
 
 // ============================================================================
@@ -1612,6 +1670,74 @@ export function getEnabledFeatures(
 }
 
 /**
+ * 汇总已启用 Feature 声明的 code highlight 编译资产。
+ *
+ * 该函数只做确定性合并，不加载任何高亮实现。构建工具可以把输出写成
+ * JSON/TS/Rust manifest，再由 syntect + two_face runtime 生成裁剪后的 artifact。
+ */
+export function createCodeHighlightCompileManifest(
+  features: readonly SupramarkFeature<SupramarkNode>[]
+): CodeHighlightCompileManifest {
+  const languages = new Set<string>();
+  const themes = new Set<string>();
+  const languageAliases: Record<string, string> = {};
+  const featureIds: string[] = [];
+
+  let runtime = false;
+  let fullLanguages = false;
+  let fullThemes = false;
+  let defaultLight: string | undefined;
+  let defaultDark: string | undefined;
+
+  for (const feature of features) {
+    const hints = feature.compile?.codeHighlight;
+    if (!hints) continue;
+
+    featureIds.push(feature.metadata.id);
+    runtime = runtime || hints.runtime === true;
+
+    for (const lang of hints.languages ?? []) {
+      if (lang === '*') {
+        fullLanguages = true;
+      } else {
+        languages.add(lang);
+      }
+    }
+
+    for (const theme of hints.themes ?? []) {
+      if (theme === '*') {
+        fullThemes = true;
+      } else {
+        themes.add(theme);
+      }
+    }
+
+    for (const [alias, target] of Object.entries(hints.languageAliases ?? {})) {
+      languageAliases[alias] = target;
+    }
+
+    defaultLight = hints.defaultThemes?.light ?? defaultLight;
+    defaultDark = hints.defaultThemes?.dark ?? defaultDark;
+  }
+
+  return {
+    runtime,
+    languages: fullLanguages ? ['*'] : [...languages].sort(),
+    languageAliases: Object.fromEntries(
+      Object.entries(languageAliases).sort(([a], [b]) => a.localeCompare(b))
+    ),
+    themes: fullThemes ? ['*'] : [...themes].sort(),
+    defaultThemes: {
+      light: defaultLight,
+      dark: defaultDark,
+    },
+    fullLanguages,
+    fullThemes,
+    featureIds: featureIds.sort(),
+  };
+}
+
+/**
  * 检查特定 Feature 是否已启用
  *
  * @param config - Supramark 配置
@@ -1623,11 +1749,7 @@ export function isFeatureEnabled(config: SupramarkConfig, featureId: string): bo
   return featureConfig?.enabled ?? false;
 }
 
-export type DiagramFeatureFamilyId =
-  | 'mermaid'
-  | 'vega-family'
-  | 'echarts'
-  | 'graphviz-family';
+export type DiagramFeatureFamilyId = 'mermaid' | 'vega-family' | 'echarts' | 'graphviz-family';
 
 const DIAGRAM_FEATURE_IDS_BY_FAMILY: Record<DiagramFeatureFamilyId, readonly string[]> = {
   mermaid: ['@supramark/feature-mermaid'],
@@ -1678,9 +1800,7 @@ export function getDiagramFeatureFamily(
 /**
  * 将 diagram engine 映射到对应的 feature id 列表。
  */
-export function getDiagramFeatureIdsForEngine(
-  engine: SupramarkDiagramEngineId | string
-): string[] {
+export function getDiagramFeatureIdsForEngine(engine: SupramarkDiagramEngineId | string): string[] {
   const family = getDiagramFeatureFamily(engine);
   if (!family) {
     return [];

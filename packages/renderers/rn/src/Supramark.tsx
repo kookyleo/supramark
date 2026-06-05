@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, ReactNode } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Text, View, Linking, TouchableOpacity, Dimensions } from 'react-native';
 import type {
   SupramarkRootNode,
@@ -28,6 +28,8 @@ import type {
   SupramarkDefinitionListNode,
   SupramarkDefinitionItemNode,
   SupramarkConfig,
+  SupramarkCodeHighlightResult,
+  SupramarkCodeHighlighter,
 } from '@supramark/core';
 import {
   parseMarkdown,
@@ -48,6 +50,8 @@ import {
 } from './styles';
 import { ErrorBoundary, ErrorInfo, ErrorDisplay } from './ErrorBoundary';
 
+type RenderedNode = any;
+
 export interface ContainerRendererRN {
   (args: {
     node: any;
@@ -55,9 +59,9 @@ export interface ContainerRendererRN {
     styles: ReturnType<typeof mergeStyles>;
     config?: SupramarkConfig;
     onOpenHtmlPage?: (node: SupramarkContainerNode) => void;
-    renderNode: (node: SupramarkNode, key: number) => React.ReactNode;
-    renderChildren: (children: SupramarkNode[]) => React.ReactNode;
-  }): React.ReactNode;
+    renderNode: (node: SupramarkNode, key: number) => RenderedNode;
+    renderChildren: (children: SupramarkNode[]) => RenderedNode;
+  }): RenderedNode;
 }
 
 export interface SupramarkProps {
@@ -74,12 +78,14 @@ export interface SupramarkProps {
   /** 错误回调（可选） */
   onError?: (error: Error, errorInfo?: React.ErrorInfo) => void;
   /** 自定义错误展示组件（可选） */
-  errorFallback?: (error: ErrorInfo) => ReactNode;
+  errorFallback?: (error: ErrorInfo) => RenderedNode;
 
   /**
    * Container 扩展渲染器注册表：node.type === 'container' 时按 node.name 委派。
    */
   containerRenderers?: Record<string, ContainerRendererRN>;
+  codeHighlighter?: SupramarkCodeHighlighter;
+  codeHighlightTheme?: string;
 
   /**
    * 当用户点击 HTML Page 卡片时的回调。
@@ -100,8 +106,13 @@ export const Supramark: React.FC<SupramarkProps> = ({
   errorFallback,
   onOpenHtmlPage,
   containerRenderers,
+  codeHighlighter,
+  codeHighlightTheme,
 }) => {
   const [root, setRoot] = useState<SupramarkRootNode | null>(ast ?? null);
+  const [highlighted, setHighlighted] = useState<Map<string, SupramarkCodeHighlightResult>>(
+    new Map()
+  );
   const [parseError, setParseError] = useState<ErrorInfo | null>(null);
 
   // 合并样式：theme -> customStyles -> defaultStyles
@@ -124,18 +135,17 @@ export const Supramark: React.FC<SupramarkProps> = ({
   }, [customStyles, theme]);
 
   useEffect(() => {
-    if (ast) {
-      setRoot(ast);
-      setParseError(null);
-      return;
-    }
-
     let cancelled = false;
     (async () => {
       try {
-        const parsed = await parseMarkdown(markdown, { config });
+        const parsed = ast ?? (await parseMarkdown(markdown, { config }));
+        const highlightedMap = await preHighlightAll(
+          collectCodeHighlightTasks(parsed.children, config, codeHighlightTheme),
+          codeHighlighter
+        );
         if (!cancelled) {
           setRoot(parsed);
+          setHighlighted(highlightedMap);
           setParseError(null);
         }
       } catch (error) {
@@ -148,6 +158,7 @@ export const Supramark: React.FC<SupramarkProps> = ({
             stack: err.stack,
           };
           setParseError(errorInfo);
+          setHighlighted(new Map());
           setRoot(null);
 
           // 调用错误回调
@@ -161,7 +172,7 @@ export const Supramark: React.FC<SupramarkProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [markdown, ast, onError]);
+  }, [markdown, ast, config, onError, codeHighlighter, codeHighlightTheme]);
 
   const mergedContainerRenderers = useMemo(() => {
     // FeatureConfig 只描述启用状态与 options，不再携带 renderer 定义。
@@ -193,7 +204,15 @@ export const Supramark: React.FC<SupramarkProps> = ({
     <ErrorBoundary onError={onError} fallback={errorFallback}>
       <View style={mergedStyles.root}>
         {root.children.map((node, index) =>
-          renderNode(node, index, mergedStyles, config, onOpenHtmlPage, mergedContainerRenderers)
+          renderNode(
+            node,
+            index,
+            mergedStyles,
+            highlighted,
+            config,
+            onOpenHtmlPage,
+            mergedContainerRenderers
+          )
         )}
       </View>
     </ErrorBoundary>
@@ -204,33 +223,29 @@ function renderNode(
   node: SupramarkNode,
   key: number,
   styles: ReturnType<typeof mergeStyles>,
+  highlighted: Map<string, SupramarkCodeHighlightResult>,
   config?: SupramarkConfig,
   onOpenHtmlPage?: (node: SupramarkContainerNode) => void,
   containerRenderers?: Record<string, ContainerRendererRN>
-): React.ReactNode {
-
+): RenderedNode {
   switch (node.type) {
     case 'paragraph':
       return (
         <Text key={key} style={styles.paragraph}>
-          {renderInlineNodes(node.children, styles, config)}
+          {renderInlineNodes(node.children, styles, highlighted, config)}
         </Text>
       );
     case 'heading': {
       const heading = node as SupramarkHeadingNode;
       return (
         <Text key={key} style={headingStyle(heading.depth, styles)}>
-          {renderInlineNodes(heading.children, styles, config)}
+          {renderInlineNodes(heading.children, styles, highlighted, config)}
         </Text>
       );
     }
     case 'code': {
       const codeBlock = node as SupramarkCodeNode;
-      return (
-        <View key={key} style={styles.codeBlock}>
-          <Text style={styles.code}>{codeBlock.value}</Text>
-        </View>
-      );
+      return renderCodeBlock(codeBlock, key, styles, highlighted);
     }
     case 'math_block': {
       const mathBlock = node as SupramarkMathBlockNode;
@@ -245,7 +260,7 @@ function renderNode(
       return (
         <View key={key} style={styles.list}>
           {list.children.map((item, index) =>
-            renderNode(item, index, styles, config, onOpenHtmlPage, containerRenderers)
+            renderNode(item, index, styles, highlighted, config, onOpenHtmlPage, containerRenderers)
           )}
         </View>
       );
@@ -259,7 +274,7 @@ function renderNode(
         <View key={key} style={styles.listItem}>
           <Text style={styles.bullet}>{isTaskList ? checkSymbol : '•'}</Text>
           <Text style={styles.listItemText}>
-            {renderInlineNodes(item.children, styles, config)}
+            {renderInlineNodes(item.children, styles, highlighted, config)}
           </Text>
         </View>
       );
@@ -284,10 +299,19 @@ function renderNode(
           styles,
           config,
           onOpenHtmlPage,
-          renderNode: (n, k) => renderNode(n, k, styles, config, onOpenHtmlPage, containerRenderers),
-          renderChildren: (children) =>
+          renderNode: (n, k) =>
+            renderNode(n, k, styles, highlighted, config, onOpenHtmlPage, containerRenderers),
+          renderChildren: children =>
             children.map((child, index) =>
-              renderNode(child, index, styles, config, onOpenHtmlPage, containerRenderers)
+              renderNode(
+                child,
+                index,
+                styles,
+                highlighted,
+                config,
+                onOpenHtmlPage,
+                containerRenderers
+              )
             ),
         });
       }
@@ -331,7 +355,7 @@ function renderNode(
             <View key={key} style={styles.listItem}>
               {title ? <Text style={styles.listItemText}>{title}</Text> : null}
               <Text style={styles.listItemText}>
-                {renderInlineNodes(container.children, styles, config)}
+                {renderInlineNodes(container.children, styles, highlighted, config)}
               </Text>
             </View>
           );
@@ -345,7 +369,7 @@ function renderNode(
               <View key={key} style={styles.listItem}>
                 {title ? <Text style={styles.listItemText}>{title}</Text> : null}
                 <Text style={styles.listItemText}>
-                  {renderInlineNodes(container.children, styles, config)}
+                  {renderInlineNodes(container.children, styles, highlighted, config)}
                 </Text>
               </View>
             );
@@ -354,8 +378,12 @@ function renderNode(
 
         return (
           <View key={key} style={styles.listItem}>
-            {title ? <Text style={[styles.listItemText, { fontWeight: '600' }]}>{title}</Text> : null}
-            <Text style={styles.listItemText}>{renderInlineNodes(container.children, styles, config)}</Text>
+            {title ? (
+              <Text style={[styles.listItemText, { fontWeight: '600' }]}>{title}</Text>
+            ) : null}
+            <Text style={styles.listItemText}>
+              {renderInlineNodes(container.children, styles, highlighted, config)}
+            </Text>
           </View>
         );
       }
@@ -363,9 +391,21 @@ function renderNode(
       // 默认：渲染为通用容器块
       return (
         <View key={key} style={styles.listItem}>
-          {container.params && <Text style={[styles.listItemText, { fontWeight: '600' }]}>{container.name}: {container.params}</Text>}
+          {container.params && (
+            <Text style={[styles.listItemText, { fontWeight: '600' }]}>
+              {container.name}: {container.params}
+            </Text>
+          )}
           {container.children.map((child, index) =>
-            renderNode(child, index, styles, config, onOpenHtmlPage, containerRenderers)
+            renderNode(
+              child,
+              index,
+              styles,
+              highlighted,
+              config,
+              onOpenHtmlPage,
+              containerRenderers
+            )
           )}
         </View>
       );
@@ -385,11 +425,11 @@ function renderNode(
               return (
                 <View key={index} style={styles.listItem}>
                   <Text style={[styles.listItemText, { fontWeight: '600' }]}>
-                    {renderInlineNodes(defItem.term, styles, config)}
+                    {renderInlineNodes(defItem.term, styles, highlighted, config)}
                   </Text>
                   {defItem.descriptions.map((descNodes, idx) => (
                     <Text key={idx} style={styles.listItemText}>
-                      {renderInlineNodes(descNodes, styles, config)}
+                      {renderInlineNodes(descNodes, styles, highlighted, config)}
                     </Text>
                   ))}
                 </View>
@@ -405,11 +445,11 @@ function renderNode(
             return (
               <View key={index} style={styles.listItem}>
                 <Text style={[styles.listItemText, { fontWeight: '600' }]}>
-                  {renderInlineNodes(defItem.term, styles, config)}
+                  {renderInlineNodes(defItem.term, styles, highlighted, config)}
                 </Text>
                 {defItem.descriptions.map((descNodes, idx) => (
                   <Text key={idx} style={styles.listItemText}>
-                    {renderInlineNodes(descNodes, styles, config)}
+                    {renderInlineNodes(descNodes, styles, highlighted, config)}
                     {isCompact ? '' : '\n'}
                   </Text>
                 ))}
@@ -427,7 +467,7 @@ function renderNode(
         return (
           <View key={key} style={styles.listItem}>
             <Text style={styles.listItemText}>
-              {renderInlineNodes(def.children, styles, config)}
+              {renderInlineNodes(def.children, styles, highlighted, config)}
             </Text>
           </View>
         );
@@ -435,7 +475,9 @@ function renderNode(
       return (
         <View key={key} style={styles.listItem}>
           <Text style={styles.bullet}>[{def.index}]</Text>
-          <Text style={styles.listItemText}>{renderInlineNodes(def.children, styles, config)}</Text>
+          <Text style={styles.listItemText}>
+            {renderInlineNodes(def.children, styles, highlighted, config)}
+          </Text>
         </View>
       );
     }
@@ -444,7 +486,7 @@ function renderNode(
       return (
         <View key={key} style={styles.table}>
           {table.children.map((row, index) =>
-            renderNode(row, index, styles, config, onOpenHtmlPage, containerRenderers)
+            renderNode(row, index, styles, highlighted, config, onOpenHtmlPage, containerRenderers)
           )}
         </View>
       );
@@ -454,7 +496,7 @@ function renderNode(
       return (
         <View key={key} style={styles.tableRow}>
           {row.children.map((cell, index) =>
-            renderNode(cell, index, styles, config, onOpenHtmlPage, containerRenderers)
+            renderNode(cell, index, styles, highlighted, config, onOpenHtmlPage, containerRenderers)
           )}
         </View>
       );
@@ -471,7 +513,9 @@ function renderNode(
 
       return (
         <View key={key} style={cellStyle}>
-          <Text style={textStyle}>{renderInlineNodes(cell.children, styles)}</Text>
+          <Text style={textStyle}>
+            {renderInlineNodes(cell.children, styles, highlighted, config)}
+          </Text>
         </View>
       );
     }
@@ -486,20 +530,73 @@ function renderNode(
   }
 }
 
+function renderCodeBlock(
+  codeBlock: SupramarkCodeNode,
+  key: number,
+  styles: ReturnType<typeof mergeStyles>,
+  highlighted: Map<string, SupramarkCodeHighlightResult>
+): RenderedNode {
+  const highlight = highlighted.get(
+    buildCodeHighlightKey(codeBlock.value, codeBlock.lang, codeBlock.meta)
+  );
+
+  if (!highlight) {
+    return (
+      <View key={key} style={styles.codeBlock}>
+        <Text style={styles.code}>{codeBlock.value}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View key={key} style={styles.codeBlock}>
+      <Text style={styles.code}>
+        {highlight.lines.map((line, lineIndex) => (
+          <Text key={lineIndex}>
+            {line.tokens.map((token, tokenIndex) => (
+              <Text key={tokenIndex} style={codeTokenTextStyle(token)}>
+                {token.text}
+              </Text>
+            ))}
+            {lineIndex < highlight.lines.length - 1 ? '\n' : null}
+          </Text>
+        ))}
+      </Text>
+    </View>
+  );
+}
+
+function codeTokenTextStyle(token: {
+  color?: string;
+  backgroundColor?: string;
+  fontStyle?: Array<'bold' | 'italic' | 'underline'>;
+}) {
+  const fontStyle = token.fontStyle ?? [];
+  return {
+    color: token.color,
+    backgroundColor: token.backgroundColor,
+    fontWeight: fontStyle.includes('bold') ? ('700' as const) : undefined,
+    fontStyle: fontStyle.includes('italic') ? ('italic' as const) : undefined,
+    textDecorationLine: fontStyle.includes('underline') ? ('underline' as const) : undefined,
+  };
+}
+
 function renderInlineNodes(
   nodes: SupramarkNode[],
   styles: ReturnType<typeof mergeStyles>,
+  highlighted: Map<string, SupramarkCodeHighlightResult>,
   config?: SupramarkConfig
-): React.ReactNode {
-  return nodes.map((node, index) => renderInlineNode(node, index, styles, config));
+): RenderedNode {
+  return nodes.map((node, index) => renderInlineNode(node, index, styles, highlighted, config));
 }
 
 function renderInlineNode(
   node: SupramarkNode,
   key: number,
   styles: ReturnType<typeof mergeStyles>,
+  highlighted: Map<string, SupramarkCodeHighlightResult>,
   config?: SupramarkConfig
-): React.ReactNode {
+): RenderedNode {
   switch (node.type) {
     case 'text': {
       const textNode = node as SupramarkTextNode;
@@ -509,7 +606,7 @@ function renderInlineNode(
       const strongNode = node as SupramarkStrongNode;
       return (
         <Text key={key} style={styles.strong}>
-          {renderInlineNodes(strongNode.children, styles)}
+          {renderInlineNodes(strongNode.children, styles, highlighted, config)}
         </Text>
       );
     }
@@ -517,7 +614,7 @@ function renderInlineNode(
       const emphasisNode = node as SupramarkEmphasisNode;
       return (
         <Text key={key} style={styles.emphasis}>
-          {renderInlineNodes(emphasisNode.children, styles)}
+          {renderInlineNodes(emphasisNode.children, styles, highlighted, config)}
         </Text>
       );
     }
@@ -534,13 +631,7 @@ function renderInlineNode(
       if (!isFeatureGroupEnabled(config, ['@supramark/feature-math'])) {
         return mathNode.value;
       }
-      return (
-        <MathInline
-          key={key}
-          value={mathNode.value}
-          textStyle={styles.paragraph}
-        />
-      );
+      return <MathInline key={key} value={mathNode.value} textStyle={styles.paragraph} />;
     }
     case 'link': {
       const linkNode = node as SupramarkLinkNode;
@@ -552,7 +643,7 @@ function renderInlineNode(
             Linking.openURL(linkNode.url).catch(err => console.error('Failed to open URL:', err));
           }}
         >
-          {renderInlineNodes(linkNode.children, styles)}
+          {renderInlineNodes(linkNode.children, styles, highlighted, config)}
         </Text>
       );
     }
@@ -572,7 +663,7 @@ function renderInlineNode(
       const deleteNode = node as SupramarkDeleteNode;
       return (
         <Text key={key} style={styles.delete}>
-          {renderInlineNodes(deleteNode.children, styles, config)}
+          {renderInlineNodes(deleteNode.children, styles, highlighted, config)}
         </Text>
       );
     }
@@ -636,11 +727,99 @@ function isFeatureGroupEnabled(config: SupramarkConfig | undefined, ids: string[
   return ids.some(id => isFeatureEnabled(config, id));
 }
 
+function collectCodeHighlightTasks(
+  nodes: SupramarkNode[],
+  config?: SupramarkConfig,
+  theme?: string
+): Array<{ key: string; code: string; lang?: string; meta?: string; theme?: string }> {
+  if (!isFeatureGroupEnabled(config, ['@supramark/feature-code-highlight'])) {
+    return [];
+  }
+
+  const tasks: Array<{ key: string; code: string; lang?: string; meta?: string; theme?: string }> =
+    [];
+
+  function walk(list: SupramarkNode[]) {
+    for (const node of list) {
+      if (node.type === 'code') {
+        const code = node as SupramarkCodeNode;
+        tasks.push({
+          key: buildCodeHighlightKey(code.value, code.lang, code.meta),
+          code: code.value,
+          lang: code.lang,
+          meta: code.meta,
+          theme,
+        });
+      }
+
+      if ('children' in node && Array.isArray((node as { children?: SupramarkNode[] }).children)) {
+        walk((node as { children: SupramarkNode[] }).children);
+      }
+
+      if (node.type === 'definition_item') {
+        const item = node as SupramarkDefinitionItemNode;
+        walk(item.term);
+        for (const description of item.descriptions) {
+          walk(description);
+        }
+      }
+    }
+  }
+
+  walk(nodes);
+  return tasks;
+}
+
+async function preHighlightAll(
+  tasks: Array<{ key: string; code: string; lang?: string; meta?: string; theme?: string }>,
+  highlighter?: SupramarkCodeHighlighter
+): Promise<Map<string, SupramarkCodeHighlightResult>> {
+  if (!highlighter || tasks.length === 0) {
+    return new Map();
+  }
+
+  const unique = new Map<
+    string,
+    { key: string; code: string; lang?: string; meta?: string; theme?: string }
+  >();
+  for (const task of tasks) {
+    if (!unique.has(task.key)) {
+      unique.set(task.key, task);
+    }
+  }
+
+  const entries = await Promise.all(
+    [...unique.values()].map(async task => {
+      try {
+        const result = await highlighter({
+          code: task.code,
+          lang: task.lang,
+          meta: task.meta,
+          theme: task.theme,
+        });
+        return result ? ([task.key, result] as const) : null;
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  return new Map(
+    entries.filter(
+      (entry): entry is readonly [string, SupramarkCodeHighlightResult] => entry !== null
+    )
+  );
+}
+
+function buildCodeHighlightKey(code: string, lang?: string, meta?: string): string {
+  return `code:${lang ?? ''}:${meta ?? ''}:${code}`;
+}
+
 function renderDisabledDiagram(
   diagram: SupramarkDiagramNode,
   key: number,
   styles: ReturnType<typeof mergeStyles>
-): React.ReactNode {
+): RenderedNode {
   const header = `[diagram engine="${diagram.engine}" 已被禁用]\n\n`;
   return (
     <View key={key} style={styles.codeBlock}>
@@ -653,7 +832,7 @@ function renderDisabledMathBlock(
   math: SupramarkMathBlockNode,
   key: number,
   styles: ReturnType<typeof mergeStyles>
-): React.ReactNode {
+): RenderedNode {
   const header = '[math 已被禁用]\n\n';
   return (
     <View key={key} style={styles.codeBlock}>
@@ -667,7 +846,7 @@ function renderMapNodeFromContainer(
   key: number,
   styles: ReturnType<typeof mergeStyles>,
   config?: SupramarkConfig
-): React.ReactNode {
+): RenderedNode {
   // 从 container.data 中提取 map 数据
   const data = container.data || {};
   const center = (data.center as [number, number]) || [0, 0];
@@ -699,8 +878,7 @@ function renderMapNodeFromContainer(
       longitudeDelta,
     };
 
-    const hasMarker =
-      marker && typeof marker.lat === 'number' && typeof marker.lng === 'number';
+    const hasMarker = marker && typeof marker.lat === 'number' && typeof marker.lng === 'number';
 
     return (
       <View key={key} style={styles.mapCard}>

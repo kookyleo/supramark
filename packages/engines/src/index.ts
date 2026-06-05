@@ -35,3 +35,10 @@ export {
 } from './graphviz/index.js';
 export { renderMermaidSvg } from './mermaid/index.js';
 export { renderMathJaxSvg, getSvgViewBoxSize } from './mathjax/index.js';
+export {
+  createCodeHighlighter,
+  withCodeHighlightCache,
+  buildCodeHighlightCacheKey,
+  type CodeHighlightService,
+  type CodeHighlightCacheOptions,
+} from './code-highlight.js';

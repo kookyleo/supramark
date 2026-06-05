@@ -13,6 +13,7 @@ import {
   isDiagramFeatureEnabled,
   isFeatureGroupEnabled,
   getFeatureOptions,
+  createCodeHighlightCompileManifest,
   type SupramarkConfig,
   type SupramarkNode,
   type SupramarkFeature,
@@ -221,9 +222,7 @@ describe('Feature 配置系统', () => {
       expect(getDiagramFeatureIdsForEngine('chart')).toEqual([
         '@supramark/feature-diagram-vega-lite',
       ]);
-      expect(getDiagramFeatureIdsForEngine('graphviz')).toEqual([
-        '@supramark/feature-diagram-dot',
-      ]);
+      expect(getDiagramFeatureIdsForEngine('graphviz')).toEqual(['@supramark/feature-diagram-dot']);
       expect(getDiagramFeatureIdsForEngine('unknown')).toEqual([]);
     });
 
@@ -309,6 +308,53 @@ describe('Feature 配置系统', () => {
       expect(enabledFeatures).toHaveLength(2);
       expect(enabledFeatures[0].metadata.id).toBe('@test/feature-mermaid');
       expect(enabledFeatures[1].metadata.id).toBe('@test/feature-vega-lite');
+    });
+  });
+
+  describe('createCodeHighlightCompileManifest', () => {
+    it('应该汇总已启用 Feature 的高亮编译资产', () => {
+      const base = createTestFeature('@test/feature-code-highlight', 'code-highlight');
+      base.compile = { codeHighlight: { runtime: true } };
+
+      const docs = createTestFeature('@test/feature-code-highlight-preset-docs', 'docs');
+      docs.compile = {
+        codeHighlight: {
+          languages: ['TypeScript', 'JSON'],
+          languageAliases: { ts: 'TypeScript', json: 'JSON' },
+          themes: ['GitHub'],
+          defaultThemes: { light: 'GitHub' },
+        },
+      };
+
+      const manifest = createCodeHighlightCompileManifest([docs, base]);
+
+      expect(manifest).toEqual({
+        runtime: true,
+        languages: ['JSON', 'TypeScript'],
+        languageAliases: { json: 'JSON', ts: 'TypeScript' },
+        themes: ['GitHub'],
+        defaultThemes: { light: 'GitHub', dark: undefined },
+        fullLanguages: false,
+        fullThemes: false,
+        featureIds: ['@test/feature-code-highlight', '@test/feature-code-highlight-preset-docs'],
+      });
+    });
+
+    it('应该把 full preset 合并为全量标记', () => {
+      const full = createTestFeature('@test/feature-code-highlight-preset-full', 'full');
+      full.compile = {
+        codeHighlight: {
+          languages: ['*'],
+          themes: ['*'],
+        },
+      };
+
+      const manifest = createCodeHighlightCompileManifest([full]);
+
+      expect(manifest.languages).toEqual(['*']);
+      expect(manifest.themes).toEqual(['*']);
+      expect(manifest.fullLanguages).toBe(true);
+      expect(manifest.fullThemes).toBe(true);
     });
   });
 });

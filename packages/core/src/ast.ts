@@ -246,6 +246,36 @@ export interface SupramarkCodeNode extends SupramarkBaseNode {
   meta?: string;
 }
 
+export type SupramarkCodeHighlightFontStyle = 'bold' | 'italic' | 'underline';
+
+export interface SupramarkCodeHighlightToken {
+  text: string;
+  color?: string;
+  backgroundColor?: string;
+  fontStyle?: SupramarkCodeHighlightFontStyle[];
+}
+
+export interface SupramarkCodeHighlightLine {
+  tokens: SupramarkCodeHighlightToken[];
+}
+
+export interface SupramarkCodeHighlightResult {
+  language?: string;
+  theme?: string;
+  lines: SupramarkCodeHighlightLine[];
+}
+
+export interface SupramarkCodeHighlightInput {
+  code: string;
+  lang?: string;
+  meta?: string;
+  theme?: string;
+}
+
+export type SupramarkCodeHighlighter = (
+  input: SupramarkCodeHighlightInput
+) => Promise<SupramarkCodeHighlightResult | null | undefined>;
+
 /**
  * Block-level math node (matches Markdown's `$$ ... $$`).
  *
