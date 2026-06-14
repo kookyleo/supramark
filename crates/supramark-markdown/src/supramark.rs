@@ -318,6 +318,7 @@ fn create_parser(options: ParseOptions) -> MarkdownParser {
     let mut md = MarkdownParser::new();
     crate::plugins::cmark::add(&mut md);
     crate::plugins::extra::math::add(&mut md);
+    crate::plugins::extra::footnote::add(&mut md);
 
     if options.gfm_tables {
         crate::plugins::extra::tables::add(&mut md);
@@ -345,23 +346,6 @@ fn map_document(
     let mut line = 0;
 
     while line < lines.len() {
-        if let Some((node, next_line)) = map_footnote_definition(source, md, &lines, line, index) {
-            if normal_start < line {
-                children.extend(map_markdown_fragment(
-                    md,
-                    source,
-                    lines[normal_start].start,
-                    lines[line].start,
-                    index,
-                ));
-            }
-
-            children.push(node);
-            line = next_line;
-            normal_start = line;
-            continue;
-        }
-
         if let Some((node, next_line)) = map_definition_list(source, md, &lines, line, index) {
             if normal_start < line {
                 children.extend(map_markdown_fragment(
@@ -1222,57 +1206,6 @@ fn join_line_text(lines: &[LineSpan<'_>]) -> String {
         .map(|line| line.text)
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-fn map_footnote_definition(
-    source: &str,
-    md: &MarkdownParser,
-    lines: &[LineSpan<'_>],
-    start_line: usize,
-    index: &OffsetIndex,
-) -> Option<(SupramarkNode, usize)> {
-    let line = &lines[start_line];
-    let (label, content_start) = parse_footnote_definition_line(line)?;
-    let content_end = line.start + line.text.len();
-    let children = if content_start < content_end {
-        map_markdown_fragment(md, source, content_start, content_end, index)
-    } else {
-        Vec::new()
-    };
-
-    Some((
-        SupramarkNode::FootnoteDefinition {
-            index: 0,
-            label,
-            children,
-            position: Some(SourcePosition {
-                start: index.point_at(line.start),
-                end: index.point_at(line.end_with_newline),
-            }),
-        },
-        start_line + 1,
-    ))
-}
-
-fn parse_footnote_definition_line(line: &LineSpan<'_>) -> Option<(String, usize)> {
-    let leading = leading_whitespace_len(line.text);
-    if leading > 3 {
-        return None;
-    }
-
-    let rest = &line.text[leading..];
-    let label_rest = rest.strip_prefix("[^")?;
-    let close = label_rest.find("]:")?;
-    let label = &label_rest[..close];
-    if label.is_empty() {
-        return None;
-    }
-
-    let mut content_relative = leading + 2 + close + 2;
-    let content_rest = &line.text[content_relative..];
-    content_relative += leading_whitespace_len(content_rest);
-
-    Some((label.to_owned(), line.start + content_relative))
 }
 
 fn map_definition_list(
