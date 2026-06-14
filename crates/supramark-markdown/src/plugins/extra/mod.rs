@@ -1,9 +1,8 @@
-//! Markdown extensions from GFM used by Supramark.
+//! Markdown extensions beyond CommonMark.
 //!
-//!  - strikethrough (`~~xxx~~`)
-//!  - tables
-//!  - linkify (convert `http://example.com` to a link; feature-gated)
-//!  - code block highlighting using `syntect` (feature-gated)
+//! GFM extras: strikethrough, tables, linkify (feature-gated) and `syntect`
+//! code highlighting (feature-gated). Supramark block extensions: math,
+//! footnote, definition lists, and the `:::`/`%%%` blocks in `ext`.
 
 #[cfg(feature = "linkify")]
 pub mod linkify;
@@ -15,15 +14,3 @@ pub mod strikethrough;
 #[cfg(feature = "syntect")]
 pub mod syntect;
 pub mod tables;
-
-use crate::MarkdownParser;
-
-/// Enable the GFM-style extras Supramark ships with.
-pub fn add(md: &mut MarkdownParser) {
-    strikethrough::add(md);
-    tables::add(md);
-    #[cfg(feature = "linkify")]
-    linkify::add(md);
-    #[cfg(feature = "syntect")]
-    syntect::add(md);
-}
