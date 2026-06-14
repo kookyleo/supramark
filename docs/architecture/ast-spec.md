@@ -355,7 +355,7 @@ interface FootnoteDefinitionNode extends SupramarkParentNode {
 要求：
 
 - `label` 保留用户源码中的 label 文本。
-- `identifier` 是规范化后用于引用匹配的 key。
+- `identifier` 是规范化后用于引用匹配的 key：去首尾空白、内部连续空白折叠为单空格、转小写。ref 与 def 按 `identifier` 关联。
 - AST 保持源码顺序；footnote definition 不在 parser 层移动到文末。
 - renderer 可以自行收集 footnote definition 并在视觉上渲染到文末。
 - 同一 `identifier` 多次定义时，parser 必须产生 diagnostic。

@@ -24,6 +24,7 @@ impl NodeValue for FootnoteDef {
     ) -> Option<Vec<crate::supramark::SupramarkNode>> {
         Some(vec![crate::supramark::SupramarkNode::FootnoteDefinition {
             index: 0,
+            identifier: crate::supramark::normalize_footnote_identifier(&self.label),
             label: self.label.clone(),
             children: ctx.map_children(&node.children),
             position: ctx.position(node),

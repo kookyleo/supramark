@@ -439,12 +439,58 @@ fn public_api_maps_footnotes() {
 
     assert!(matches!(
         &paragraph[1],
-        SupramarkNode::FootnoteReference { index, label, .. } if *index == 1 && label == "a"
+        SupramarkNode::FootnoteReference { index, label, identifier, .. }
+            if *index == 1 && label == "a" && identifier == "a"
     ));
     assert!(matches!(
         &children[1],
-        SupramarkNode::FootnoteDefinition { index, label, .. } if *index == 1 && label == "a"
+        SupramarkNode::FootnoteDefinition { index, label, identifier, .. }
+            if *index == 1 && label == "a" && identifier == "a"
     ));
+}
+
+#[test]
+fn public_api_associates_footnotes_by_normalized_identifier() {
+    // Reference label "My Note" and definition label "my  note" differ in case
+    // and whitespace but normalize to the same identifier, so they must share an
+    // index and stay associated.
+    let ast = parse("Text[^My Note].\n\n[^my  note]: Body.");
+    let SupramarkNode::Root { children, .. } = ast else {
+        panic!("expected root");
+    };
+    let SupramarkNode::Paragraph {
+        children: paragraph,
+        ..
+    } = &children[0]
+    else {
+        panic!("expected paragraph");
+    };
+
+    let SupramarkNode::FootnoteReference {
+        index: ref_index,
+        label: ref_label,
+        identifier: ref_id,
+        ..
+    } = &paragraph[1]
+    else {
+        panic!("expected footnote reference, got {:?}", paragraph[1]);
+    };
+    let SupramarkNode::FootnoteDefinition {
+        index: def_index,
+        label: def_label,
+        identifier: def_id,
+        ..
+    } = &children[1]
+    else {
+        panic!("expected footnote definition, got {:?}", children[1]);
+    };
+
+    assert_eq!(ref_label, "My Note");
+    assert_eq!(def_label, "my  note");
+    assert_eq!(ref_id, "my note");
+    assert_eq!(def_id, "my note");
+    assert_eq!(ref_index, def_index);
+    assert_ne!(*ref_index, 0);
 }
 
 #[test]

@@ -346,6 +346,8 @@ export interface SupramarkFootnoteReferenceNode extends SupramarkBaseNode {
   type: 'footnote_reference';
   index: number;
   label?: string;
+  /** 规范化后的引用 key（去首尾空白、内部空白折叠为单空格、转小写），用于 ref↔def 关联。 */
+  identifier: string;
   subId?: number;
 }
 
@@ -364,6 +366,8 @@ export interface SupramarkFootnoteDefinitionNode extends SupramarkParentNode {
   type: 'footnote_definition';
   index: number;
   label?: string;
+  /** 规范化后的引用 key（去首尾空白、内部空白折叠为单空格、转小写），用于 ref↔def 关联。 */
+  identifier: string;
 }
 
 /**

@@ -222,6 +222,7 @@ pub enum SupramarkNode {
     FootnoteDefinition {
         index: u32,
         label: String,
+        identifier: String,
         children: Vec<SupramarkNode>,
         #[serde(skip_serializing_if = "Option::is_none")]
         position: Option<SourcePosition>,
@@ -229,6 +230,7 @@ pub enum SupramarkNode {
     FootnoteReference {
         index: u32,
         label: String,
+        identifier: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         position: Option<SourcePosition>,
     },
@@ -408,6 +410,13 @@ fn map_children(children: &[Node], index: &OffsetIndex, base_offset: usize) -> V
         .collect()
 }
 
+/// Normalize a footnote label into an mdast-style identifier used to match
+/// references with definitions: trim leading/trailing whitespace, collapse
+/// internal whitespace runs into a single space, and lowercase.
+pub(crate) fn normalize_footnote_identifier(label: &str) -> String {
+    label.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+}
+
 fn assign_footnote_indices(children: &mut [SupramarkNode]) {
     let mut labels = HashMap::new();
     let mut next_index = 1;
@@ -424,8 +433,8 @@ fn collect_footnote_reference_labels(
 ) {
     for node in nodes {
         match node {
-            SupramarkNode::FootnoteReference { label, .. } => {
-                assign_footnote_label(label, labels, next_index);
+            SupramarkNode::FootnoteReference { identifier, .. } => {
+                assign_footnote_label(identifier, labels, next_index);
             }
             _ => visit_children(node, |children| {
                 collect_footnote_reference_labels(children, labels, next_index);
@@ -442,9 +451,9 @@ fn collect_footnote_definition_labels(
     for node in nodes {
         match node {
             SupramarkNode::FootnoteDefinition {
-                label, children, ..
+                identifier, children, ..
             } => {
-                assign_footnote_label(label, labels, next_index);
+                assign_footnote_label(identifier, labels, next_index);
                 collect_footnote_definition_labels(children, labels, next_index);
             }
             _ => visit_children(node, |children| {
@@ -466,9 +475,13 @@ fn assign_footnote_label(label: &str, labels: &mut HashMap<String, u32>, next_in
 fn apply_footnote_indices(nodes: &mut [SupramarkNode], labels: &HashMap<String, u32>) {
     for node in nodes {
         match node {
-            SupramarkNode::FootnoteReference { index, label, .. }
-            | SupramarkNode::FootnoteDefinition { index, label, .. } => {
-                *index = labels.get(label).copied().unwrap_or(0);
+            SupramarkNode::FootnoteReference {
+                index, identifier, ..
+            }
+            | SupramarkNode::FootnoteDefinition {
+                index, identifier, ..
+            } => {
+                *index = labels.get(identifier).copied().unwrap_or(0);
                 visit_children_mut(node, |children| apply_footnote_indices(children, labels));
             }
             _ => visit_children_mut(node, |children| apply_footnote_indices(children, labels)),
@@ -597,9 +610,11 @@ fn map_inline_text(
                 cursor = end + 1;
             }
             InlineExtensionKind::Footnote { label_start, end } => {
+                let label = value[label_start..end].to_owned();
                 nodes.push(SupramarkNode::FootnoteReference {
                     index: 0,
-                    label: value[label_start..end].to_owned(),
+                    identifier: normalize_footnote_identifier(&label),
+                    label,
                     position: Some(position_from_abs(
                         index,
                         source_start + next.start,
