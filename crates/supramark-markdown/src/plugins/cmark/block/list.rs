@@ -75,6 +75,15 @@ impl NodeValue for BulletList {
 pub struct ListItem;
 
 impl NodeValue for ListItem {
+    fn to_ast_v2(&self, node: &Node, ctx: &crate::supramark::AstV2Ctx<'_>) -> Option<Vec<crate::supramark::SupramarkNode>> {
+        let (checked, children) = ctx.map_list_item_children(&node.children);
+        Some(vec![crate::supramark::SupramarkNode::ListItem {
+            checked,
+            children,
+            position: ctx.position(node),
+        }])
+    }
+
     fn render(&self, node: &Node, fmt: &mut dyn Renderer) {
         fmt.open("li", &node.attrs);
         fmt.contents(&node.children);

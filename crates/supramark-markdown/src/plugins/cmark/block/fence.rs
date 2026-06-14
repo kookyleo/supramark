@@ -18,6 +18,10 @@ pub struct CodeFence {
 }
 
 impl NodeValue for CodeFence {
+    fn to_ast_v2(&self, node: &Node, ctx: &crate::supramark::AstV2Ctx<'_>) -> Option<Vec<crate::supramark::SupramarkNode>> {
+        Some(vec![ctx.map_fence(self, node)])
+    }
+
     fn render(&self, node: &Node, fmt: &mut dyn Renderer) {
         let info = unescape_all(&self.info);
         let mut split = info.split_whitespace();

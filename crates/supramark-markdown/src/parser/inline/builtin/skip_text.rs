@@ -13,6 +13,10 @@ pub struct Text {
 }
 
 impl NodeValue for Text {
+    fn to_ast_v2(&self, node: &Node, ctx: &crate::supramark::AstV2Ctx<'_>) -> Option<Vec<crate::supramark::SupramarkNode>> {
+        Some(ctx.map_inline_text(&self.content, node))
+    }
+
     fn render(&self, _: &Node, fmt: &mut dyn Renderer) {
         fmt.text(&self.content);
     }
@@ -27,6 +31,10 @@ pub struct TextSpecial {
 }
 
 impl NodeValue for TextSpecial {
+    fn to_ast_v2(&self, node: &Node, ctx: &crate::supramark::AstV2Ctx<'_>) -> Option<Vec<crate::supramark::SupramarkNode>> {
+        Some(ctx.map_inline_text(&self.content, node))
+    }
+
     fn render(&self, _: &Node, fmt: &mut dyn Renderer) {
         fmt.text(&self.content);
     }

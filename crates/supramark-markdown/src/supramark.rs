@@ -1,7 +1,6 @@
 use crate::plugins::cmark::block::fence::CodeFence;
-use crate::plugins::cmark::block::list::ListItem;
 use crate::plugins::extra::tables::{
-    ColumnAlignment, Table, TableBody, TableCell, TableHead, TableRow,
+    ColumnAlignment, TableBody, TableCell, TableHead, TableRow,
 };
 use crate::{MarkdownIt, Node};
 use serde::{Deserialize, Serialize};
@@ -526,6 +525,29 @@ impl<'a> AstV2Ctx<'a> {
     pub(crate) fn map_children(&self, children: &[Node]) -> Vec<SupramarkNode> {
         map_children(children, self.index, self.base_offset)
     }
+
+    pub(crate) fn map_inline_text(&self, value: &str, node: &Node) -> Vec<SupramarkNode> {
+        map_inline_text(value, self.position(node), self.index)
+    }
+
+    pub(crate) fn map_fence(&self, fence: &CodeFence, node: &Node) -> SupramarkNode {
+        map_fence(fence, self.position(node))
+    }
+
+    pub(crate) fn map_list_item_children(
+        &self,
+        children: &[Node],
+    ) -> (Option<bool>, Vec<SupramarkNode>) {
+        map_list_item_children(children, self.index, self.base_offset)
+    }
+
+    pub(crate) fn map_table_sections(
+        &self,
+        sections: &[Node],
+        alignments: &[ColumnAlignment],
+    ) -> Vec<SupramarkNode> {
+        map_table_sections(sections, alignments, self.index, self.base_offset)
+    }
 }
 
 fn map_children(children: &[Node], index: &OffsetIndex, base_offset: usize) -> Vec<SupramarkNode> {
@@ -662,40 +684,9 @@ where
 }
 
 fn map_node(node: &Node, index: &OffsetIndex, base_offset: usize) -> Vec<SupramarkNode> {
-    let position = position_for(node, index, base_offset);
-
     let ctx = AstV2Ctx { index, base_offset };
     if let Some(v2) = node.to_ast_v2(&ctx) {
         return v2;
-    }
-
-    if let Some(text) = node.cast::<crate::parser::inline::Text>() {
-        return map_inline_text(&text.content, position, index);
-    }
-
-    if let Some(text) = node.cast::<crate::parser::inline::TextSpecial>() {
-        return map_inline_text(&text.content, position, index);
-    }
-
-    if let Some(fence) = node.cast::<CodeFence>() {
-        return vec![map_fence(fence, position)];
-    }
-
-    if node.is::<ListItem>() {
-        let (checked, children) = map_list_item_children(&node.children, index, base_offset);
-        return vec![SupramarkNode::ListItem {
-            checked,
-            children,
-            position,
-        }];
-    }
-
-    if let Some(table) = node.cast::<Table>() {
-        return vec![SupramarkNode::Table {
-            align: table.alignments.iter().map(map_alignment).collect(),
-            children: map_table_sections(&node.children, &table.alignments, index, base_offset),
-            position,
-        }];
     }
 
     map_children(&node.children, index, base_offset)
@@ -1092,7 +1083,7 @@ fn map_table_cells(
         .collect()
 }
 
-fn map_alignment(alignment: &ColumnAlignment) -> Option<TableAlign> {
+pub(crate) fn map_alignment(alignment: &ColumnAlignment) -> Option<TableAlign> {
     match alignment {
         ColumnAlignment::None => None,
         ColumnAlignment::Left => Some(TableAlign::Left),
