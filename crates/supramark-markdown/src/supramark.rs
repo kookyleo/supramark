@@ -319,6 +319,7 @@ fn create_parser(options: ParseOptions) -> MarkdownParser {
     crate::plugins::cmark::add(&mut md);
     crate::plugins::extra::math::add(&mut md);
     crate::plugins::extra::footnote::add(&mut md);
+    crate::plugins::extra::deflist::add(&mut md);
 
     if options.gfm_tables {
         crate::plugins::extra::tables::add(&mut md);
@@ -346,23 +347,6 @@ fn map_document(
     let mut line = 0;
 
     while line < lines.len() {
-        if let Some((node, next_line)) = map_definition_list(source, md, &lines, line, index) {
-            if normal_start < line {
-                children.extend(map_markdown_fragment(
-                    md,
-                    source,
-                    lines[normal_start].start,
-                    lines[line].start,
-                    index,
-                ));
-            }
-
-            children.push(node);
-            line = next_line;
-            normal_start = line;
-            continue;
-        }
-
         if let Some(open) = parse_extension_open(lines[line].text) {
             if normal_start < line {
                 children.extend(map_markdown_fragment(
@@ -1206,144 +1190,6 @@ fn join_line_text(lines: &[LineSpan<'_>]) -> String {
         .map(|line| line.text)
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-fn map_definition_list(
-    source: &str,
-    md: &MarkdownParser,
-    lines: &[LineSpan<'_>],
-    start_line: usize,
-    index: &OffsetIndex,
-) -> Option<(SupramarkNode, usize)> {
-    let mut cursor = start_line;
-    let mut items = Vec::new();
-    let mut list_end = lines[start_line].start;
-
-    while cursor < lines.len() {
-        let term_start = cursor;
-        let mut term_lines = Vec::new();
-
-        while cursor < lines.len() && is_definition_term_line(lines[cursor].text) {
-            term_lines.push(cursor);
-            cursor += 1;
-        }
-
-        if term_lines.is_empty()
-            || cursor >= lines.len()
-            || !is_definition_description_line(lines[cursor].text)
-        {
-            if items.is_empty() {
-                return None;
-            }
-            break;
-        }
-
-        let mut item_children = Vec::new();
-        for term_line in &term_lines {
-            let line = &lines[*term_line];
-            let content_start = line.start + leading_whitespace_len(line.text);
-            let content_end = line.start + line.text.len();
-            item_children.push(SupramarkNode::DefinitionTerm {
-                children: map_markdown_fragment_as_inline(
-                    md,
-                    source,
-                    content_start,
-                    content_end,
-                    index,
-                ),
-                position: Some(SourcePosition {
-                    start: index.point_at(line.start),
-                    end: index.point_at(line.end_with_newline),
-                }),
-            });
-        }
-
-        while cursor < lines.len() && is_definition_description_line(lines[cursor].text) {
-            let line = &lines[cursor];
-            let content_start = definition_description_content_start(line);
-            let content_end = line.start + line.text.len();
-            let children = if content_start < content_end {
-                map_markdown_fragment(md, source, content_start, content_end, index)
-            } else {
-                Vec::new()
-            };
-            item_children.push(SupramarkNode::DefinitionDescription {
-                children,
-                position: Some(SourcePosition {
-                    start: index.point_at(line.start),
-                    end: index.point_at(line.end_with_newline),
-                }),
-            });
-            list_end = line.end_with_newline;
-            cursor += 1;
-        }
-
-        items.push(SupramarkNode::DefinitionItem {
-            children: item_children,
-            position: Some(SourcePosition {
-                start: index.point_at(lines[term_start].start),
-                end: index.point_at(list_end),
-            }),
-        });
-
-        if cursor >= lines.len() || lines[cursor].text.trim().is_empty() {
-            break;
-        }
-    }
-
-    Some((
-        SupramarkNode::DefinitionList {
-            children: items,
-            position: Some(SourcePosition {
-                start: index.point_at(lines[start_line].start),
-                end: index.point_at(list_end),
-            }),
-        },
-        cursor,
-    ))
-}
-
-fn map_markdown_fragment_as_inline(
-    md: &MarkdownParser,
-    source: &str,
-    start: usize,
-    end: usize,
-    index: &OffsetIndex,
-) -> Vec<SupramarkNode> {
-    let mut blocks = map_markdown_fragment(md, source, start, end, index);
-    if blocks.len() == 1 {
-        if let SupramarkNode::Paragraph { children, .. } = blocks.remove(0) {
-            return children;
-        }
-    }
-    blocks
-}
-
-fn is_definition_term_line(line: &str) -> bool {
-    let trimmed = line.trim();
-    !trimmed.is_empty()
-        && !is_definition_description_line(line)
-        && parse_extension_open(line).is_none()
-        && !is_raw_html_line(line)
-        && trimmed != "$$"
-}
-
-fn is_definition_description_line(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed
-        .strip_prefix(':')
-        .is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
-}
-
-fn leading_whitespace_len(line: &str) -> usize {
-    line.len() - line.trim_start().len()
-}
-
-fn definition_description_content_start(line: &LineSpan<'_>) -> usize {
-    let leading = leading_whitespace_len(line.text);
-    let after_colon = leading + 1;
-    let rest = &line.text[after_colon..];
-    line.start + after_colon + leading_whitespace_len(rest)
 }
 
 fn map_extension_block(
