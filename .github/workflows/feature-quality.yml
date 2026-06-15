@@ -119,6 +119,16 @@ jobs:
       - name: Install dependencies
         run: bun install --no-progress
 
+      - name: Setup Rust toolchain (for wasm builds)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
       - name: TypeScript workspace build
         run: bun run build
 
