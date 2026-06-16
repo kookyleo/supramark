@@ -363,18 +363,9 @@ export function FeaturePreview({ initialFeature }: { initialFeature: string }) {
   const renderPreviewLoading = () => {
     if (!renderState.pending) return null;
 
-    const engines =
-      renderState.engines.length > 0 ? renderState.engines.join(' / ') : feature.displayName;
-    const detail =
-      renderState.renderTasks > 0 ? `Rendering ${engines}` : `Preparing ${feature.displayName}`;
-
     return (
-      <div className="feature-preview-loading" role="status" aria-live="polite">
-        <div className="feature-preview-loading__spinner" />
-        <div className="feature-preview-loading__body">
-          <strong>{detail}</strong>
-          <span>Loading parser and renderer modules</span>
-        </div>
+      <div className="feature-preview-loading" role="status" aria-label="Rendering preview">
+        <div className="feature-preview-loading__spinner" aria-hidden="true" />
       </div>
     );
   };
@@ -446,16 +437,15 @@ export function FeaturePreview({ initialFeature }: { initialFeature: string }) {
       }}
     >
       <div
-        className={`feature-preview-render-shell${renderState.pending ? ' is-loading' : ''}`}
+        className="feature-preview-render-shell"
         data-preview-theme={bgMode}
         style={{
           width: compact ? maxPreviewWidth : previewWidth,
           maxWidth: '100%',
         }}
       >
-        {renderPreviewLoading()}
         <div
-          className="feature-preview-render"
+          className={`feature-preview-render${renderState.pending ? ' is-loading' : ''}`}
           data-preview-theme={bgMode}
           style={{
             width: '100%',
@@ -468,11 +458,18 @@ export function FeaturePreview({ initialFeature }: { initialFeature: string }) {
             alignSelf: 'flex-start',
           }}
         >
-          <Supramark
-            markdown={markdown}
-            containerRenderers={containerRenderers}
-            onRenderStateChange={onRenderStateChange}
-          />
+          {renderPreviewLoading()}
+          <div
+            className={`feature-preview-render-content${
+              renderState.pending ? ' is-hidden' : ''
+            }`}
+          >
+            <Supramark
+              markdown={markdown}
+              containerRenderers={containerRenderers}
+              onRenderStateChange={onRenderStateChange}
+            />
+          </div>
         </div>
       </div>
     </div>
