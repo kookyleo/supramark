@@ -207,17 +207,28 @@ function renderNode(node: SupramarkNode): React.ReactNode {
 
 ### 重度功能渲染策略
 
-对于需要浏览器环境的功能（图表、复杂数学公式）：
+图表 / 公式两端都**只消费 `@supramark/engines`**，不直接引图表库（见 [Diagram Engine 架构目标](/architecture/DIAGRAM_ENGINE_TARGET)）。`render()` 返回原生 SVG（`payload`）+ 只读尺寸（`size`）；外围尺寸用统一的 `computeDiagramBox` 布局，引擎层不改写 SVG。
 
 **Web 端**：
 
 ```typescript
-// 直接使用浏览器库
-import mermaid from 'mermaid'
+import { createWebDiagramEngine } from '@supramark/engines/web'
+import { type DiagramRenderResult } from '@supramark/engines'
+
+const engine = createWebDiagramEngine()
 
 function DiagramRenderer({ code }: { code: string }) {
-  const svg = useMemo(() => mermaid.render(code), [code])
-  return <div dangerouslySetInnerHTML={{ __html: svg }} />
+  const [result, setResult] = useState<DiagramRenderResult>()
+  useEffect(() => {
+    engine.render({ engine: 'mermaid', code }).then(setResult)
+  }, [code])
+
+  if (result?.format !== 'svg') return null
+  // 用 size 预留比例(SSR 安全、无抖动);内联 SVG 原样塞入,铺满容器即可。
+  const style = result.size
+    ? { aspectRatio: `${result.size.width} / ${result.size.height}` }
+    : undefined
+  return <div style={style} dangerouslySetInnerHTML={{ __html: result.payload }} />
 }
 ```
 
@@ -225,11 +236,15 @@ function DiagramRenderer({ code }: { code: string }) {
 
 ```typescript
 import { createReactNativeDiagramEngine } from '@supramark/engines/rn'
+import { computeDiagramBox } from '@supramark/engines'
 
 const engine = createReactNativeDiagramEngine()
 
-async function renderDiagram(code: string) {
-  return engine.render({ engine: 'mermaid', code })
+async function renderDiagram(code: string, containerWidth: number) {
+  const result = await engine.render({ engine: 'mermaid', code })
+  // 与 web 共用同一策略;比例来自引擎层只读解析的 size。
+  const box = computeDiagramBox({ size: result.size, containerWidth })
+  return { svg: result.payload, ...box } // <SvgXml width={box.width} height={box.height} />
 }
 ```
 

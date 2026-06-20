@@ -88,12 +88,67 @@ Renderer 侧不负责：
 
 在这个结构下，`@supramark/engines` 是唯一 diagram 渲染入口。
 
+## SVG 尺寸契约（describe, don't mutate）
+
+引擎层对 SVG 只做一件事：**描述，不改写**。`render()` 返回的 SVG 原样透传（忠实于上游 / 原生输出），尺寸信息作为**只读元数据**挂在 `size` 上；外围尺寸的布局决策统一交给纯函数 `computeDiagramBox`，由各平台展示层调用。
+
+这样图表的"渲染数据"与"布局决策"彻底分离：vendored 的 `*-little` / `graphviz-anywhere` 模块专心跟进原生，引擎层不污染其输出，尺寸风格的统一只在更上层完成。
+
+### 契约
+
+```ts
+interface DiagramRenderResult {
+  payload: string;                 // 原生 SVG，零改写
+  size?: SvgIntrinsicSize | null;  // 只读解析；解析不出比例时为 null
+  // ...id / engine / success / format / error
+}
+
+interface SvgIntrinsicSize {
+  width: number;
+  height: number;
+  aspectRatio: number;             // width / height
+}
+```
+
+`size` 由 `parseSvgSize()` 从 `<svg>` 的 `viewBox`（优先）或 `width/height` 属性只读解析，百分比 / em 等相对单位不计入。当前所有图表引擎（mermaid / d2 / plantuml / dot / echarts / vega-lite）都输出 `viewBox`，因此 `size` 稳定可得；`null` 分支仅为未知引擎兜底。
+
+> mermaid 会输出 `width="100%"`，所以 `viewBox` 必须优先于 `width/height`，否则比例会被 `100%` 算错。
+
+### 示例用法
+
+下游 web / RN 共用同一套尺寸策略：
+
+```ts
+import { computeDiagramBox } from '@supramark/engines';
+
+const result = await engine.render({ engine: 'd2', code: 'x -> y' });
+// result.size === { width: 57, height: 224, aspectRatio: 0.254 }
+
+const box = computeDiagramBox({
+  size: result.size,
+  containerWidth,   // 容器实测宽度
+  maxHeight: 500,   // 可选：高瘦图高度上限，默认 500
+});
+// box === { width: containerWidth, height: min(containerWidth / aspectRatio, 500) }
+```
+
+- **RN**：`<SvgXml xml={svg} width={box.width} height={box.height} />`
+- **Web**：外层容器用 `aspectRatio: size.width / size.height` 预留比例，内联 SVG 铺满即可。
+- `size` 为 `null` 时回退 `fallbackHeight`（默认 300），不会崩。
+
+### 边界
+
+- **引擎层永不把 width/height 注入回 SVG**（旧的 D2 专用补丁 `injectD2Dimensions` 已移除）。
+- 需要不同尺寸语义的（如 math 随字号 em 缩放）走各自展示层，不套用 `computeDiagramBox`，也不进入本契约。
+- 平台差异只剩"展示层适配"：web 仅在缺 `viewBox` 时单向补一个 + 加填充样式；RN 为 `react-native-svg` 做必要规范化。
+
 ## 维护原则
 
 1. 新增 diagram 能力时，不再扩散到新的 renderer 私有实现。
 2. 任何 `source -> svg` 能力都应迁入 `@supramark/engines`。
 3. `@supramark/rn` 与 `@supramark/web` 只通过 `@supramark/engines.render()` 获取结果。
 4. 平台差异只体现在 engine adapter 与 SVG 展示层。
+5. 引擎层对 SVG **只描述不改写**：尺寸走 `size` 元数据 + `computeDiagramBox`，详见上文「SVG 尺寸契约」。
 
 ## 迁移顺序
 
