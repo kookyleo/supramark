@@ -30,6 +30,12 @@ export interface SupramarkStyles {
   bullet?: TextStyle;
   listItemText?: TextStyle;
 
+  // Blockquote / divider / input
+  blockquote?: ViewStyle;
+  thematicBreak?: ViewStyle;
+  inputBlock?: ViewStyle;
+  inputBlockText?: TextStyle;
+
   // Inline elements
   strong?: TextStyle;
   emphasis?: TextStyle;
@@ -271,6 +277,30 @@ export const defaultStyles = StyleSheet.create({
     textDecorationLine: 'line-through',
     textDecorationStyle: 'solid',
   },
+  // Blockquote / divider / input
+  blockquote: {
+    marginBottom: 8,
+    paddingLeft: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#d0d7de',
+  },
+  thematicBreak: {
+    marginVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#d0d7de',
+  },
+  inputBlock: {
+    marginBottom: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#d0d7de',
+    borderRadius: 6,
+    backgroundColor: '#f6f8fa',
+  },
+  inputBlockText: {
+    fontSize: 13,
+    color: '#57606a',
+  },
   // Table styles
   table: {
     borderWidth: 1,
@@ -377,6 +407,19 @@ export const darkThemeStyles: SupramarkStyles = {
     color: '#58a6ff',
   },
   imageText: {
+    color: '#8b949e',
+  },
+  blockquote: {
+    borderLeftColor: '#30363d',
+  },
+  thematicBreak: {
+    borderBottomColor: '#30363d',
+  },
+  inputBlock: {
+    borderColor: '#30363d',
+    backgroundColor: '#161b22',
+  },
+  inputBlockText: {
     color: '#8b949e',
   },
   table: {

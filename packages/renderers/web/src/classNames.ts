@@ -44,6 +44,11 @@ export interface SupramarkClassNames {
   tableCell?: string; // td 元素
   tableHeaderCell?: string; // th 元素
 
+  // Blockquote / divider / input
+  blockquote?: string; // blockquote 元素
+  thematicBreak?: string; // hr 元素
+  inputBlock?: string; // %%% input 扩展块容器
+
   // Diagram
   diagram?: string; // diagram 容器 div
   diagramPre?: string; // diagram 中的 pre
@@ -101,6 +106,11 @@ export const tailwindClassNames: SupramarkClassNames = {
   link: 'text-blue-600 dark:text-blue-400 hover:underline',
   image: 'max-w-full h-auto',
   delete: 'line-through',
+  blockquote:
+    'border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic text-gray-600 dark:text-gray-400 mb-4',
+  thematicBreak: 'border-0 border-t border-gray-300 dark:border-gray-700 my-6',
+  inputBlock:
+    'border border-gray-300 dark:border-gray-700 rounded-md p-3 mb-4 bg-gray-50 dark:bg-gray-900 text-sm',
   table: 'border-collapse border border-gray-300 dark:border-gray-700 mb-4 w-full',
   tableBody: '',
   tableRow: 'border-b border-gray-300 dark:border-gray-700',
@@ -137,6 +147,9 @@ export const minimalClassNames: SupramarkClassNames = {
   link: 'sm-link',
   image: 'sm-img',
   delete: 'sm-del',
+  blockquote: 'sm-blockquote',
+  thematicBreak: 'sm-hr',
+  inputBlock: 'sm-input-block',
   table: 'sm-table',
   tableBody: 'sm-tbody',
   tableRow: 'sm-tr',

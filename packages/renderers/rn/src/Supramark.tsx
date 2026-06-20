@@ -10,6 +10,8 @@ import type {
   SupramarkInlineCodeNode,
   SupramarkListNode,
   SupramarkListItemNode,
+  SupramarkBlockquoteNode,
+  SupramarkInputNode,
   SupramarkDiagramNode,
   SupramarkContainerNode,
   SupramarkTextNode,
@@ -561,6 +563,36 @@ function renderNode(
           <Text style={textStyle}>
             {renderInlineNodes(cell.children, styles, highlighted, config)}
           </Text>
+        </View>
+      );
+    }
+    case 'blockquote': {
+      // 引用块渲染成带左边框的容器，否则 RN 端命中 default 会静默丢弃整段内容。
+      const blockquote = node as SupramarkBlockquoteNode;
+      return (
+        <View key={key} style={styles.blockquote}>
+          {blockquote.children.map((child, index) =>
+            renderNode(child, index, styles, highlighted, config, onOpenHtmlPage, containerRenderers)
+          )}
+        </View>
+      );
+    }
+    case 'thematic_break':
+      // `---` / `***` 落地成一条分割线，否则在 RN 端无任何输出。
+      return <View key={key} style={styles.thematicBreak} />;
+    case 'input': {
+      // `%%%…%%%` input 扩展块先兜底成信息卡片，保证至少可见。
+      const input = node as SupramarkInputNode;
+      const title = `%%%${input.name}${input.params ? ` ${input.params}` : ''}`;
+      const body =
+        input.value ??
+        (input.data && Object.keys(input.data).length > 0
+          ? JSON.stringify(input.data, null, 2)
+          : '');
+      return (
+        <View key={key} style={styles.inputBlock}>
+          <Text style={[styles.inputBlockText, { fontWeight: '600' }]}>{title}</Text>
+          {body ? <Text style={styles.inputBlockText}>{body}</Text> : null}
         </View>
       );
     }

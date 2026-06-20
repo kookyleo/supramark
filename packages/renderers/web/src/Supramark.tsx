@@ -9,6 +9,8 @@ import type {
   SupramarkInlineCodeNode,
   SupramarkListNode,
   SupramarkListItemNode,
+  SupramarkBlockquoteNode,
+  SupramarkInputNode,
   SupramarkDiagramNode,
   SupramarkContainerNode,
   SupramarkTextNode,
@@ -809,6 +811,36 @@ function renderNode(
       ) : (
         <div key={key} id={`fn-${def.index}`} className={classNames.paragraph}>
           <sup>[{def.index}]</sup> {body}
+        </div>
+      );
+    }
+    case 'blockquote': {
+      // 引用块用语义化 <blockquote>，否则块级 switch 命中 default 会静默丢弃整段内容。
+      const blockquote = node as SupramarkBlockquoteNode;
+      return (
+        <blockquote key={key} className={classNames.blockquote}>
+          {blockquote.children.map((child, index) =>
+            renderNode(child, index, classNames, rendered, highlighted, config, containerRenderers)
+          )}
+        </blockquote>
+      );
+    }
+    case 'thematic_break':
+      // `---` / `***` 落地成 <hr>，否则无任何输出。
+      return <hr key={key} className={classNames.thematicBreak} />;
+    case 'input': {
+      // `%%%…%%%` input 扩展块先兜底成可见区块。
+      const input = node as SupramarkInputNode;
+      const title = `%%%${input.name}${input.params ? ` ${input.params}` : ''}`;
+      const body =
+        input.value ??
+        (input.data && Object.keys(input.data).length > 0
+          ? JSON.stringify(input.data, null, 2)
+          : '');
+      return (
+        <div key={key} className={classNames.inputBlock}>
+          <div>{title}</div>
+          {body ? <pre>{body}</pre> : null}
         </div>
       );
     }
