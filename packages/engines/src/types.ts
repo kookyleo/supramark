@@ -9,6 +9,21 @@ export interface DiagramErrorInfo {
   details?: string;
 }
 
+/**
+ * SVG 的固有尺寸,**只读**解析自 `viewBox`(优先)或 `width/height` 属性。
+ *
+ * 这是 "describe, don't mutate" 的核心:引擎层不改写 SVG,只把尺寸信息描述出来,
+ * 交给下游(web / RN)用统一的 {@link computeDiagramBox} 策略布局。
+ */
+export interface SvgIntrinsicSize {
+  /** 固有宽(SVG 用户单位)。 */
+  width: number;
+  /** 固有高(SVG 用户单位)。 */
+  height: number;
+  /** 宽高比 `width / height`,下游据此在容器内定尺寸。 */
+  aspectRatio: number;
+}
+
 export interface DiagramRenderResult {
   id: string;
   engine: DiagramEngineType;
@@ -17,6 +32,12 @@ export interface DiagramRenderResult {
   format: DiagramRenderFormat;
   payload: string;
   error?: DiagramErrorInfo;
+  /**
+   * 只读解析出的固有尺寸,供下游统一布局;**不改写** `payload`。
+   * 解析不出有效比例(既无 viewBox 又无 width/height)时为 `null`;
+   * 失败结果不带此字段。仅对图表类引擎有意义,math 等下游可忽略。
+   */
+  size?: SvgIntrinsicSize | null;
 }
 
 export interface DiagramRenderService {

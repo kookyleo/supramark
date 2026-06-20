@@ -14,6 +14,7 @@ export type {
   DiagramErrorInfo,
   DiagramRenderResult,
   DiagramRenderService,
+  SvgIntrinsicSize,
   GraphvizAttributeValue,
   GraphvizImageSize,
   GraphvizDiagramOptions,
@@ -26,6 +27,7 @@ export { DiagramRenderError } from './types.js';
 
 // ── Diagram runtime facade ───────────────────────────────
 export { createDiagramEngine } from './engine.js';
+export { parseSvgSize, computeDiagramBox, type DiagramBox } from './svg-size.js';
 export {
   GRAPHVIZ_LAYOUT_ENGINES,
   renderGraphvizSvg,

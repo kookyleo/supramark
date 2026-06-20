@@ -5,6 +5,7 @@ import {
 } from './graphviz';
 import { loadEchartsSvgRender, loadVegaLiteSvgRender } from './js-chart-loaders';
 import { getNativeEngineAdapter, renderViaNative } from './rn-native-adapter';
+import { parseSvgSize } from './svg-size';
 import type {
   DiagramEngineOptions,
   DiagramRenderResult,
@@ -74,7 +75,9 @@ export function createReactNativeDiagramEngine(
             // adapter so renderViaNative must succeed. Defensive only.
             return inner.render(params);
           }
-          return { id, engine, success: true, format: 'svg', payload };
+          // native 分支不经过 LocalDiagramEngine.svg(),这里补同一套只读尺寸解析,
+          // 让 RN-native 的 d2 / mermaid / plantuml 也带上 size。
+          return { id, engine, success: true, format: 'svg', payload, size: parseSvgSize(payload) };
         } catch (err) {
           return {
             id,

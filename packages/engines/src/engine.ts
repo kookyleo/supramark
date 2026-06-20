@@ -1,6 +1,7 @@
 import { isGraphvizDiagramEngine, renderGraphvizSvg } from './graphviz';
 import { renderMathJaxSvg } from './mathjax';
 import { renderMermaidSvg } from './mermaid';
+import { parseSvgSize } from './svg-size';
 import type {
   DiagramErrorInfo,
   DiagramEngineOptions,
@@ -172,6 +173,8 @@ class LocalDiagramEngine implements DiagramRenderService {
       success: true,
       format: 'svg',
       payload,
+      // 只读解析固有尺寸供下游布局;不改写 payload。
+      size: parseSvgSize(payload),
     };
   }
 
