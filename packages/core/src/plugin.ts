@@ -1,4 +1,4 @@
-import type { SupramarkRootNode } from './ast.js';
+import type { SupramarkNode, SupramarkParentNode, SupramarkRootNode } from './ast.js';
 import { type SupramarkConfig } from './feature.js';
 import { loadRustMarkdownModule } from './plugin-loader.js';
 
@@ -64,8 +64,53 @@ export async function parse(
   options: SupramarkParseOptions = {}
 ): Promise<SupramarkRootNode> {
   const root = await parseWithRustMarkdown(source);
+  await expandOpaqueContainers(root);
   await applyPlugins(root, source, options.plugins ?? []);
   return root;
+}
+
+/**
+ * Expand "transparent" containers: re-parse the body of an opaque container
+ * (which the native parser leaves as a raw markdown string on `value`) into an
+ * AST subtree and put it back on `children`.
+ *
+ * Background: in AST v2 all container scanning happens in the Rust parser, so
+ * every `:::name` container is emitted as `mode: 'opaque'` — body on `value`,
+ * `children` empty. The names the parser recognises (map / vison / html /
+ * weather) also carry structured `data` (their body is YAML / HTML / JSON, not
+ * markdown, and must be left untouched). Every other container (note and the
+ * other admonitions, plus custom containers) has no `data`; its body is
+ * markdown and must be expanded here, otherwise renderers that read `children`
+ * silently drop the body.
+ *
+ * Discriminator: `mode === 'opaque'` and `data` empty and `value` non-empty →
+ * a transparent container, expand it. A genuinely-opaque container (one that
+ * carries `data`, e.g. map) is left exactly as-is — never re-parsed, never has
+ * its `value` cleared.
+ *
+ * Idempotent: an already-expanded container has its `value` cleared, so a
+ * second pass only walks the tree without re-parsing. This single entry point
+ * lives in `parse()` so Web / RN / Node share it and renderers need no copy.
+ */
+export async function expandOpaqueContainers(node: SupramarkNode): Promise<void> {
+  const children = (node as Partial<SupramarkParentNode>).children;
+  if (!Array.isArray(children)) {
+    return;
+  }
+  for (const child of children) {
+    if (
+      child.type === 'container' &&
+      child.mode === 'opaque' &&
+      child.data == null &&
+      typeof child.value === 'string' &&
+      child.value.length > 0
+    ) {
+      const sub = await parseWithRustMarkdown(child.value);
+      child.children = sub.children;
+      child.value = undefined;
+    }
+    await expandOpaqueContainers(child);
+  }
 }
 
 async function parseWithRustMarkdown(source: string): Promise<SupramarkRootNode> {

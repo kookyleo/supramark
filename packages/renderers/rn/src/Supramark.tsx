@@ -35,6 +35,7 @@ import type {
 } from '@supramark/core';
 import {
   parse,
+  expandOpaqueContainers,
   isFeatureEnabled,
   isDiagramFeatureEnabled,
   getFeatureOptionsAs,
@@ -53,46 +54,6 @@ import {
 import { ErrorBoundary, ErrorInfo, ErrorDisplay } from './ErrorBoundary';
 
 type RenderedNode = any;
-
-/**
- * 递归遍历 AST，对 `mode: 'opaque'` 且有 `value` 的 container，
- * 用 parse(value) 解析 value 成 AST 子树，填回 container.children。
- *
- * 新 AST v2 的 opaque container children 为空，正文在 value（原始 markdown 字符串）。
- * Rust parser 不认 feature 插件 JS 侧注册的 registerContainerHook，把所有 :::xxx
- * 当 opaque 处理。这里在主组件异步上下文里预解析，renderNode 就能同步渲染 children。
- *
- * 递归处理已填充的 children（可能嵌套 opaque container）。
- */
-async function expandOpaqueContainers(node: SupramarkNode): Promise<void> {
-  if (!node || typeof node !== 'object' || !('children' in node)) {
-    return;
-  }
-  const parent = node as { children: SupramarkNode[] };
-  for (let i = 0; i < parent.children.length; i++) {
-    const child = parent.children[i] as SupramarkNode & {
-      mode?: string;
-      value?: string;
-    };
-    if (
-      child &&
-      typeof child === 'object' &&
-      child.mode === 'opaque' &&
-      typeof child.value === 'string' &&
-      child.value.length > 0
-    ) {
-      try {
-        const sub = await parse(child.value);
-        (child as { children: SupramarkNode[] }).children = sub.children;
-        // 清空 value，避免 renderNode 误判再次解析
-        child.value = undefined;
-      } catch {
-        // 解析失败保留原 children（可能为空），renderNode 走 fallback
-      }
-    }
-    await expandOpaqueContainers(child);
-  }
-}
 
 function getDefinitionTerms(item: SupramarkDefinitionItemNode): SupramarkDefinitionTermNode[] {
   return item.children.filter(

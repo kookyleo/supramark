@@ -55,7 +55,7 @@ export {
  * @param options - 解析选项（可选 AST 后处理插件）
  * @returns Supramark AST v2
  */
-export { parse } from './plugin.js';
+export { parse, expandOpaqueContainers } from './plugin.js';
 
 /**
  * 预设（Presets）
