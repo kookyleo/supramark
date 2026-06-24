@@ -37,6 +37,7 @@ import { type DiagramRenderResult, type DiagramRenderService } from '@supramark/
 import { createWebDiagramEngine } from '@supramark/engines/web';
 import {
   parse,
+  expandOpaqueContainers,
   isFeatureEnabled,
   isDiagramFeatureEnabled,
   getFeatureOptionsAs,
@@ -177,6 +178,12 @@ export const Supramark: React.FC<SupramarkWebProps> = ({
         });
 
         const parsed = ast ?? (await parse(markdown, { config }));
+        // Post-process：递归解析 opaque container 的 value。
+        // 新 AST v2 的 opaque container children 为空，正文在 value（原始 markdown）。
+        // Rust parser 不认 feature 插件 JS 侧注册的 registerContainerHook，
+        // 把所有 :::xxx 当 opaque 处理。这里在主组件异步上下文里把 value 解析成
+        // AST 子树填回 children，renderNode 就能正常渲染。
+        await expandOpaqueContainers(parsed);
         const renderTasks = collectRenderTasks(parsed.children, config);
         const highlightTasks = collectCodeHighlightTasks(
           parsed.children,
@@ -814,6 +821,18 @@ function renderNode(
     }
     case 'text':
       return <React.Fragment key={key}>{(node as SupramarkTextNode).value}</React.Fragment>;
+    case 'strong':
+    case 'emphasis':
+    case 'delete':
+    case 'inline_code':
+    case 'math_inline':
+    case 'link':
+    case 'image':
+    case 'break':
+    case 'footnote_reference':
+      // Rust parser 把 list_item.children 等场景的 inline 节点扁平铺开（非 paragraph 包裹），
+      // renderNode 遍历到这些类型时委托给 renderInlineNode，避免走 default 返回 null 吞掉内容。
+      return renderInlineNode(node, key, classNames, rendered, highlighted, config);
     default:
       return null;
   }
