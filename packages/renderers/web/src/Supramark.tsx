@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState, ReactNode } from 'react';
+import React, { useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
   SupramarkRootNode,
   SupramarkNode,
@@ -16,7 +16,6 @@ import type {
   SupramarkEmphasisNode,
   SupramarkLinkNode,
   SupramarkImageNode,
-  SupramarkBreakNode,
   SupramarkDeleteNode,
   SupramarkTableNode,
   SupramarkTableRowNode,
@@ -51,7 +50,7 @@ import {
 } from './classNames.js';
 import { DiagramBlock } from './DiagramBlock.js';
 import { DiagramEngineContext } from './DiagramEngineProvider.js';
-import { ErrorBoundary, ErrorInfo, ErrorDisplay } from './ErrorBoundary.js';
+import { ErrorBoundary, type ErrorInfo, ErrorDisplay } from './ErrorBoundary.js';
 import { MathBlockWeb, MathInlineWeb } from './MathBlockWeb.js';
 
 export interface ContainerRendererWeb {

@@ -3,7 +3,6 @@ import { Text, View, Linking, TouchableOpacity, Dimensions } from 'react-native'
 import type {
   SupramarkRootNode,
   SupramarkNode,
-  SupramarkParagraphNode,
   SupramarkHeadingNode,
   SupramarkCodeNode,
   SupramarkMathBlockNode,
@@ -17,7 +16,6 @@ import type {
   SupramarkEmphasisNode,
   SupramarkLinkNode,
   SupramarkImageNode,
-  SupramarkBreakNode,
   SupramarkDeleteNode,
   SupramarkTableNode,
   SupramarkTableRowNode,
@@ -46,12 +44,11 @@ import { MathBlock } from './MathBlock';
 import { MathInline } from './MathInline';
 import {
   type SupramarkStyles,
-  defaultStyles,
   mergeStyles,
   darkThemeStyles,
   lightThemeStyles,
 } from './styles';
-import { ErrorBoundary, ErrorInfo, ErrorDisplay } from './ErrorBoundary';
+import { ErrorBoundary, type ErrorInfo, ErrorDisplay } from './ErrorBoundary';
 
 type RenderedNode = React.ComponentProps<typeof Text>['children'];
 
@@ -902,7 +899,7 @@ function renderMapNodeFromContainer(
   container: SupramarkContainerNode,
   key: number,
   styles: ReturnType<typeof mergeStyles>,
-  config?: SupramarkConfig
+  _config?: SupramarkConfig
 ): RenderedNode {
   // 从 container.data 中提取 map 数据
   const data = container.data || {};

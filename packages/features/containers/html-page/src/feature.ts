@@ -3,7 +3,6 @@ import type {
   SupramarkNode,
   SupramarkRootNode,
   FeatureConfigWithOptions,
-  SupramarkConfig,
   SupramarkFeature,
 } from '@supramark/core';
 import { makeFeatureConfigHelpers, FeatureRegistry } from '@supramark/core';

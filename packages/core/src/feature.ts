@@ -849,7 +849,7 @@ export interface TestingDefinition<TNode extends SupramarkNode> {
   renderTests?: RenderTestSuite<TNode>;
 
   /** 集成测试 */
-  integrationTests?: IntegrationTestSuite<TNode>;
+  integrationTests?: IntegrationTestSuite;
 
   /** 测试覆盖率要求 */
   coverageRequirements?: CoverageRequirements;
@@ -920,15 +920,15 @@ export interface RenderTestCase<TNode, TPlatform> {
 /**
  * 集成测试套件
  */
-export interface IntegrationTestSuite<TNode> {
+export interface IntegrationTestSuite {
   /** 端到端测试用例 */
-  cases: IntegrationTestCase<TNode>[];
+  cases: IntegrationTestCase[];
 }
 
 /**
  * 集成测试用例
  */
-export interface IntegrationTestCase<TNode> {
+export interface IntegrationTestCase {
   /** 测试名称 */
   name: string;
 

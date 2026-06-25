@@ -29,7 +29,7 @@ import { registerNativeParserAdapter } from '@supramark/core/rn';
 const LINKING_ERROR =
   `The package '@supramark/markdown-native-rn' doesn't seem to be linked. Make sure:\n\n` +
   Platform.select({
-    ios: '- You have run \`pod install\`\n',
+    ios: '- You have run `pod install`\n',
     android: '',
     default: '',
   }) +

@@ -5,7 +5,6 @@ import type {
   SupramarkDefinitionListNode,
   SupramarkDefinitionItemNode,
   FeatureConfigWithOptions,
-  SupramarkConfig,
 } from '@supramark/core';
 import { definitionListExamples } from './examples.js';
 import { makeFeatureConfigHelpers } from '@supramark/core';
