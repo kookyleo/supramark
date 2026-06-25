@@ -20,15 +20,16 @@ Pod::Spec.new do |s|
   s.source_files = "*.{h,m,mm}"
   s.public_header_files = "GraphvizModule.h"
 
-  # Link against the prebuilt Graphviz xcframework (multi-slice:
-  # ios-arm64 device + ios-arm64_x86_64-simulator). The xcframework is
-  # staged under ios/Frameworks/ by scripts/build-ios-xcframework.sh.
-  # Using vendored_frameworks instead of flat lib/include so Xcode picks
-  # the correct slice per target (device arm64 vs simulator arm64/x86_64).
+  # Link against the prebuilt Graphviz core, vendored as an XCFramework. It is
+  # staged under ios/Frameworks/ by scripts/prepare-native.js (consuming
+  # output/ios/Graphviz.xcframework produced by scripts/build-ios.sh) and ships
+  # inside the npm tarball — there is no postinstall download.
   s.preserve_paths = "Frameworks/**"
-  s.vendored_frameworks = "Frameworks/GraphvizApi.xcframework"
+  s.vendored_frameworks = "Frameworks/Graphviz.xcframework"
   s.xcconfig = {
-    "HEADER_SEARCH_PATHS" => "\"$(PODS_TARGET_SRCROOT)/Frameworks/GraphvizApi.xcframework/ios-arm64/Headers\" \"$(PODS_TARGET_SRCROOT)/Frameworks/GraphvizApi.xcframework/ios-arm64_x86_64-simulator/Headers\"",
+    "HEADER_SEARCH_PATHS" =>
+      "\"$(PODS_TARGET_SRCROOT)/Frameworks/Graphviz.xcframework/ios-arm64/Headers\" " \
+      "\"$(PODS_TARGET_SRCROOT)/Frameworks/Graphviz.xcframework/ios-arm64_x86_64-simulator/Headers\"",
     "OTHER_LDFLAGS" => "$(inherited)",
   }
 

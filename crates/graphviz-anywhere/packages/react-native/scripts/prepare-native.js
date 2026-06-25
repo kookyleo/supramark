@@ -1,44 +1,64 @@
 #!/usr/bin/env node
-/**
- * prepare-native.js — stage the build-android.sh outputs (output/android/<abi>/)
- * into the package so that a `file:` install carries the .so + headers and a
- * fresh `yarn install` does not drop them.
+/*
+ * prepare-native.js — stage the locally built Graphviz native libraries into
+ * the RN package's shipped layout so the podspec (iOS / macOS), Gradle + CMake
+ * (Android) and the Windows project reference stable paths, and so `npm pack`
+ * bundles the binaries directly into the tarball.
  *
- * Each artifact is staged to two destinations for two distinct uses:
- *   1. android/libs/<abi>/{lib,include}/  — CMake link-time inputs for the JNI
- *      build (CMakeLists.txt's GRAPHVIZ_PREBUILT points at ../../libs/<abi>)
- *   2. android/src/main/jniLibs/<abi>/    — packaged into the APK by Gradle for
- *      runtime loading (build.gradle's jniLibs.srcDirs = ["src/main/jniLibs"])
+ * This package has NO cargo crate of its own — the native core is built from
+ * Graphviz *source* via scripts/build-<platform>.sh at the crate root. Build
+ * the platforms you need first, e.g. from crates/graphviz-anywhere:
  *
- * Run this AFTER:
- *   - ANDROID_NDK_HOME=... ./scripts/build-android.sh  (produces output/android/)
+ *   ./scripts/build-ios.sh                       -> output/ios/Graphviz.xcframework
+ *   ./scripts/build-android.sh                   -> output/android/<abi>/lib/libgraphviz_api.so
+ *   ./scripts/build-macos.sh                     -> output/macos-universal/lib/libgraphviz_api.dylib
+ *   ./scripts/build-windows.sh                   -> output/windows-x86_64/lib/graphviz_api.{lib,dll}
  *
- * Idempotent — re-running just refreshes.
+ * Then run `npm run prepare-native` (or `node scripts/prepare-native.js`).
+ * Idempotent — re-running just refreshes. Missing platforms are skipped with a
+ * warning; the run only fails if NOTHING was staged.
+ *
+ * NOTE: the staged binaries are gitignored (see .gitignore) but ARE published
+ * because package.json `files[]` lists ios/android/macos/windows and `prepack`
+ * runs the bob build. There is no postinstall download step — consumers get the
+ * binaries straight from the npm tarball.
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// crates/graphviz-anywhere/packages/react-native/scripts/ → 5 levels up
-const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..');
+// crates/graphviz-anywhere/packages/react-native/scripts/ -> crate root is 2 up.
 const PKG_DIR = path.resolve(__dirname, '..');
-const PROJECT_ROOT = path.resolve(PKG_DIR, '..', '..'); // crates/graphviz-anywhere
-const TARGET_DIR = path.join(REPO_ROOT, 'target');
+const CRATE_ROOT = path.resolve(__dirname, '..', '..', '..');
+const OUTPUT_DIR = path.join(CRATE_ROOT, 'output');
+const CAPI_HEADER = path.join(CRATE_ROOT, 'capi', 'graphviz_api.h');
 
-const ANDROID_OUTPUT = path.join(PROJECT_ROOT, 'output', 'android');
-const ABIS = ['arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'];
+// ── Android: one unified libgraphviz_api.so per ABI, staged under jniLibs so
+//    Gradle packages it into the APK and CMake imports it from the same path
+//    (single-sourced — no separate android/libs copy). ───────────────────────
+const ANDROID_ABIS = ['arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'];
+const ANDROID_JNILIBS_DEST = path.join(PKG_DIR, 'android', 'src', 'main', 'jniLibs');
 
-// iOS xcframework (build-ios.sh output, staged under target/ios-xcframeworks/)
-const IOS_XCFRAMEWORK_SRC = path.join(TARGET_DIR, 'ios-xcframeworks', 'GraphvizApi.xcframework');
+// ── iOS: the static XCFramework produced by build-ios.sh. ────────────────────
+const IOS_XCFRAMEWORK_SRC = path.join(OUTPUT_DIR, 'ios', 'Graphviz.xcframework');
 const IOS_FRAMEWORKS_DEST = path.join(PKG_DIR, 'ios', 'Frameworks');
 
-// CMake link-time inputs (CMakeLists.txt's GRAPHVIZ_PREBUILT)
-const LIBS_DEST = path.join(PKG_DIR, 'android', 'libs');
-// Packaged into the APK by Gradle (build.gradle's jniLibs.srcDirs)
-const JNILIBS_DEST = path.join(PKG_DIR, 'android', 'src', 'main', 'jniLibs');
+// ── macOS: the universal dylib + header. ─────────────────────────────────────
+const MACOS_LIB_SRC = path.join(OUTPUT_DIR, 'macos-universal', 'lib');
+const MACOS_FRAMEWORKS_DEST = path.join(PKG_DIR, 'macos', 'Frameworks');
+
+// ── Windows: the import lib / DLL + header. ──────────────────────────────────
+const WINDOWS_LIB_SRC = path.join(OUTPUT_DIR, 'windows-x86_64', 'lib');
+const WINDOWS_INCLUDE_SRC = path.join(OUTPUT_DIR, 'windows-x86_64', 'include');
+const WINDOWS_FRAMEWORKS_DEST = path.join(PKG_DIR, 'windows', 'Frameworks');
 
 function fileExists(p) {
-  try { fs.accessSync(p); return true; } catch { return false; }
+  try {
+    fs.accessSync(p);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function copyDirRecursive(src, dest) {
@@ -46,57 +66,98 @@ function copyDirRecursive(src, dest) {
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
     const s = path.join(src, entry.name);
     const d = path.join(dest, entry.name);
-    if (entry.isDirectory()) copyDirRecursive(s, d);
-    else fs.copyFileSync(s, d);
+    if (entry.isDirectory()) {
+      copyDirRecursive(s, d);
+    } else if (entry.isSymbolicLink()) {
+      const link = fs.readlinkSync(s);
+      try {
+        fs.unlinkSync(d);
+      } catch {
+        /* not present */
+      }
+      fs.symlinkSync(link, d);
+    } else {
+      fs.copyFileSync(s, d);
+    }
   }
-}
-
-function prepareIOS() {
-  if (!fileExists(IOS_XCFRAMEWORK_SRC)) {
-    console.warn(`⚠  iOS xcframework not found at:\n   ${IOS_XCFRAMEWORK_SRC}`);
-    console.warn(`   Run scripts/build-ios.sh, then assemble GraphvizApi.xcframework into target/ios-xcframeworks/.`);
-    return false;
-  }
-  fs.rmSync(IOS_FRAMEWORKS_DEST, { recursive: true, force: true });
-  fs.mkdirSync(IOS_FRAMEWORKS_DEST, { recursive: true });
-  copyDirRecursive(IOS_XCFRAMEWORK_SRC, path.join(IOS_FRAMEWORKS_DEST, 'GraphvizApi.xcframework'));
-  console.log(`✓ iOS: copied GraphvizApi.xcframework → ${path.relative(REPO_ROOT, IOS_FRAMEWORKS_DEST)}`);
-  return true;
 }
 
 function prepareAndroid() {
   let anyFound = false;
-  for (const abi of ABIS) {
-    const srcSo = path.join(ANDROID_OUTPUT, abi, 'lib', 'libgraphviz_api.so');
-    const srcHeader = path.join(ANDROID_OUTPUT, abi, 'include', 'graphviz_api.h');
-    if (!fileExists(srcSo)) {
-      console.warn(`⚠  Android ${abi}: missing ${path.relative(REPO_ROOT, srcSo)} (skip)`);
+  for (const abi of ANDROID_ABIS) {
+    const src = path.join(OUTPUT_DIR, 'android', abi, 'lib', 'libgraphviz_api.so');
+    if (!fileExists(src)) {
+      console.warn(`!  Android ${abi}: missing ${path.relative(CRATE_ROOT, src)} (skip)`);
       continue;
     }
-
-    // 1. libs/<abi>/lib + libs/<abi>/include (CMake link-time inputs)
-    const libsAbiDir = path.join(LIBS_DEST, abi);
-    fs.mkdirSync(path.join(libsAbiDir, 'lib'), { recursive: true });
-    fs.mkdirSync(path.join(libsAbiDir, 'include'), { recursive: true });
-    fs.copyFileSync(srcSo, path.join(libsAbiDir, 'lib', 'libgraphviz_api.so'));
-    if (fileExists(srcHeader)) {
-      fs.copyFileSync(srcHeader, path.join(libsAbiDir, 'include', 'graphviz_api.h'));
-    }
-
-    // 2. jniLibs/<abi> (packaged into the APK by Gradle)
-    const jniLibsAbiDir = path.join(JNILIBS_DEST, abi);
-    fs.mkdirSync(jniLibsAbiDir, { recursive: true });
-    fs.copyFileSync(srcSo, path.join(jniLibsAbiDir, 'libgraphviz_api.so'));
-
+    const destDir = path.join(ANDROID_JNILIBS_DEST, abi);
+    fs.mkdirSync(destDir, { recursive: true });
+    fs.copyFileSync(src, path.join(destDir, 'libgraphviz_api.so'));
     anyFound = true;
-    console.log(`✓ Android ${abi}: copied .so → libs/${abi}/lib + jniLibs/${abi}/`);
+    console.log(`OK Android ${abi}: libgraphviz_api.so -> jniLibs/${abi}/`);
+  }
+  if (!anyFound) {
+    console.warn('   Run `./scripts/build-android.sh` at the crate root first.');
   }
   return anyFound;
 }
 
-const ios = prepareIOS();
-const android = prepareAndroid();
-if (!ios && !android) {
-  console.error('No native artefacts found. Run scripts/build-android.sh / build-ios.sh first.');
+function prepareIOS() {
+  if (!fileExists(IOS_XCFRAMEWORK_SRC)) {
+    console.warn(`!  iOS: missing ${path.relative(CRATE_ROOT, IOS_XCFRAMEWORK_SRC)} (skip)`);
+    console.warn('   Run `./scripts/build-ios.sh` at the crate root first.');
+    return false;
+  }
+  const dest = path.join(IOS_FRAMEWORKS_DEST, 'Graphviz.xcframework');
+  fs.rmSync(dest, { recursive: true, force: true });
+  fs.mkdirSync(IOS_FRAMEWORKS_DEST, { recursive: true });
+  copyDirRecursive(IOS_XCFRAMEWORK_SRC, dest);
+  console.log('OK iOS: Graphviz.xcframework -> ios/Frameworks/');
+  return true;
+}
+
+function prepareMacOS() {
+  const dylib = path.join(MACOS_LIB_SRC, 'libgraphviz_api.dylib');
+  if (!fileExists(dylib)) {
+    console.warn(`!  macOS: missing ${path.relative(CRATE_ROOT, dylib)} (skip)`);
+    return false;
+  }
+  const libDest = path.join(MACOS_FRAMEWORKS_DEST, 'lib');
+  const incDest = path.join(MACOS_FRAMEWORKS_DEST, 'include');
+  fs.mkdirSync(libDest, { recursive: true });
+  fs.mkdirSync(incDest, { recursive: true });
+  fs.copyFileSync(dylib, path.join(libDest, 'libgraphviz_api.dylib'));
+  if (fileExists(CAPI_HEADER)) {
+    fs.copyFileSync(CAPI_HEADER, path.join(incDest, 'graphviz_api.h'));
+  }
+  console.log('OK macOS: libgraphviz_api.dylib + header -> macos/Frameworks/');
+  return true;
+}
+
+function prepareWindows() {
+  if (!fileExists(WINDOWS_LIB_SRC)) {
+    console.warn(`!  Windows: missing ${path.relative(CRATE_ROOT, WINDOWS_LIB_SRC)} (skip)`);
+    return false;
+  }
+  const libDest = path.join(WINDOWS_FRAMEWORKS_DEST, 'lib');
+  const incDest = path.join(WINDOWS_FRAMEWORKS_DEST, 'include');
+  copyDirRecursive(WINDOWS_LIB_SRC, libDest);
+  if (fileExists(WINDOWS_INCLUDE_SRC)) {
+    copyDirRecursive(WINDOWS_INCLUDE_SRC, incDest);
+  } else if (fileExists(CAPI_HEADER)) {
+    fs.mkdirSync(incDest, { recursive: true });
+    fs.copyFileSync(CAPI_HEADER, path.join(incDest, 'graphviz_api.h'));
+  }
+  console.log('OK Windows: graphviz_api libs + headers -> windows/Frameworks/');
+  return true;
+}
+
+const results = [prepareAndroid(), prepareIOS(), prepareMacOS(), prepareWindows()];
+if (!results.some(Boolean)) {
+  console.error(
+    'No native artefacts found. Build at least one platform with ' +
+      'scripts/build-<platform>.sh at the crate root first.'
+  );
   process.exit(1);
 }
+console.log('prepare-native: done.');

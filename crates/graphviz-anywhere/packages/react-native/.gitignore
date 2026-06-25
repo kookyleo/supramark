@@ -1,14 +1,11 @@
-# Staged / downloaded native artefacts — produced by
-# `node scripts/prepare-native.js` from cargo-built target/, or fetched by
-# `node scripts/download-native.js` from release assets. NEVER commit these
-# binaries to git. The committed headers under android/libs/<abi>/include and
-# ios/Frameworks/.../Headers (plus Info.plist) stay tracked — .gitignore never
-# untracks files that are already committed.
+# Staged native artefacts — produced by the crate-root scripts/build-<platform>.sh
+# and copied here by `node scripts/prepare-native.js`. NEVER commit these
+# binaries to git; they ship in the npm tarball via package.json `files[]`
+# (staged at prepack time), not from the repo.
+android/src/main/jniLibs/
 ios/Frameworks/
 macos/Frameworks/
 windows/Frameworks/
-android/libs/*/lib/
-android/src/main/jniLibs/
 
 # react-native-builder-bob build output
 lib/
