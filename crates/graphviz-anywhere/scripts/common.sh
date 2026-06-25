@@ -56,6 +56,13 @@ check_build_deps() {
 # kept for belt-and-braces compat with older CMakeLists that still read them.
 #
 # Usage: cmake "${GV_CMAKE_COMMON_ARGS[@]}" ...
+# macOS 系统 bison 是 2.3，graphviz 需要 ≥3.0。优先用 homebrew bison，
+# 显式指定 BISON_EXECUTABLE 避免 CMake 缓存系统旧 bison。
+GV_BISON_EXTRA_ARGS=()
+if [ -x /opt/homebrew/opt/bison/bin/bison ]; then
+    GV_BISON_EXTRA_ARGS+=("-DBISON_EXECUTABLE=/opt/homebrew/opt/bison/bin/bison")
+fi
+
 GV_CMAKE_COMMON_ARGS=(
     -DCMAKE_BUILD_TYPE=Release
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON

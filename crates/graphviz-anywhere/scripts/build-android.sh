@@ -95,6 +95,7 @@ build_android_abi() {
         -DANDROID_NATIVE_API_LEVEL="${ANDROID_API}" \
         -DANDROID_STL=c++_shared \
         "${GV_CMAKE_COMMON_ARGS[@]}" \
+        "${GV_BISON_EXTRA_ARGS[@]}" \
         "-DCMAKE_C_FLAGS=-O2 -fPIC" \
         -DCMAKE_INSTALL_PREFIX="${gv_install}"
 
@@ -137,13 +138,15 @@ build_android_abi() {
 
     mkdir -p "${install_dir}/lib" "${install_dir}/include"
     # WITH_EXPAT=OFF / WITH_ZLIB=OFF → no -lexpat / -lz needed.
+    # graphviz 静态库含 C++ 符号引用（如 std::length_error），需链接 libc++_shared，
+    # 运行时由 APK 内的 libc++_shared.so（RN 自带）提供符号。
     "${cc}" -shared "${target_flag}" \
         -o "${install_dir}/lib/libgraphviz_api.so" \
         "${build_dir}/graphviz_api.o" \
         -Wl,--whole-archive \
         "${libs[@]}" \
         -Wl,--no-whole-archive \
-        -lm
+        -lm -lc++_shared
 
     cp "${WRAPPER_SRC}/graphviz_api.h" "${install_dir}/include/"
 

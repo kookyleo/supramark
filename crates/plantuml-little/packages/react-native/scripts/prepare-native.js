@@ -38,6 +38,19 @@ const ANDROID_ABIS = {
 };
 const ANDROID_JNILIBS_DEST = path.join(PKG_DIR, 'android', 'src', 'main', 'jniLibs');
 
+// C ABI header —— 拷贝到包内，让 Android CMake 能自包含找到（不依赖
+// monorepo 内的相对路径；file: 协议安装后包会被拷贝到消费者的 node_modules，
+// 相对路径会断裂）。
+const NATIVE_HEADER_SRC = path.join(
+  REPO_ROOT,
+  'crates',
+  'plantuml-little',
+  'packages',
+  'native',
+  'include'
+);
+const ANDROID_JNI_INCLUDE_DEST = path.join(PKG_DIR, 'android', 'src', 'main', 'jni', 'include');
+
 function copyDirRecursive(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
@@ -90,7 +103,27 @@ function prepareAndroid() {
 
 const ios = prepareIOS();
 const android = prepareAndroid();
+
+// 拷贝 C ABI header 到包内（Android CMake 自包含用；iOS 靠 xcframework 内的 Headers）
+function prepareHeader() {
+  if (!fileExists(NATIVE_HEADER_SRC)) {
+    console.warn(`⚠  Native header not found at:\n   ${NATIVE_HEADER_SRC}`);
+    return false;
+  }
+  fs.mkdirSync(ANDROID_JNI_INCLUDE_DEST, { recursive: true });
+  for (const entry of fs.readdirSync(NATIVE_HEADER_SRC)) {
+    fs.copyFileSync(path.join(NATIVE_HEADER_SRC, entry), path.join(ANDROID_JNI_INCLUDE_DEST, entry));
+  }
+  console.log(`✓ Android: copied headers → ${path.relative(REPO_ROOT, ANDROID_JNI_INCLUDE_DEST)}/`);
+  return true;
+}
+const header = prepareHeader();
+
 if (!ios && !android) {
   console.error('No native artefacts found. Build the Rust crate first.');
+  process.exit(1);
+}
+if (!header) {
+  console.error('Native header missing. Cannot proceed.');
   process.exit(1);
 }

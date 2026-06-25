@@ -18,6 +18,7 @@ def safeExtGet(prop, fallback) {
 }
 
 apply plugin: "com.android.library"
+apply plugin: "com.facebook.react"
 
 android {
     namespace "com.graphviznative"
@@ -62,6 +63,9 @@ android {
     sourceSets {
         main {
             java.srcDirs = ["src/main/java"]
+            // libgraphviz_api.so 由 CMakeLists 引用（IMPORTED_LOCATION 指向 libs/<abi>/lib/），
+            // 同时需作为 jniLibs 打进 APK。prepare 阶段把 .so 拷到 src/main/jniLibs/<abi>/。
+            jniLibs.srcDirs = ["src/main/jniLibs"]
         }
     }
 
