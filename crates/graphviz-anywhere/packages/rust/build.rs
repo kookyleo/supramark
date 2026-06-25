@@ -122,10 +122,11 @@ fn try_repo_output(manifest_dir: &Path) -> bool {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
 
     // Determine whether we expect a static or dynamic lib for this target.
-    // Only iOS links statically (matching `asset_is_static`): a static archive
-    // cannot embed the C++ runtime / expat, so desktop targets — including
-    // macOS — link the self-contained shared library (.so/.dylib) instead.
-    let prefer_static = is_ios_target(&target);
+    // Only iOS links statically: a static archive cannot embed the C++ runtime
+    // / expat, so desktop targets — including macOS — link the self-contained
+    // shared library (.so/.dylib). Reuse the single `asset_is_static` policy so
+    // the repo-output path and the download fallback can never diverge.
+    let prefer_static = asset_is_static(&target);
 
     // ── Collect candidate directories ────────────────────────────────────────
 
