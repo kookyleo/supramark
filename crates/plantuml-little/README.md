@@ -30,6 +30,16 @@ Two Graphviz execution modes are supported:
 - `native` (default): links against [`graphviz-anywhere`](https://github.com/Actrium/graphviz-anywhere)'s prebuilt `libgraphviz_api` — fast, no Node required; recommended for `cargo test --lib` / day-to-day development.
 - `wasm` (opt-in via `PLANTUML_LITTLE_TEST_BACKEND=wasm`): spawns the same Node/wasm runner the Java reference pipeline uses; this is what CI runs for `test-reference` to guarantee cross-platform determinism.
 
+> **Font prerequisite for the `native` backend on non-Linux hosts.** The native Graphviz build measures real text through pango/fontconfig, so the reference baselines only reproduce byte-exact on a machine where fontconfig resolves `DejaVu Sans` to the same font the baselines were generated with. A fresh macOS has no DejaVu installed, so fontconfig silently falls back to a system face (e.g. Hiragino Sans) — that shifts `textLength` and layout coordinates by a pixel or two and the reference tests fail even though nothing is wrong with the code. Install DejaVu before running the native reference suite:
+>
+> ```sh
+> brew install --cask font-dejavu   # macOS; Linux: apt install fonts-dejavu-core
+> fc-cache -f
+> fc-match "DejaVu Sans"            # must report DejaVuSans.ttf, not a system fallback
+> ```
+>
+> CI sidesteps this entirely by running the `wasm` backend, whose font metrics are baked into `src/font_data.rs` and host-independent.
+
 See `tests/reference/VERSION` for the exact jar / JDK / Graphviz / font-stack snapshot the current baseline was produced against.
 
 ## Supported Diagram Types (29)
